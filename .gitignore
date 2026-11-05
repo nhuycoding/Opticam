@@ -1,0 +1,12 @@
+node_modules/
+dist/
+frontend/test-results/
+frontend/playwright-report/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+.DS_Store
+*.log

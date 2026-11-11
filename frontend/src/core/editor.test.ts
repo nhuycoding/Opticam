@@ -3,7 +3,7 @@ import { PRESETS, withManualCams } from '../data/presets';
 import { addObstacle, removeObstacle, resizeObstacle, resizeRoom } from './editor';
 import { fromApiResponse, toApiPayload } from './api';
 import { normalizeLayout } from './io';
-import { riskColor } from '../components/canvas/shared';
+import { priorityBand, riskColor, shouldShowRiskWeight } from '../components/canvas/shared';
 import { obsPoly, satCollide } from './geometry';
 import { buildZones, SHELF_RISK_PROFILES } from './optics';
 import { canPlacePerson } from './person';
@@ -67,13 +67,22 @@ describe('API adapter', () => {
   });
 
   describe('risk heatmap colors', () => {
-    it('uses visibly different continuous colors for fractional risk weights', () => {
-      expect(riskColor(1)).toBe('rgba(37,99,235,0.420)');
+    it('uses a low-emphasis cool neutral and increasingly prominent warm risk colors', () => {
+      expect(riskColor(1)).toBe('rgba(134,164,170,0.025)');
       expect(riskColor(2.5)).not.toBe(riskColor(2));
       expect(riskColor(3)).not.toBe(riskColor(2));
       expect(riskColor(4.5)).not.toBe(riskColor(4));
+      expect(Number(riskColor(5).match(/,([0-9.]+)\)$/)?.[1])).toBeGreaterThan(Number(riskColor(4).match(/,([0-9.]+)\)$/)?.[1]));
       expect(riskColor(0)).toBe(riskColor(1));
       expect(riskColor(6)).toBe(riskColor(5));
+    });
+    it('groups priority weights using the same thresholds as the legend', () => {
+      expect([1.99, 2, 3.99, 4].map(priorityBand)).toEqual(['low', 'medium', 'medium', 'high']);
+    });
+    it('hides labels below 0.5 m, shows all at 0.5 m, and only non-low weights on coarser grids', () => {
+      expect([1, 1.99, 2, 5].map((weight) => shouldShowRiskWeight(weight, 0.49))).toEqual([false, false, false, false]);
+      expect([1, 1.99, 2, 5].map((weight) => shouldShowRiskWeight(weight, 0.5))).toEqual([true, true, true, true]);
+      expect([1, 1.99, 2, 5].map((weight) => shouldShowRiskWeight(weight, 0.51))).toEqual([false, false, true, true]);
     });
   });
   it('response chấp nhận pan_angle và data.cameras', () => {

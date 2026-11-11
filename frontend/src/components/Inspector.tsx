@@ -68,7 +68,7 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
   const cam = sel?.kind === 'cam' ? L.cameras.find((c) => c.id === sel.id) : undefined;
   const area = L.widthM * L.heightM, mLen = measure ? Math.hypot(measure.b[0] - measure.a[0], measure.b[1] - measure.a[1]) : 0;
   return (
-    <div className="panel">
+    <div className="panel inspector-panel">
       <h3>Điểm đánh giá trên người</h3>
       <label className="field">Độ cao mục tiêu tính từ sàn
         <select value={L.targetHeight} onChange={(e) => {
@@ -79,15 +79,22 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
         </select>
       </label>
       <p className="muted small">PPM và vùng khuất được tính tại độ cao đã chọn; chiều cao từng kệ/POS được xét trên đường ngắm 3D.</p>
-      <h3>Tường bao & tỷ lệ</h3>
-      <div className="row">
-        <Num label="Rộng (m)" value={L.widthM} min={3} max={40} step={0.5} onChange={(v) => onRoom(v, L.heightM)} />
-        <Num label="Dài (m)" value={L.heightM} min={3} max={40} step={0.5} onChange={(v) => onRoom(L.widthM, v)} />
-        <Num label="Kích thước ô (m)" value={L.gridM} min={0.1} max={2} step={0.05} onChange={onGrid} />
-        <Num label="px / m" value={L.pixelsPerMeter} min={30} max={120} step={5} onChange={onScale} />
-      </div>
-      <p className={area < AREA_MIN || area > AREA_MAX ? 'fail small' : 'muted small'}>{area} m² {area < AREA_MIN || area > AREA_MAX ? `— ngoài phạm vi ${AREA_MIN}–${AREA_MAX} m² của đề tài` : `(1 m = ${L.pixelsPerMeter} px, 1 ô = ${L.gridM} m)`}</p>
-      <p className="muted small">Để lấy mẫu vùng giảm dần đủ mịn, nên dùng gridM ≤ (R − r₀)/3; cọ rủi ro lưu theo tọa độ thực nên không lệch khi đổi lưới.</p>
+      <details className="inspector-settings">
+        <summary>
+          <span>Tường bao & tỷ lệ</span>
+          <small>{L.widthM} × {L.heightM} m · ô {L.gridM} m</small>
+        </summary>
+        <div className="inspector-settings-content">
+          <div className="row">
+            <Num label="Rộng (m)" value={L.widthM} min={3} max={40} step={0.5} onChange={(v) => onRoom(v, L.heightM)} />
+            <Num label="Dài (m)" value={L.heightM} min={3} max={40} step={0.5} onChange={(v) => onRoom(L.widthM, v)} />
+            <Num label="Kích thước ô (m)" value={L.gridM} min={0.1} max={2} step={0.05} onChange={onGrid} />
+            <Num label="px / m" value={L.pixelsPerMeter} min={30} max={120} step={5} onChange={onScale} />
+          </div>
+          <p className={area < AREA_MIN || area > AREA_MAX ? 'fail small' : 'muted small'}>{area} m² {area < AREA_MIN || area > AREA_MAX ? `— ngoài phạm vi ${AREA_MIN}–${AREA_MAX} m² của đề tài` : `(1 m = ${L.pixelsPerMeter} px, 1 ô = ${L.gridM} m)`}</p>
+          <p className="muted small">Để lấy mẫu vùng giảm dần đủ mịn, nên dùng gridM ≤ (R − r₀)/3; cọ rủi ro lưu theo tọa độ thực nên không lệch khi đổi lưới.</p>
+        </div>
+      </details>
       {L.background && measure && mLen > 0.05 && (
         <CalibrateRow measured={mLen} onApply={onCalibrate} />
       )}

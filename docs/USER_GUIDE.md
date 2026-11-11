@@ -8,41 +8,46 @@ trên trình duyệt.
 
 ## Khu vực giao diện
 
-- **Canvas:** mặt bằng theo mét, lưới, vật cản, camera, vùng FOV và heatmap.
-- **Thanh công cụ:** chọn lớp phủ, cọ rủi ro, bật lưới/điểm neo, thêm vật thể, đo và benchmark.
-- **Inspector:** chỉnh tường bao, tỷ lệ ảnh nền và thông số của vật thể/camera đang chọn.
-- **Live Scorecard:** so sánh 4 camera thủ công, phương án hiện tại và Greedy không trọng số.
-- **BOM:** bảng thiết bị/cáp ước tính; có thể tải CSV.
+- **Thanh đầu trang:** chọn mặt bằng mẫu, hoàn tác/làm lại, tối ưu vị trí, mở BOM và xuất JSON.
+- **Thanh công cụ bên trái:** chọn/kéo, thêm camera/kệ/POS/cửa, đặt người đánh giá, đo và tô mức ưu tiên W.
+- **Canvas:** mặt bằng theo mét, lưới, vật cản, camera, vùng FOV và heatmap. Chọn lớp DORI/rủi ro/tắt
+  và bật lưới/điểm neo ngay phía trên canvas.
+- **Inspector bên phải:** KPI trực tiếp, so sánh phương án, chỉnh tường bao và thông số của vật thể/camera đang chọn.
+- **Xuất và dự án / Công cụ nâng cao:** nhập layout JSON, lưu PNG, Greedy không trọng số, ảnh nền và các thao tác ít dùng.
 - **Hoàn tác/Làm lại:** các thay đổi sơ đồ và hình người được gom theo thao tác; dùng nút hoặc
   `Ctrl+Z` / `Ctrl+Y` (Mac: `⌘Z` / `⌘Y`). Thay layout, xóa vật thể và xóa cọ sẽ hỏi xác nhận.
 
 ## Các thao tác chính
 
-1. Chọn một trong ba layout mẫu ở đầu trang hoặc import layout JSON.
-2. Thêm kệ, POS, cửa hoặc camera bằng các nút trên toolbar.
+1. Chọn một trong ba layout mẫu ở thanh đầu trang; nhập layout JSON trong mục **Xuất và dự án**.
+2. Thêm kệ, POS, cửa hoặc camera bằng thanh công cụ bên trái.
    Chọn **Người đánh giá**, rồi bấm vào mặt bằng để đặt hình người; chọn/kéo hình người để
    mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
-3. Kéo camera trên tường để đổi vị trí; kéo tay cầm màu cam để đổi hướng theo nấc 15°.
+3. Kéo camera trên tường để đổi vị trí; chọn camera rồi kéo tay cầm màu cam để đổi hướng theo nấc 15°.
    Chọn camera rồi chỉnh chất lượng, model, pan, FOV, tầm xa và chiều cao trong Inspector.
    Ô số cho phép xóa giá trị cũ để nhập lại; nhấn `Enter` để áp dụng, `Esc` hoặc rời ô để
    hủy nội dung đang nhập.
 4. Chọn vật cản để đổi tên/kích thước/chiều cao; xoay bằng nút xoay hoặc phím `R`.
    Cửa được khóa vào cạnh tường; vật cản không được chồng lấn.
-5. Chọn **Heatmap DORI**, **Ma trận rủi ro W**, hoặc **Tắt** để đổi lớp phủ.
-   Chọn cọ `W = 5`, `W = 3`, `W = 1`, rồi kéo trên sơ đồ để ghi đè trọng số. Nét cọ được
+5. Chọn **DORI**, **Rủi ro**, hoặc **Tắt lớp phủ** phía trên canvas để đổi lớp phủ.
+   Chọn cọ `W 5`, `W 3`, `W 1` ở thanh công cụ bên trái, rồi kéo trên sơ đồ để ghi đè trọng số. Nét cọ được
    lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới. Heatmap rủi ro dùng
-   chuyển sắc liên tục xanh → lục lam → vàng → cam → đỏ; khi phóng đủ lớn, mỗi ô hiện giá trị
-   W thực tế để phân biệt rõ các trọng số thập phân.
-6. Chọn **Tối ưu vị trí · 3 camera**, **Tối ưu vị trí với … camera hiện có** hoặc **Ít camera
-   nhất đạt KPI** để nhận vị trí đề xuất. Chế độ tìm số ít nhất lần lượt đánh giá các tiền tố của
+   thang đơn sắc theo độ ưu tiên; lưới nhỏ hơn 0.5 m ẩn số, ở 0.5 m hiện mọi W, lưới lớn hơn chỉ hiện W ≥ 2.
+   Chú giải bên dưới sơ đồ lọc Thấp/Vừa/Cao.
+6. Chọn **Tối ưu vị trí · 3 camera** để nhận vị trí đề xuất. Mở menu mũi tên cạnh nút để chọn
+   **Tối ưu … camera hiện có** hoặc **Tìm số camera ít nhất đạt KPI**. Chế độ tìm số ít nhất lần lượt đánh giá các tiền tố của
    phương án Greedy, dừng ở số camera ít nhất đạt cả hai KPI. Cấu hình FOV, độ phân giải,
    tầm xa, chiều cao và model được giữ theo thứ tự camera đã nhập; vị trí và hướng được tối ưu
    lại. Nếu không đạt KPI với số camera hiện có, ứng dụng giữ toàn bộ phương án tốt nhất và
    thông báo tỷ lệ thực tế trên Scorecard/toast.
-7. Rê chuột lên ô để xem PPM, DORI, W chính xác, nhóm ưu tiên và vật thể/cọ tạo mức W đó.
-8. Chọn **Bảng BOM**, **Export JSON**, **Import JSON**, hoặc **PNG** để xem/tải kết quả.
+7. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ. Nút **Vừa khung**,
+   **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas; giữ `Alt` khi cuộn
+   để xoay camera/vật thể đang chọn.
+8. Chọn **BOM** hoặc **Xuất JSON** ở thanh đầu trang. Các thao tác nhập layout, lưu PNG và
+   so sánh Greedy không trọng số nằm trong mục **Xuất và dự án** ở Inspector.
 
-Trên màn hình nhỏ, Inspector nằm dưới sơ đồ; có thể cuộn ngang canvas để xem toàn bộ mặt bằng.
+Trên màn hình nhỏ, bấm **Mở công cụ mặt bằng** dưới canvas để hiện thanh công cụ. Inspector nằm
+dưới sơ đồ; kéo nền trống để pan khi phóng lớn.
 
 ### Thông số camera
 

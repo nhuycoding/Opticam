@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 import { OptiCamCanvas } from './components/canvas/OptiCamCanvas';
-import { DORI_COLOR, RISK_COLOR, type Segment, type Selection, type Tool, type ViewMode } from './components/canvas/shared';
+import { DORI_COLOR, priorityBand, type PriorityBand, type Segment, type Selection, type Tool, type ViewMode } from './components/canvas/shared';
 import { Inspector } from './components/Inspector';
 import { BomModal } from './components/BomModal';
-import { Scorecard } from './components/Scorecard';
+import { Scorecard, type RiskMetrics } from './components/Scorecard';
 import { PRESETS, withManualCams } from './data/presets';
 import { buildZones, evaluate, RISK_DEFAULTS, SHELF_RISK_PROFILES } from './core/optics';
 import { greedyPlace, makeCamera, manualFourCorners, minimumCamerasForTargets } from './core/optimizer';
@@ -22,6 +22,8 @@ export default function App() {
   const [layout, setLayout] = useState<Layout>(() => withManualCams(PRESETS[0]));
   const [view, setView] = useState<ViewMode>('dori');
   const [brush, setBrush] = useState<Weight | null>(null);
+  const [riskFilter, setRiskFilter] = useState<PriorityBand | null>(null);
+  const [focusCell, setFocusCell] = useState<{ r: number; c: number } | null>(null);
   const [sel, setSel] = useState<Selection>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [grid, setGrid] = useState(true), [anchors, setAnchors] = useState(false), [bom, setBom] = useState(false);
@@ -76,6 +78,20 @@ export default function App() {
   const zones = useMemo(() => buildZones(layout), [layout.obstacles, layout.risk, layout.riskStrokes, layout.widthM, layout.heightM, layout.gridM]);
   const { cells, score } = useMemo(() => evaluate(layout, zones), [layout.cameras, zones, layout.obstacles, layout.targetHeight]);
   const manual = useMemo(() => evaluate({ ...layout, cameras: manualFourCorners(layout) }, zones).score, [zones, layout.obstacles, layout.targetHeight]);
+  const riskMetrics = useMemo<RiskMetrics>(() => {
+    const openCells = cells.filter((cell) => !cell.solid);
+    const totals = { low: 0, medium: 0, high: 0 };
+    const high = openCells.filter((cell) => priorityBand(cell.w) === 'high');
+    const uncovered = high.filter((cell) => cell.ppm <= 0);
+    for (const cell of openCells) totals[priorityBand(cell.w)]++;
+    const percent = (count: number) => openCells.length ? Math.round((count / openCells.length) * 100) : 0;
+    return {
+      lowPercent: percent(totals.low), mediumPercent: percent(totals.medium), highPercent: percent(totals.high),
+      highCoverage: high.length ? Math.round(((high.length - uncovered.length) / high.length) * 100) : null,
+      highTotal: high.length, uncoveredHigh: uncovered.length,
+      firstUncovered: uncovered.length ? { r: uncovered[0].r, c: uncovered[0].c } : null
+    };
+  }, [cells]);
 
   const flash = (t: string) => {
     if (messageTimer.current !== null) clearTimeout(messageTimer.current);
@@ -313,121 +329,174 @@ export default function App() {
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
   const bg = layout.background;
+  const selectedPreset = PRESETS.findIndex((preset) => preset.name === layout.name);
   return (
     <div className="app">
-      <header>
+      <header className="app-header">
         <div className="brand-lockup">
+          <div className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></div>
           <div>
-            <h1>OptiCam <span>·</span> Retail</h1>
-            <span className="muted">{layout.name} · {layout.widthM}×{layout.heightM} m ({layout.widthM * layout.heightM} m²) · lưới {layout.gridM} m · {layout.pixelsPerMeter} px/m</span>
+            <span className="eyebrow">THIẾT KẾ GIÁM SÁT BÁN LẺ</span>
+            <h1>OptiCam <span>Studio</span></h1>
           </div>
         </div>
-        <div className="toolbar-group" aria-label="Mặt bằng và tối ưu">
-          <div className="toolbar-group" aria-label="Chọn layout">
-            <span className="toolbar-heading">Mặt bằng</span>
-          {PRESETS.map((p, i) => <button key={p.name} onClick={() => loadLayout(withManualCams(p))} title={p.name}>Layout {i + 1}</button>)}
+        <div className="project-controls">
+          <label className="project-picker">
+            <span className="eyebrow">MẶT BẰNG ĐANG MỞ</span>
+            <select
+              aria-label="Chọn mặt bằng cửa hàng"
+              value={selectedPreset < 0 ? '' : selectedPreset}
+              onChange={(event) => {
+                const preset = PRESETS[Number(event.target.value)];
+                if (preset) loadLayout(withManualCams(preset));
+              }}
+            >
+              {selectedPreset < 0 && <option value="">Layout tùy chỉnh</option>}
+              {PRESETS.map((preset, index) => <option key={preset.name} value={index}>{preset.name}</option>)}
+            </select>
+          </label>
+          <div className="project-meta">
+            <strong>{layout.widthM} × {layout.heightM} m</strong>
+            <span>{layout.widthM * layout.heightM} m² <i /> Lưới {layout.gridM} m</span>
           </div>
-          <div className="toolbar-group optimize-group" aria-label="Tối ưu camera">
-          <span className="toolbar-heading">Tối ưu camera · KPI Đỏ ≥95% · Vàng ≥80%</span>
-          <button className="primary" onClick={() => autoOptimize()} disabled={optimizing}>{optimizing ? 'Đang tối ưu…' : 'Tối ưu vị trí · 3 camera'}</button>
-          <button onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing || layout.cameras.length < 1 || layout.cameras.length > MAX_CAMS} title={`Tối ưu lại vị trí với ${layout.cameras.length} camera và giữ profile đã nhập`}>
-            Tối ưu vị trí với {layout.cameras.length} camera hiện có
-          </button>
-          <button onClick={minimizeCameras} disabled={optimizing || layout.cameras.length < 1 || layout.cameras.length > MAX_CAMS} title="Tìm số ít nhất đạt Đỏ ≥95% và Vàng ≥80%; giữ cấu hình camera đã nhập">
-            Ít camera nhất đạt KPI
-          </button>
+          <div className="history-actions" aria-label="Lịch sử chỉnh sửa">
+            <button onClick={undo} disabled={!undoReady} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác">↶</button>
+            <button onClick={redo} disabled={!redoReady} title="Làm lại (Ctrl+Y)" aria-label="Làm lại">↷</button>
           </div>
+        </div>
+        <div className="header-actions">
+          <button className="primary optimize-button" onClick={() => autoOptimize()} disabled={optimizing}>
+            {optimizing ? <><span className="spinner" aria-hidden="true" /> Đang tối ưu…</> : <>Tối ưu vị trí <span>· 3 camera</span></>}
+          </button>
+          <details className="optimize-menu">
+            <summary aria-label="Tùy chọn tối ưu camera" title="Tùy chọn tối ưu">⌄</summary>
+            <div className="menu-popover">
+              <span className="eyebrow">MỤC TIÊU ĐỀ XUẤT</span>
+              <p>Đỏ ≥95% <i /> Vàng ≥80%</p>
+              <button onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing || layout.cameras.length < 1 || layout.cameras.length > MAX_CAMS}>
+                Tối ưu {layout.cameras.length} camera hiện có
+              </button>
+              <button onClick={minimizeCameras} disabled={optimizing || layout.cameras.length < 1 || layout.cameras.length > MAX_CAMS}>
+                Tìm số camera ít nhất đạt KPI
+              </button>
+            </div>
+          </details>
+          <span className="header-divider" />
+          <button onClick={() => setBom(true)}>BOM</button>
+          <button onClick={() => download('opticam_layout.json', exportBundle(layout, score))}>Xuất JSON</button>
         </div>
       </header>
 
-      <main>
-        <div className="workspace">
+      <main className="planner">
+        <nav className={`tool-rail${toolsOpen ? ' is-open' : ''}`} aria-label="Công cụ mặt bằng">
+          <span className="rail-label">CÔNG CỤ</span>
+          <button className={`rail-button${tool === 'select' && brush === null ? ' active' : ''}`} aria-pressed={tool === 'select' && brush === null} title="Chọn và kéo đối tượng" onClick={() => { setBrush(null); setTool('select'); }}>
+            <span aria-hidden="true">↖</span><small>Chọn</small>
+          </button>
+          <button className="rail-button" title="Thêm camera" onClick={addCamera}><span aria-hidden="true">◉</span><small>Camera</small></button>
+          <button className="rail-button" title="Thêm kệ hàng" onClick={() => addObs('shelf')}><span aria-hidden="true">▤</span><small>Kệ hàng</small></button>
+          <button className="rail-button" title="Thêm quầy POS" onClick={() => addObs('pos')}><span aria-hidden="true">▰</span><small>Quầy POS</small></button>
+          <button className="rail-button" title="Thêm cửa ra vào" onClick={() => addObs('entrance')}><span aria-hidden="true">⇥</span><small>Cửa</small></button>
+          <button className={`rail-button${tool === 'person' ? ' active' : ''}`} aria-pressed={tool === 'person'} title="Đặt người để đánh giá DORI" onClick={() => { setTool(tool === 'person' ? 'select' : 'person'); setBrush(null); }}>
+            <span aria-hidden="true">♙</span><small>Đánh giá</small>
+          </button>
+          <button className={`rail-button${tool === 'measure' ? ' active' : ''}`} aria-pressed={tool === 'measure'} title="Đo khoảng cách" onClick={() => { setTool(tool === 'measure' ? 'select' : 'measure'); setBrush(null); setMeasure(null); }}>
+            <span aria-hidden="true">↔</span><small>Đo</small>
+          </button>
+          <span className="rail-divider" />
+          <span className="rail-label">ƯU TIÊN</span>
+          {([5, 3, 1] as Weight[]).map((weight) => (
+            <button key={weight} className={`rail-button risk-tool${brush === weight ? ' active' : ''}`} aria-pressed={brush === weight} title={`Tô vùng ưu tiên W = ${weight}`} onClick={() => { setBrush(brush === weight ? null : weight); setTool('select'); setView('risk'); }}>
+              <span className={`risk-dot risk-${weight}`} aria-hidden="true" /><small>W {weight}</small>
+            </button>
+          ))}
+          <button className="rail-button rail-clear" title="Xóa vùng rủi ro đã tô" disabled={!layout.riskStrokes.length && !Object.keys(layout.risk).length} onClick={() => {
+            if ((layout.riskStrokes.length || Object.keys(layout.risk).length) && window.confirm('Xóa toàn bộ vùng rủi ro đã tô bằng cọ?')) patch({ risk: {}, riskStrokes: [] });
+          }}><span aria-hidden="true">⌫</span><small>Xóa cọ</small></button>
+        </nav>
+
+        <section className="workspace" aria-label="Không gian thiết kế">
           <div className="workspace-heading">
             <div>
-              <h2>Mặt bằng cửa hàng</h2>
-              <p>{layout.widthM} × {layout.heightM} m <span>·</span> Lưới {layout.gridM} m <span>·</span> {layout.cameras.length} camera</p>
+              <span className="eyebrow">KHÔNG GIAN THIẾT KẾ</span>
+              <h2>{layout.name}</h2>
             </div>
-            <span className="live-indicator">Cập nhật trực tiếp</span>
+            <div className="workspace-summary">
+              <span>{layout.cameras.length} camera</span>
+              <span>{layout.widthM * layout.heightM} m²</span>
+              <span className="live-indicator"><i /> Trực tiếp</span>
+            </div>
           </div>
           <div className="workspace-controls">
-            <div className="toolbar-group view-switch" aria-label="Lớp hiển thị">
-              <span className="toolbar-heading">Lớp phủ</span>
-              {(['dori', 'risk', 'off'] as ViewMode[]).map((v) => <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => setView(v)}>{{ dori: 'DORI', risk: 'Rủi ro W', off: 'Tắt' }[v]}</button>)}
+            <div className="layer-switch" role="group" aria-label="Lớp phân tích">
+              <span className="toolbar-heading">LỚP PHÂN TÍCH</span>
+              {(['dori', 'risk', 'off'] as ViewMode[]).map((mode) => (
+                <button key={mode} className={view === mode ? 'on' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>
+                  <i aria-hidden="true">{{ dori: '◉', risk: '◈', off: '○' }[mode]}</i>
+                  {{ dori: 'DORI', risk: 'Rủi ro', off: 'Tắt lớp phủ' }[mode]}
+                </button>
+              ))}
             </div>
-            <button className="mobile-tools-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)}>
-              {toolsOpen ? 'Thu gọn công cụ' : 'Công cụ chỉnh sửa'}
-            </button>
-          </div>
-          <OptiCamCanvas layout={layout} cells={cells} view={view} tool={tool} brush={brush} selected={sel} people={people} onAddPerson={addPerson} onPerson={updatePerson} onInvalidPerson={() => flash('Không thể đặt người sát tường hoặc chồng lên vật cản')} showGrid={grid} showAnchors={anchors} measure={measure} stageRef={stageRef} drawMsRef={drawMsRef}
-            onCamera={updateCamera} onObstacle={updateObstacle} onPaint={paint} onSelect={select} onRotate={rotate} onMeasure={setMeasure} />
-          <div className="legend">
-            {view === 'dori' && (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((k) => <span key={k}><i style={{ background: DORI_COLOR[k] }} />{{ identification: '≥250 PPM', recognition: '≥125', observation: '≥62', detection: '≥25', blind: 'mù / <25' }[k]}</span>)}
-            {view === 'risk' && <div className="risk-legend">
-              <span className="risk-legend-title">W theo từng ô — số hiển thị khi phóng to</span>
-              <span className="muted small">W là mức ưu tiên thiết kế, không phải xác suất xảy ra trộm.</span>
-              <div className="risk-gradient" aria-label="Thang màu trọng số từ W bằng 1 đến W bằng 5" />
-              <div className="risk-ticks"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
-              <div className="risk-bands"><span>Thấp: W&lt;2</span><span>Vừa: 2≤W&lt;4</span><span>Cao: W≥4</span></div>
-            </div>}
-          </div>
-          <div className={`toolbar editor-toolbar${toolsOpen ? ' is-open' : ''}`} aria-label="Công cụ mặt bằng">
-            <div className="toolbar-group" aria-label="Cọ trọng số">
-              <span className="toolbar-heading">Cọ trọng số</span>
-              <button className={brush === null ? 'on' : ''} aria-pressed={brush === null} onClick={() => { setBrush(null); setTool('select'); }}>Chọn / kéo</button>
-              {([5, 3, 1] as Weight[]).map((w) => <button key={w} className={brush === w ? 'on' : ''} aria-pressed={brush === w} style={{ borderColor: RISK_COLOR[w >= 4 ? 'red' : w >= 2 ? 'yellow' : 'green'].replace(/[\d.]+\)$/, '1)') }} onClick={() => { setBrush(w); setTool('select'); }}>W = {w}.0</button>)}
-              <button onClick={() => {
-                if ((layout.riskStrokes.length || Object.keys(layout.risk).length) &&
-                  window.confirm('Xóa toàn bộ vùng rủi ro đã tô bằng cọ?')) patch({ risk: {}, riskStrokes: [] });
-              }} disabled={!layout.riskStrokes.length && !Object.keys(layout.risk).length}>Xóa cọ</button>
-            </div>
-            <div className="toolbar-group" aria-label="Công cụ sơ đồ">
-              <span className="toolbar-heading">Chỉnh sửa sơ đồ</span>
-              <button className={grid ? 'on' : ''} onClick={() => setGrid(!grid)} aria-pressed={grid}>Lưới</button>
+            <div className="canvas-options">
+              <button className={grid ? 'on' : ''} onClick={() => setGrid(!grid)} aria-pressed={grid}>{view === 'risk' ? 'Ranh giới W' : 'Lưới'}</button>
               <button className={anchors ? 'on' : ''} onClick={() => setAnchors(!anchors)} aria-pressed={anchors}>Điểm neo</button>
-              <button onClick={() => addObs('shelf')}>+ Kệ 1.8 m</button>
-              <button onClick={() => addObs('pos')}>+ POS</button>
-              <button onClick={() => addObs('entrance')}>+ Cửa</button>
-              <button onClick={addCamera}>+ Camera</button>
-              <button className={tool === 'person' ? 'on' : ''} aria-pressed={tool === 'person'} title={tool === 'person' ? 'Bấm vào mặt bằng để đặt người' : 'Đặt người để xem DORI tại mặt, ngực, bụng và chân'} onClick={() => { setTool(tool === 'person' ? 'select' : 'person'); setBrush(null); }}>
-                {tool === 'person' ? 'Bấm mặt bằng để đặt người' : '+ Người đánh giá'}
-              </button>
-              <button className={tool === 'measure' ? 'on' : ''} aria-pressed={tool === 'measure'} onClick={() => { setTool(tool === 'measure' ? 'select' : 'measure'); setBrush(null); setMeasure(null); }}>Đo khoảng cách</button>
-              <button onClick={() => setLayout((l) => ({ ...l, cameras: manualFourCorners(l) }))}>Đặt 4 góc thủ công</button>
-              <button onClick={deleteSelected} disabled={!sel}>Xóa đã chọn</button>
-              <button onClick={() => rotate(1)} disabled={!sel}>Xoay +15°</button>
-              <button onClick={benchmark}>Đo hiệu năng · 20 cam</button>
-            </div>
-            <div className="toolbar-group" aria-label="Lịch sử chỉnh sửa">
-              <span className="toolbar-heading">Lịch sử</span>
-              <button onClick={undo} disabled={!undoReady} title="Hoàn tác (Ctrl+Z)">↶ Hoàn tác</button>
-              <button onClick={redo} disabled={!redoReady} title="Làm lại (Ctrl+Y)">↷ Làm lại</button>
             </div>
           </div>
-        </div>
+          <OptiCamCanvas layout={layout} cells={cells} view={view} tool={tool} brush={brush} selected={sel} people={people} riskFilter={riskFilter} focusCell={focusCell}
+            onRiskFilter={setRiskFilter} onAddPerson={addPerson} onPerson={updatePerson} onInvalidPerson={() => flash('Không thể đặt người sát tường hoặc chồng lên vật cản')} showGrid={grid} showAnchors={anchors} measure={measure} stageRef={stageRef} drawMsRef={drawMsRef}
+            onCamera={updateCamera} onObstacle={updateObstacle} onPaint={paint} onSelect={select} onRotate={rotate} onMeasure={setMeasure} />
+          <button className="mobile-tools-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)}>
+            {toolsOpen ? 'Ẩn công cụ' : 'Mở công cụ mặt bằng'}
+          </button>
+          <div className="legend">
+            {view === 'dori' && (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((key) => <span key={key}><i style={{ background: DORI_COLOR[key] }} />{{ identification: '≥250 PPM', recognition: '≥125', observation: '≥62', detection: '≥25', blind: 'Mù / <25' }[key]}</span>)}
+            {view === 'risk' && <span className="canvas-note">Số W ẩn khi lưới &lt; 0,5 m; ở 0,5 m hiện tất cả; lưới lớn hơn chỉ hiện W ≥ 2.</span>}
+          </div>
+          <div className="canvas-footer">
+            <span>{layout.pixelsPerMeter} px / m <i /> Lưới {layout.gridM} m</span>
+            <span>{sel ? `Đang chọn ${sel.kind === 'cam' ? 'camera' : sel.kind === 'obs' ? 'vật thể' : 'người'}` : 'Chưa chọn đối tượng'}</span>
+          </div>
+        </section>
 
-        <aside>
-          <Scorecard d={{ manual, live: score, unweighted, solveMs, renderMs, heatMs: drawMsRef.current }} />
+        <aside className="inspector-column">
+          <Scorecard d={{ manual, live: score, unweighted, solveMs, renderMs, heatMs: drawMsRef.current }}
+            view={view} riskMetrics={riskMetrics}
+            onFocusHighUncovered={() => {
+              if (!riskMetrics.firstUncovered) return;
+              setView('risk'); setRiskFilter('high'); setFocusCell(riskMetrics.firstUncovered);
+            }} />
           <Inspector layout={layout} sel={sel} measure={measure} onTargetHeight={(targetHeight) => patch({ targetHeight })} onGrid={(gridM) => patch({ gridM: Math.max(0.1, Math.min(2, gridM)), risk: {} })} onObs={editObstacle} onCam={editCamera} onRoom={setRoom} onScale={(v) => patch({ pixelsPerMeter: v })} onCalibrate={calibrate} />
-          <div className="panel">
-            <h3>Dự án</h3>
-            <div className="row wrap">
-              <button onClick={runUnweighted}>Chạy Greedy không trọng số</button>
-              <button onClick={() => setBom(true)}>Bảng BOM</button>
-              <button onClick={() => download('opticam_layout.json', exportBundle(layout, score))}>Export JSON</button>
-              <label className="btn">Import JSON<input type="file" accept=".json" hidden onChange={(e) => onFile(e, 'json')} /></label>
-              <button onClick={savePng}>PNG</button>
+          <details className="panel project-panel">
+            <summary>Xuất và dự án</summary>
+            <div className="project-actions">
+              <button onClick={() => setBom(true)}>Mở bảng BOM</button>
+              <button onClick={() => download('opticam_layout.json', exportBundle(layout, score))}>Xuất layout JSON</button>
+              <label className="btn">Nhập layout JSON<input type="file" accept=".json" hidden onChange={(e) => onFile(e, 'json')} /></label>
+              <button onClick={savePng}>Lưu ảnh PNG</button>
+              <button onClick={runUnweighted}>So sánh Greedy không trọng số</button>
             </div>
-          </div>
-          <div className="panel">
-            <h3>Ảnh nền tham chiếu</h3>
-            <label className="btn">Nạp ảnh mặt bằng<input type="file" accept="image/*" hidden onChange={(e) => onFile(e, 'bg')} /></label>
-            {bg && <div className="col">
-              <label>Bề ngang ảnh = {bg.widthM.toFixed(1)} m<input type="range" min={2} max={40} step={0.5} value={bg.widthM} onChange={(e) => patch({ background: { ...bg, widthM: +e.target.value } })} /></label>
-              <label>Độ mờ<input type="range" min={0.1} max={1} step={0.1} value={bg.opacity} onChange={(e) => patch({ background: { ...bg, opacity: +e.target.value } })} /></label>
-              <div className="row"><button onClick={() => patch({ background: { ...bg, visible: !bg.visible } })}>{bg.visible ? 'Ẩn' : 'Hiện'}</button><button onClick={() => patch({ background: undefined })}>Gỡ</button></div>
-            </div>}
-          </div>
-          <p className="muted small">Phím: Ctrl+Z hoàn tác · Ctrl+Y làm lại · O tối ưu · B BOM · G lưới · A điểm neo · C thêm cam · R xoay · Del xóa. Thay layout sẽ hỏi xác nhận.</p>
+          </details>
+          <details className="panel reference-panel" open={Boolean(bg)}>
+            <summary>Ảnh nền tham chiếu</summary>
+            <div className="reference-actions">
+              <label className="btn">Nạp ảnh mặt bằng<input type="file" accept="image/*" hidden onChange={(e) => onFile(e, 'bg')} /></label>
+              {bg && <>
+                <label className="field">Bề ngang ảnh · {bg.widthM.toFixed(1)} m<input type="range" min={2} max={40} step={0.5} value={bg.widthM} onChange={(e) => patch({ background: { ...bg, widthM: +e.target.value } })} /></label>
+                <label className="field">Độ mờ · {Math.round(bg.opacity * 100)}%<input type="range" min={0.1} max={1} step={0.1} value={bg.opacity} onChange={(e) => patch({ background: { ...bg, opacity: +e.target.value } })} /></label>
+                <div className="row"><button onClick={() => patch({ background: { ...bg, visible: !bg.visible } })}>{bg.visible ? 'Ẩn ảnh nền' : 'Hiện ảnh nền'}</button><button onClick={() => patch({ background: undefined })}>Gỡ ảnh</button></div>
+              </>}
+            </div>
+          </details>
+          <details className="panel advanced-panel">
+            <summary>Công cụ nâng cao</summary>
+            <div className="project-actions">
+              <button onClick={() => setLayout((current) => ({ ...current, cameras: manualFourCorners(current) }))}>Đặt 4 camera góc tường</button>
+              <button onClick={() => rotate(1)} disabled={!sel || sel.kind === 'person'}>Xoay đối tượng +15°</button>
+              <button onClick={deleteSelected} disabled={!sel}>Xóa đối tượng đã chọn</button>
+              <button onClick={benchmark}>Đo hiệu năng · 20 camera</button>
+            </div>
+          </details>
+          <p className="keyboard-hint">Phím tắt: <kbd>Ctrl Z</kbd> hoàn tác <i /> <kbd>O</kbd> tối ưu <i /> <kbd>B</kbd> BOM <i /> <kbd>G</kbd> lưới <i /> <kbd>Del</kbd> xóa</p>
         </aside>
       </main>
       {bom && <BomModal layout={layout} onClose={closeBom} />}

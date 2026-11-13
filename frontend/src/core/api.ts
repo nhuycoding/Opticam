@@ -1,6 +1,6 @@
 import type { Camera, Layout, Zone } from '../types';
 import { normalizeCameras } from './io';
-import { greedyPlace } from './optimizer';
+import { solveLocally } from './localSolver';
 
 /**
  * ĐIỂM DUY NHẤT cần sửa khi chốt schema với Gia Bảo (xem docs/API_CONTRACT.md):
@@ -29,16 +29,25 @@ export function fromApiResponse(json: any, l: Layout): Camera[] {
 }
 
 /** POST /api/v1/optimize; quá 1.5 s hoặc lỗi → Greedy phía client. */
-export async function requestOptimize(l: Layout, zones: Zone[], K = 3, cameraProfiles?: Camera[]): Promise<{ cameras: Camera[]; source: 'api' | 'client' }> {
+export async function requestOptimize(l: Layout, zones: Zone[], K = 3, cameraProfiles?: Camera[], signal?: AbortSignal): Promise<{ cameras: Camera[]; source: 'api' | 'client' }> {
+  if (signal?.aborted) throw new DOMException('Đã hủy tối ưu.', 'AbortError');
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 1500);
+  const abort = () => ctl.abort();
+  signal?.addEventListener('abort', abort, { once: true });
   try {
     const res = await fetch('/api/v1/optimize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
       body: JSON.stringify(toApiPayload(l, zones, K, cameraProfiles))
     });
-    if (res.ok) return { cameras: fromApiResponse(await res.json(), l), source: 'api' };
-  } catch { /* backend chưa bật / sai schema → fallback */ } finally { clearTimeout(timer); }
-  return { cameras: greedyPlace(l, zones, K, true, { cameraProfiles: cameraProfiles?.map((camera) => ({
-    fov: camera.fov, res: camera.res, range: camera.range, height: camera.height, model: camera.model
-  })) }), source: 'client' };
+    if (res.ok) {
+      const cameras = fromApiResponse(await res.json(), l);
+      if (cameras.length > K) throw new Error('Backend trả quá ngân sách camera.');
+      return { cameras, source: 'api' };
+    }
+  } catch { /* Backend unavailable or invalid response. */ } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  }
+  const result = await solveLocally({ layout: l, zones, count: K, profiles: cameraProfiles ?? [], mode: 'positions' }, signal);
+  return { cameras: result.cameras, source: 'client' };
 }

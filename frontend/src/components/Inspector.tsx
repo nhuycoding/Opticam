@@ -6,7 +6,9 @@ import { CAMERA_QUALITY_PRESETS, cameraQualityForResolution, type CameraQualityI
 import { RISK_DEFAULTS, SHELF_RISK_PROFILES } from '../core/optics';
 
 interface Props {
+  mode?: 'room' | 'risk' | 'camera';
   layout: Layout; sel: Selection; measure: Segment;
+  onSelect: (selection: Selection) => void;
   onTargetHeight: (height: TargetHeight) => void;
   onGrid: (gridM: number) => void;
   onObs: (id: string, patch: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR'>>) => void;
@@ -18,9 +20,11 @@ function NumberInput({ value, min, max, step, onCommit, style }: {
 }) {
   const [draft, setDraft] = useState(String(value));
   const acceptedValue = useRef(value);
+  const [error, setError] = useState('');
   useEffect(() => {
     acceptedValue.current = value;
     setDraft(String(value));
+    setError('');
   }, [value]);
 
   const restore = () => setDraft(String(acceptedValue.current));
@@ -28,34 +32,36 @@ function NumberInput({ value, min, max, step, onCommit, style }: {
     const text = draft.trim();
     const next = text ? Number(text) : Number.NaN;
     if (Number.isFinite(next) && next >= min && (max === undefined || next <= max)) {
-      acceptedValue.current = next;
-      onCommit(next);
-      setDraft(String(next));
+      setError('');
+      if (next !== value) onCommit(next);
+      setDraft(String(value));
     } else {
+      setError(max === undefined ? `Nhập số từ ${min}.` : `Nhập số từ ${min} đến ${max}.`);
       restore();
     }
   };
 
-  return <input
+  return <span className="number-input"><input
+    aria-invalid={Boolean(error)}
     type="number"
     value={draft}
     min={min}
     max={max}
     step={step}
     style={style}
-    onChange={(event) => setDraft(event.target.value)}
+    onChange={(event) => { setDraft(event.target.value); setError(''); }}
     onKeyDown={(event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        commit();
+        event.currentTarget.blur();
       } else if (event.key === 'Escape') {
         event.preventDefault();
         restore();
-        event.currentTarget.blur();
+        setError('');
       }
     }}
-    onBlur={restore}
-  />;
+    onBlur={commit}
+  />{error && <small className="fail" role="alert">{error}</small>}</span>;
 }
 
 const Num = ({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) => (
@@ -63,13 +69,28 @@ const Num = ({ label, value, min, max, step, onChange }: { label: string; value:
 );
 
 /** Thuộc tính vật thể đang chọn · kích thước tường bao · tỷ lệ px/m · hiệu chuẩn ảnh nền bằng công cụ đo. */
-export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onObs, onCam, onRoom, onScale, onCalibrate }: Props) {
+export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, onTargetHeight, onGrid, onObs, onCam, onRoom, onScale, onCalibrate }: Props) {
+  const [customResolutionFor, setCustomResolutionFor] = useState<string | null>(null);
   const obs = sel?.kind === 'obs' ? L.obstacles.find((o) => o.id === sel.id) : undefined;
   const cam = sel?.kind === 'cam' ? L.cameras.find((c) => c.id === sel.id) : undefined;
   const area = L.widthM * L.heightM, mLen = measure ? Math.hypot(measure.b[0] - measure.a[0], measure.b[1] - measure.a[1]) : 0;
   return (
     <div className="panel inspector-panel">
-      <h3>Điểm đánh giá trên người</h3>
+      <h3>{sel ? 'Thuộc tính đối tượng' : mode === 'room' ? 'Kích thước & bố trí' : mode === 'risk' ? 'Ưu tiên theo vật thể' : 'Thông số & đánh giá'}</h3>
+      <label className="field object-picker">Đối tượng đang chọn
+        <select aria-label="Chọn đối tượng để chỉnh sửa" value={sel && sel.kind !== 'person' ? `${sel.kind}:${sel.id}` : ''} onChange={(event) => {
+          const value = event.target.value;
+          const separator = value.indexOf(':');
+          onSelect(value ? { kind: value.slice(0, separator) as 'cam' | 'obs', id: value.slice(separator + 1) } : null);
+        }}>
+          <option value="">Chọn đối tượng trên sơ đồ</option>
+          <optgroup label="Camera">{L.cameras.map((camera) => <option key={camera.id} value={`cam:${camera.id}`}>{camera.id} · {camera.model ?? 'Camera'}</option>)}</optgroup>
+          <optgroup label="Vật cản">{L.obstacles.map((obstacle) => <option key={obstacle.id} value={`obs:${obstacle.id}`}>{obstacle.label}</option>)}</optgroup>
+        </select>
+      </label>
+      <details className="inspector-settings" open={mode === 'room' || (!obs && !cam && mode === 'camera')}>
+      <summary>Thiết lập mặt bằng & đánh giá</summary>
+      <div className="inspector-settings-content">
       <label className="field">Độ cao mục tiêu tính từ sàn
         <select value={L.targetHeight} onChange={(e) => {
           const target = PERSON_TARGETS.find((option) => option.height === Number(e.target.value));
@@ -79,7 +100,7 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
         </select>
       </label>
       <p className="muted small">PPM và vùng khuất được tính tại độ cao đã chọn; chiều cao từng kệ/POS được xét trên đường ngắm 3D.</p>
-      <details className="inspector-settings">
+      <details className="inspector-settings" open={mode === 'room'}>
         <summary>
           <span>Tường bao & tỷ lệ</span>
           <small>{L.widthM} × {L.heightM} m · ô {L.gridM} m</small>
@@ -98,8 +119,10 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
       {L.background && measure && mLen > 0.05 && (
         <CalibrateRow measured={mLen} onApply={onCalibrate} />
       )}
+      </div></details>
+      {!sel && <div className="object-list">{(mode === 'camera' ? L.cameras.map(c => ({ id: c.id, label: c.id, note: `${c.res}px · FOV ${c.fov}°`, kind: 'cam' as const })) : L.obstacles.map(o => ({ id: o.id, label: o.label, note: mode === 'risk' ? `W ${(o.riskWmax ?? RISK_DEFAULTS[o.type].wmax).toFixed(1)}` : `${o.w} × ${o.h} m`, kind: 'obs' as const }))).map(item => <button key={item.id} onClick={() => onSelect({ kind: item.kind, id: item.id })}><span>{item.label}</span><small>{item.note}</small></button>)}</div>}
       {obs && <>
-        {(() => {
+        {mode === 'risk' && (() => {
           const defaults = RISK_DEFAULTS[obs.type];
           const riskCategory = obs.riskCategory ?? 'standard';
           return <>
@@ -130,17 +153,18 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
         <p className="muted small">W giữ ở mức đỉnh đến r₀, sau đó giảm tuyến tính về 1 tại R. Wmax nhóm hàng là giá trị khởi tạo có thể chỉnh, chưa hiệu chuẩn bằng dữ liệu tổn thất của cửa hàng.</p>
         </>;
         })()}
-        <h3>Vật cản: {obs.label}</h3>
+        {mode !== 'risk' && <>
+        <h3>Vật cản · {obs.label}</h3>
         <label className="field">Tên<input value={obs.label} onChange={(e) => onObs(obs.id, { label: e.target.value })} /></label>
         <div className="row">
           <Num label="Dài (m)" value={obs.w} min={0.2} max={20} step={0.5} onChange={(v) => onObs(obs.id, { w: v })} />
           <Num label="Rộng (m)" value={obs.h} min={0.2} max={20} step={0.1} onChange={(v) => onObs(obs.id, { h: v })} />
           <Num label="Cao (m)" value={obs.elev} min={0.1} max={3} step={0.1} onChange={(v) => onObs(obs.id, { elev: v })} />
         </div>
-        <p className="muted small">Chiều cao vật thể được xét trên đường ngắm 3D tới điểm mục tiêu.</p>
+        <p className="muted small">Chiều cao vật thể được xét trên đường ngắm 3D tới điểm mục tiêu.</p></>}
       </>}
       {cam && <>
-        <h3>Camera: {cam.id}</h3>
+        <h3>Camera · {cam.id}</h3>
         <p className="muted small">Chỉnh thông số camera đang chọn. Góc xoay điều khiển hướng nhìn; góc quay là độ rộng vùng phủ (FOV).</p>
         <label className="field">Model / tên camera
           <input value={cam.model ?? ''} placeholder="Ví dụ: OptiCam IP 4MP" onChange={(e) => onCam(cam.id, { model: e.target.value })} />
@@ -148,9 +172,10 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
         <div className="row">
           <label className="field">Chất lượng hình ảnh
             <select
-              value={cameraQualityForResolution(cam.res)}
+              value={customResolutionFor === cam.id ? 'custom' : cameraQualityForResolution(cam.res)}
               onChange={(e) => {
                 const quality = e.target.value as CameraQualityId;
+                setCustomResolutionFor(quality === 'custom' ? cam.id : null);
                 const preset = CAMERA_QUALITY_PRESETS.find((option) => option.id === quality);
                 if (preset) onCam(cam.id, { res: preset.resolution, model: preset.model });
               }}
@@ -159,7 +184,7 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
               <option value="custom">Tùy chỉnh</option>
             </select>
           </label>
-          {cameraQualityForResolution(cam.res) === 'custom' && (
+          {(customResolutionFor === cam.id || cameraQualityForResolution(cam.res) === 'custom') && (
             <Num label="Độ phân giải ngang (px)" value={cam.res} min={640} max={7680} step={160} onChange={(v) => onCam(cam.id, { res: v })} />
           )}
           <Num label="Góc xoay / hướng nhìn (°)" value={cam.pan} min={0} max={345} step={15} onChange={(v) => onCam(cam.id, { pan: v })} />
@@ -170,7 +195,7 @@ export function Inspector({ layout: L, sel, measure, onTargetHeight, onGrid, onO
           <Num label="Cao (m)" value={cam.height} min={1.8} max={4} step={0.1} onChange={(v) => onCam(cam.id, { height: v })} />
         </div>
       </>}
-      {sel?.kind !== 'cam' && <p className="muted small">Chọn camera trên sơ đồ để chỉnh chất lượng, hướng xoay và góc quan sát.</p>}
+      {mode === 'camera' && sel?.kind !== 'cam' && <p className="muted small">Chọn camera trên sơ đồ để chỉnh chất lượng, hướng xoay và góc quan sát.</p>}
     </div>
   );
 }
@@ -180,7 +205,7 @@ function CalibrateRow({ measured, onApply }: { measured: number; onApply: (real:
   return (
     <div className="row wrap">
       <span className="small">Đã đo trên ảnh nền: {measured.toFixed(2)} m →</span>
-      <NumberInput value={real} min={0.1} step={0.1} style={{ width: 80 }} onCommit={setReal} /> m thực
+      <label className="field">Chiều dài thực (m)<NumberInput value={real} min={0.1} step={0.1} style={{ width: 80 }} onCommit={setReal} /></label>
       <button onClick={() => onApply(real)}>Hiệu chuẩn ảnh nền</button>
     </div>
   );

@@ -189,7 +189,7 @@ class OptiCamGreedy:
     ):
         self.room_width = room_width
         self.room_length = room_length
-        self.obstacles = list(obstacles_data)
+        self.obstacles = [obstacle.dict() if hasattr(obstacle, "dict") else obstacle for obstacle in obstacles_data]
         self.target_height = target_height
         self.risk_strokes = list(risk_strokes)
         self.legacy_risk = legacy_risk or {}
@@ -200,8 +200,8 @@ class OptiCamGreedy:
         risk_matrix: Sequence[Sequence[int]] | None = None,
         blocked_matrix: Sequence[Sequence[int]] | None = None,
     ) -> list[GridPoint]:
-        rows = round(self.room_length / cell_size)
-        cols = round(self.room_width / cell_size)
+        rows = math.floor(self.room_length / cell_size + 0.5)
+        cols = math.floor(self.room_width / cell_size + 0.5)
         points: list[GridPoint] = []
         for row in range(rows):
             for col in range(cols):
@@ -268,7 +268,8 @@ class OptiCamGreedy:
         camera_candidate_groups: Sequence[Sequence[dict[str, Any]]] | None = None,
     ) -> tuple[list[dict[str, Any]], dict[str, float | bool]]:
         total_points = len(grid_points)
-        if not total_points or not camera_candidates or camera_budget <= 0:
+        candidate_groups = camera_candidate_groups or [camera_candidates]
+        if not total_points or not any(candidate_groups) or camera_budget <= 0:
             total_weight = sum(weight for _, _, weight in grid_points)
             return [], {
                 "area_coverage_pct": 100.0 if not total_points else 0.0,
@@ -276,35 +277,26 @@ class OptiCamGreedy:
                 "weighted_coverage_pct": 100.0 if not total_weight else 0.0,
             }
 
-        candidate_groups = camera_candidate_groups or [camera_candidates]
-        candidate_scores: list[list[tuple[dict[str, Any], list[float], list[float]]]] = []
-        scored_groups: dict[int, list[tuple[dict[str, Any], list[float], list[float]]]] = {}
-        for group in candidate_groups:
-            group_id = id(group)
-            if group_id not in scored_groups:
-                group_scores: list[tuple[dict[str, Any], list[float], list[float]]] = []
-                for camera in group:
-                    ppm_values = [
-                        camera_ppm(camera, (x, y), self.obstacles, self.target_height)
-                        for x, y, _ in grid_points
-                    ]
-                    scores = [
-                        dori_factor(ppm) * weight
-                        for ppm, (_, _, weight) in zip(ppm_values, grid_points)
-                    ]
-                    if any(ppm_values):
-                        group_scores.append((camera, scores, ppm_values))
-                scored_groups[group_id] = group_scores
-            group_scores = scored_groups[group_id]
-            candidate_scores.append(group_scores)
-
+        current_candidates: list[tuple[dict[str, Any], list[float], list[float]]] = []
+        current_group_id = None
         current_scores = [0.0] * total_points
         current_ppm = [0.0] * total_points
         selected: list[dict[str, Any]] = []
         covered_count = 0
-        while len(selected) < camera_budget:
+        for profile_index in range(camera_budget):
+            group = candidate_groups[min(profile_index, len(candidate_groups) - 1)]
+            if id(group) != current_group_id:
+                current_candidates = []
+                for camera in group:
+                    if camera in selected:
+                        continue
+                    ppm_values = [camera_ppm(camera, (x, y), self.obstacles, self.target_height)
+                                  for x, y, _ in grid_points]
+                    if any(ppm_values):
+                        scores = [dori_factor(ppm) * weight for ppm, (_, _, weight) in zip(ppm_values, grid_points)]
+                        current_candidates.append((camera, scores, ppm_values))
+                current_group_id = id(group)
             best_index, best_gain, best_ppm_gain = -1, -1.0, -1.0
-            current_candidates = candidate_scores[min(len(selected), len(candidate_scores) - 1)]
             for index, (_, scores, ppm_values) in enumerate(current_candidates):
                 gain = sum(max(0.0, score - current) for score, current in zip(scores, current_scores))
                 ppm_gain = sum(
@@ -314,7 +306,7 @@ class OptiCamGreedy:
                 if gain > best_gain or (gain == best_gain and ppm_gain > best_ppm_gain):
                     best_index, best_gain, best_ppm_gain = index, gain, ppm_gain
             if best_index < 0:
-                break
+                continue
 
             camera, scores, ppm_values = current_candidates.pop(best_index)
             selected.append(camera)

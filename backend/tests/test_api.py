@@ -1,4 +1,7 @@
 import json
+import io
+import pytest
+from openpyxl import load_workbook
 
 from fastapi.testclient import TestClient
 
@@ -133,7 +136,7 @@ def test_optimize_returns_cameras_even_when_all_points_are_below_detection_thres
     payload["cameraBudgetK"] = 3
     payload["layout"].update(widthM=40, heightM=40, gridM=1)
     payload["grid"].update(rows=40, cols=40, cellSizeM=1)
-    payload["cameraProfiles"] = [{"fov": 140, "res": 640, "range": 30}]
+    payload["cameraProfiles"] = [{"fov": 140, "res": 640, "range": 30}] * 3
     payload["riskMatrix"] = [[1] * 40 for _ in range(40)]
     payload["blockedMatrix"] = [[1] * 40 for _ in range(40)]
     payload["blockedMatrix"][20][20] = 0
@@ -203,7 +206,7 @@ def test_target_height_changes_3d_obstruction_and_optimizer_api() -> None:
     face = OptiCamGreedy(6, 3, [pos], target_height=1.6)
     waist = OptiCamGreedy(6, 3, [pos], target_height=0.9)
     assert face.get_covered_points(0, 1.5, 10, grid, 0, 90) == {0}
-    assert waist.get_covered_points(0, 1.5, 10, grid, 0, 90) == set()
+    assert waist.get_covered_points(0, 1.5, 10, [(5.5, 1.5, 1)], 0, 90) == set()
 
     payload = optimize_payload()
     payload["layout"]["targetHeight"] = 1.2
@@ -249,3 +252,119 @@ def test_bom_csv_and_project_bundle() -> None:
     )
     assert imported.status_code == 200
     assert imported.json()["project_bundle"]["layout"]["name"] == "Test room"
+
+
+@pytest.mark.parametrize("field,value", [("fov", 0), ("res", "invalid"), ("height", -1), ("x", 99)])
+def test_export_rejects_invalid_camera_settings(field, value):
+    layout = sample_layout()
+    layout["cameras"][0][field] = value
+    assert client.post("/api/v1/bom/export", json=layout).status_code == 422
+
+
+def test_non_finite_obstacle_data_is_rejected():
+    layout = sample_layout()
+    layout["obstacles"] = [{"type": "shelf", "x": "NaN", "y": 1}]
+    assert client.post("/api/v1/bom/export", json=layout).status_code == 422
+
+
+def test_fractional_grid_rounding_matches_javascript():
+    payload = optimize_payload()
+    payload["layout"]["widthM"] = 4.5
+    payload["grid"]["cols"] = 5
+    payload["riskMatrix"] = [[1] * 5 for _ in range(3)]
+    payload["blockedMatrix"] = [[0] * 5 for _ in range(3)]
+    response = client.post("/api/v1/optimize", json=payload)
+    assert response.status_code == 200
+    assert len(OptiCamGreedy(4.5, 3, []).generate_grid(1)) == 15
+
+
+def test_blocked_matrix_does_not_silently_truncate_fractional_values():
+    payload = optimize_payload()
+    payload["blockedMatrix"][0][0] = 0.5
+    assert client.post("/api/v1/optimize", json=payload).status_code == 422
+
+
+def test_dense_grid_anchor_reduction_terminates(monkeypatch):
+    payload = optimize_payload()
+    payload["layout"].update(widthM=40, heightM=30, gridM=0.32)
+    payload["grid"].update(rows=94, cols=125, cellSizeM=0.32)
+    payload["riskMatrix"] = [[1] * 125 for _ in range(94)]
+    payload["blockedMatrix"] = [[0] * 125 for _ in range(94)]
+    original_anchors = main._wall_anchors
+    anchor_calls = 0
+    def bounded_anchors(*args):
+        nonlocal anchor_calls
+        anchor_calls += 1
+        assert anchor_calls <= 20
+        return original_anchors(*args)
+    monkeypatch.setattr(main, "_wall_anchors", bounded_anchors)
+    # Isolate anchor reduction so this regression never needs a huge PPM matrix.
+    def empty_solution(self, candidates, cells, budget, **kwargs):
+        assert len(candidates) == 4 * 24
+        return [], {"weighted_coverage_pct": 0, "area_coverage_pct": 0, "target_coverage_reached": False}
+    monkeypatch.setattr(OptiCamGreedy, "run_greedy", empty_solution)
+    assert client.post("/api/v1/optimize", json=payload).status_code == 200
+
+
+def test_bundle_heatmap_excludes_solid_cells():
+    layout = sample_layout()
+    layout["obstacles"] = [{"id": "s", "type": "shelf", "x": 1, "y": 1, "w": 1, "h": 1, "elev": 0.1}]
+    response = client.post("/api/v1/project/export", json={"layout": layout})
+    assert response.status_code == 200
+    cell = next(cell for cell in response.json()["heatmap"]["cells"] if cell["row"] == 1 and cell["col"] == 1)
+    assert cell["solid"] is True
+    assert cell["ppm"] == 0
+
+
+def test_bom_spreadsheet_strings_are_literal():
+    layout = sample_layout()
+    layout["cameras"][0]["model"] = '=SUM(1,2)'
+    csv_response = client.post("/api/v1/bom/export?format=csv", json=layout)
+    assert "'=SUM(1,2)" in csv_response.text
+    response = client.post("/api/v1/bom/export?format=xlsx", json=layout)
+    workbook = load_workbook(io.BytesIO(response.content))
+    assert workbook.active["H2"].data_type == "s"
+
+
+def test_concurrent_saves_leave_complete_json(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    def save(index):
+        layout = main.LayoutData(**{**sample_layout(), "name": f"revision-{index}"})
+        main.save_layout(layout, filename="shared.json")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(save, range(20)))
+    saved = json.loads((tmp_path / "shared.json").read_text())
+    assert saved["name"].startswith("revision-")
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_non_finite_export_metadata_is_rejected():
+    response = client.post("/api/v1/project/export", content=json.dumps({"layout": sample_layout(), "score": {"weighted": float("nan")}}), headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("empty_first_group", [False, True])
+def test_later_camera_profiles_can_cover_a_target_the_first_profile_cannot(empty_first_group):
+    optimizer = OptiCamGreedy(4, 3, [])
+    invisible = {"x": 0, "y": 0, "pan": 180, "fov": 30, "res": 2560, "range": 1, "height": 2.4}
+    visible = {**invisible, "pan": 45, "fov": 90, "range": 10}
+    first_group = [] if empty_first_group else [invisible]
+    cameras, _ = optimizer.run_greedy(first_group, [(2.5, 1.5, 1)], 2, camera_candidate_groups=[first_group, [visible]])
+    assert cameras == [visible]
+
+
+def test_optimizer_converts_obstacle_models_once(monkeypatch):
+    calls = 0
+    original = main.Obstacle.dict
+    def tracked(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(self, *args, **kwargs)
+    obstacle = main.Obstacle(type="shelf", x=1, y=1, w=0.5, h=1)
+    monkeypatch.setattr(main.Obstacle, "dict", tracked)
+    optimizer = OptiCamGreedy(4, 3, [obstacle])
+    points = optimizer.generate_grid(0.5)
+    candidates = [{"x": 0, "y": 0, "pan": 45, "fov": 85, "range": 10, "res": 2560, "height": 2.4}]
+    optimizer.run_greedy(candidates, points, 1)
+    assert calls == 1

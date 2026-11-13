@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Layer, Shape } from 'react-konva';
+import { Group, Layer, Shape } from 'react-konva';
 import type { Cell, Layout } from '../../types';
 import { PlanAnnotationsLayer } from './PlanAnnotationsLayer';
 import { DORI_COLOR, PAD, priorityBand, riskColor, shouldShowRiskWeight, type PriorityBand, type ViewMode } from './shared';
@@ -15,7 +15,7 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
   const cellsByPosition = new Map(cells.map((cell) => [`${cell.r}_${cell.c}`, cell]));
   return (
     <Layer x={PAD} y={PAD} listening={false}>
-      <Shape visible={view !== 'off'} sceneFunc={(ctx) => {
+      <Group clipX={0} clipY={0} clipWidth={layout.widthM * layout.pixelsPerMeter} clipHeight={layout.heightM * layout.pixelsPerMeter}><Shape visible={view !== 'off'} sceneFunc={(ctx) => {
         const t0 = performance.now();
         for (const c of cells) {
           if (c.solid) continue;
@@ -33,9 +33,9 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
             ctx.setAttr('textAlign', 'center');
             ctx.setAttr('textBaseline', 'middle');
             ctx.setAttr('lineWidth', 2.5);
-            ctx.setAttr('strokeStyle', 'rgba(10,19,24,.82)');
+            ctx.setAttr('strokeStyle', 'rgba(255,254,247,.9)');
             ctx.strokeText(c.w.toFixed(1), (c.c + 0.5) * cellPx, (c.r + 0.5) * cellPx);
-            ctx.setAttr('fillStyle', '#fff');
+            ctx.setAttr('fillStyle', '#594e37');
             ctx.fillText(c.w.toFixed(1), (c.c + 0.5) * cellPx, (c.r + 0.5) * cellPx);
           }
           ctx.setAttr('globalAlpha', 1);
@@ -55,7 +55,7 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
               ctx.lineTo((c.c + 1) * cellPx, (c.r + 1) * cellPx);
             }
           }
-          ctx.setAttr('strokeStyle', 'rgba(231,238,233,.5)');
+          ctx.setAttr('strokeStyle', 'rgba(112,92,58,.35)');
           ctx.setAttr('lineWidth', 1);
           ctx.stroke();
         }
@@ -69,7 +69,7 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
           ctx.strokeRect(highlight.c * cellPx + 1, highlight.r * cellPx + 1, cellPx - 2, cellPx - 2);
         }
         drawMsRef.current = performance.now() - t0;
-      }} />
+      }} /></Group>
       <PlanAnnotationsLayer layout={layout} />
     </Layer>
   );

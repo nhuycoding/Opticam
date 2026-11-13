@@ -67,6 +67,7 @@ export interface Cell extends Zone { ppm: number; dori: Dori }
 
 export interface Score {
   red: number; yellow: number;   // % ô đạt chuẩn DORI của vùng
+  redCells?: number; yellowCells?: number;
   redMinPpm: number;
   weighted: number;              // Σ W × Score_DORI
   cams: number; ms: number;

@@ -85,10 +85,11 @@ the matrices using `buildZones()`; blocked cells are excluded from coverage calc
 
 The matrix snippets above are illustrative only; actual matrix dimensions must be exactly
 `rows × cols`. `cameraBudgetK` is 1–20. `cellSizeM` must match `layout.gridM`, and grid
-dimensions must equal `round(heightM / cellSizeM)` rows and `round(widthM / cellSizeM)`
+dimensions use positive half-up rounding, `floor(value / cellSizeM + 0.5)`, for rows and
 columns. Risk values are continuous numbers in `[1, 5]`; blocked values are 0 or 1. The grid may contain at most
-12,000 cells. Candidate evaluations are capped at 1,000,000; the optimizer coarsens wall
-anchor spacing when required.
+12,000 cells. The optimizer coarsens wall anchor spacing toward roughly 1,000,000
+candidate-cell evaluations per profile, stopping at four corner anchors. Near the cell limit,
+those four anchors require up to 1,152,000 evaluations.
 
 `cameraProfiles` is optional and ordered by optimized camera number. Each profile's FOV,
 horizontal resolution, range, height, and model are applied to its corresponding optimized
@@ -96,9 +97,10 @@ camera. Missing profiles use `FOV=85°`, `res=2560` horizontal pixels, `height=2
 `range=10 m`. The frontend sends profiles for the selected camera budget, using the existing
 cameras' settings in order; cameras without an existing profile use those defaults.
 Anchors are on room walls, at `max(gridM, 0.5 m)` spacing initially, with pan angles in
-15° increments. Greedy maximizes weighted DORI gain and stops at 95% of unblocked
-cells reaching Detection (25 PPM), no positive-gain candidate, or the budget. This is not
-the same candidate set or stopping rule as the client optimizer; exact formulas are in
+15° increments. Greedy maximizes weighted DORI gain across up to the requested budget
+of camera profiles. Each candidate within a profile is selected at most once. Profiles
+with no reachable free cells are skipped. Coverage metrics report the achieved result.
+The client uses its own candidate sampling and tie-breaking rules. Exact formulas are in
 [FORMULAS.md](FORMULAS.md).
 
 Response shape:

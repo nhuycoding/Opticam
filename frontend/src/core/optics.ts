@@ -125,6 +125,6 @@ export function evaluate(l: Layout, zones: Zone[]): { cells: Cell[]; score: Scor
   const pct = (a: number, n: number) => (n ? Math.round((a / n) * 1000) / 10 : 100);
   return {
     cells,
-    score: { red: pct(redOk, redN), yellow: pct(yelOk, yelN), redMinPpm: Number.isFinite(redMinPpm) ? Math.round(redMinPpm) : 0, weighted: Math.round(weighted * 10) / 10, cams: l.cameras.length, ms: Math.round((performance.now() - t0) * 100) / 100 }
+    score: { red: pct(redOk, redN), yellow: pct(yelOk, yelN), redCells: redN, yellowCells: yelN, redMinPpm: Number.isFinite(redMinPpm) ? Math.round(redMinPpm) : 0, weighted: Math.round(weighted * 10) / 10, cams: l.cameras.length, ms: Math.round((performance.now() - t0) * 100) / 100 }
   };
 }

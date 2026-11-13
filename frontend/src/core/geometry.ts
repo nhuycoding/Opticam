@@ -19,6 +19,8 @@ export function rectPoly(cx: number, cy: number, w: number, h: number, angDeg: n
   );
 }
 export const obsPoly = (o: Obstacle): Pt[] => rectPoly(...center(o), o.w, o.h, o.angle);
+export const obstacleFitsRoom = (o: Obstacle, width: number, height: number): boolean =>
+  obsPoly(o).every(([x, y]) => x >= -0.011 && y >= -0.011 && x <= width + 0.011 && y <= height + 0.011);
 
 /** Separating Axis Theorem — chỉ coi là va chạm khi chồng lấn thật (chạm cạnh vẫn hợp lệ). */
 export function satCollide(a: Pt[], b: Pt[]): boolean {
@@ -78,10 +80,12 @@ export const rayBlocked = (a: Pt, b: Pt, polys: Pt[][]) =>
 
 /** Điểm neo ứng viên dọc tường bao, bước = gridM. */
 export function wallAnchors(W: number, H: number, step: number): Pt[] {
+  if (![W, H, step].every((value) => Number.isFinite(value) && value > 0)) throw new Error('Kích thước và bước neo phải lớn hơn 0.');
   const set = new Map<string, Pt>();
   const add = (x: number, y: number) => set.set(`${x.toFixed(2)}_${y.toFixed(2)}`, [round2(x), round2(y)]);
-  for (let i = 0; i <= Math.round(W / step); i++) { add(i * step, 0); add(i * step, H); }
-  for (let j = 0; j <= Math.round(H / step); j++) { add(0, j * step); add(W, j * step); }
+  for (let i = 0; i <= Math.floor(W / step); i++) { add(i * step, 0); add(i * step, H); }
+  for (let j = 0; j <= Math.floor(H / step); j++) { add(0, j * step); add(W, j * step); }
+  add(W, 0); add(W, H); add(0, H);
   return [...set.values()];
 }
 

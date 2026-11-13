@@ -7,6 +7,7 @@ import math
 import os
 import re
 import time
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -15,7 +16,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, root_validator, validator, conint
 
 if __package__:
     from .greedy_optimizer import OptiCamGreedy, camera_ppm
@@ -42,14 +43,61 @@ MAX_GRID_CELLS = 12_000
 MAX_CANDIDATE_CELL_EVALUATIONS = 1_000_000
 
 
-class Obstacle(BaseModel):
+class FiniteModel(BaseModel):
+    @root_validator(pre=True)
+    def reject_non_finite_json(cls, values):
+        pending = [values]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("numeric values must be finite")
+            if isinstance(value, dict):
+                pending.extend(value.values())
+            elif isinstance(value, (list, tuple)):
+                pending.extend(value)
+        return values
+
+    class Config:
+        allow_inf_nan = False
+
+
+class CameraProfile(FiniteModel):
+    fov: float = Field(default=85, ge=30, le=140)
+    res: float = Field(default=2560, ge=640, le=7680)
+    range: float = Field(default=10, ge=1, le=30)
+    height: float = Field(default=2.4, ge=1.8, le=4)
+    model: str | None = "Dome IP 4MP (2560px, ống kính 2.8mm)"
+
+
+class CameraData(CameraProfile):
     id: str = ""
-    type: str = "shelf"
+    x: float = 0
+    y: float = 0
+    pan: float = 0
+    target: str | None = None
+
+    class Config:
+        extra = "allow"
+
+    @root_validator(pre=True)
+    def normalize_pan(cls, values):
+        values = dict(values)
+        values["pan"] = values.get("pan", values.get("pan_angle", values.get("angle", 0)))
+        return values
+
+    @validator("pan")
+    def wrap_pan(cls, value):
+        return value % 360
+
+
+class Obstacle(FiniteModel):
+    id: str = ""
+    type: Literal["shelf", "pos", "entrance"] = "shelf"
     x: float
     y: float
     w: float = Field(default=1, gt=0)
     h: float = Field(default=1, gt=0)
-    elev: float = 1.8
+    elev: float = Field(default=1.8, ge=0, le=20)
     angle: float = 0
     riskCategory: Literal["high", "standard", "bulky", "custom"] | None = None
     riskWmax: float | None = Field(default=None, ge=1, le=5)
@@ -70,27 +118,37 @@ class Obstacle(BaseModel):
         return values
 
 
-class RiskStroke(BaseModel):
+class RiskStroke(FiniteModel):
     x: float
     y: float
     radius: float = Field(gt=0)
     weight: float = Field(ge=1, le=5)
 
 
-class LayoutData(BaseModel):
+class LayoutData(FiniteModel):
     version: str = "1.0"
     name: str = "Layout"
     widthM: float = Field(gt=0, le=40)
     heightM: float = Field(gt=0, le=40)
     gridM: float = Field(default=0.5, ge=0.1, le=2)
     targetHeight: float = Field(default=1.6, ge=0.5, le=2)
-    obstacles: list[Obstacle] = Field(default_factory=list)
+    obstacles: list[Obstacle] = Field(default_factory=list, max_items=500)
     risk: dict[str, float] = Field(default_factory=dict)
-    riskStrokes: list[RiskStroke] = Field(default_factory=list)
-    cameras: list[dict[str, Any]] = Field(default_factory=list)
+    riskStrokes: list[RiskStroke] = Field(default_factory=list, max_items=50000)
+    cameras: list[dict[str, Any]] = Field(default_factory=list, max_items=20)
 
     class Config:
         extra = "allow"
+
+    @validator("cameras", each_item=True)
+    def validate_camera(cls, camera):
+        return CameraData.parse_obj(camera).dict(exclude_none=True)
+
+    @validator("risk")
+    def validate_risk(cls, risk):
+        if any(not math.isfinite(value) or not 1 <= value <= 5 for value in risk.values()):
+            raise ValueError("risk weights must be finite and between 1 and 5")
+        return risk
 
     @root_validator
     def validate_grid_size(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -101,30 +159,29 @@ class LayoutData(BaseModel):
             raise ValueError("room dimensions must be at least 3 meters")
         if math.ceil(width / grid) * math.ceil(height / grid) > MAX_GRID_CELLS:
             raise ValueError(f"layout cannot exceed {MAX_GRID_CELLS} grid cells")
+        for index, camera in enumerate(values.get("cameras", [])):
+            camera["id"] = camera["id"] or f"CAM-{index + 1:02}"
+            if not 0 <= camera["x"] <= width or not 0 <= camera["y"] <= height:
+                raise ValueError("camera coordinates must be inside the room")
+        ids = [camera["id"] for camera in values.get("cameras", []) if camera["id"]]
+        if len(ids) != len(set(ids)):
+            raise ValueError("camera IDs must be unique")
         return values
 
 
-class GridData(BaseModel):
-    rows: int = Field(gt=0)
-    cols: int = Field(gt=0)
+class GridData(FiniteModel):
+    rows: conint(strict=True, gt=0)
+    cols: conint(strict=True, gt=0)
     cellSizeM: float = Field(gt=0)
 
 
-class CameraProfile(BaseModel):
-    fov: float = Field(default=85, ge=30, le=140)
-    res: float = Field(default=2560, ge=640, le=7680)
-    range: float = Field(default=10, ge=1, le=30)
-    height: float = Field(default=2.4, ge=1.8, le=4)
-    model: str | None = "Dome IP 4MP (2560px, ống kính 2.8mm)"
-
-
-class OptimizeRequest(BaseModel):
-    cameraBudgetK: int = Field(default=3, ge=1, le=20)
+class OptimizeRequest(FiniteModel):
+    cameraBudgetK: conint(strict=True, ge=1, le=20) = 3
     cameraProfiles: list[CameraProfile] = Field(default_factory=list)
     layout: LayoutData
     grid: GridData
     riskMatrix: list[list[float]]
-    blockedMatrix: list[list[int]]
+    blockedMatrix: list[list[conint(strict=True, ge=0, le=1)]]
 
     @root_validator
     def validate_matrices(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -137,7 +194,7 @@ class OptimizeRequest(BaseModel):
             raise ValueError(f"grid cannot exceed {MAX_GRID_CELLS} cells")
         if abs(grid.cellSizeM - layout.gridM) > 1e-6:
             raise ValueError("grid cellSizeM must match layout gridM")
-        if rows != round(layout.heightM / grid.cellSizeM) or cols != round(layout.widthM / grid.cellSizeM):
+        if rows != math.floor(layout.heightM / grid.cellSizeM + 0.5) or cols != math.floor(layout.widthM / grid.cellSizeM + 0.5):
             raise ValueError("grid dimensions must match layout dimensions")
         if len(risk_matrix) != rows or any(len(row) != cols for row in risk_matrix):
             raise ValueError("riskMatrix dimensions must match grid")
@@ -150,7 +207,7 @@ class OptimizeRequest(BaseModel):
         return values
 
 
-class ProjectExportRequest(BaseModel):
+class ProjectExportRequest(FiniteModel):
     layout: LayoutData
     score: dict[str, Any] = Field(default_factory=dict)
 
@@ -187,7 +244,7 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
 
     anchor_step = max(grid, 0.5)
     anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step)
-    while cells and len(anchors) * 24 * len(cells) > MAX_CANDIDATE_CELL_EVALUATIONS:
+    while cells and anchor_step < max(layout.widthM, layout.heightM) and len(anchors) * 24 * len(cells) > MAX_CANDIDATE_CELL_EVALUATIONS:
         anchor_step *= 2
         anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step)
 
@@ -258,10 +315,15 @@ def save_layout(
 ) -> dict[str, str]:
     safe_name = _safe_filename(filename)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    (DATA_DIR / safe_name).write_text(
-        json.dumps(payload.dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=DATA_DIR, suffix=".tmp", delete=False) as output:
+            temporary_path = Path(output.name)
+            json.dump(payload.dict(), output, ensure_ascii=False, indent=2)
+        os.replace(temporary_path, DATA_DIR / safe_name)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     return {"status": "success", "saved_file": safe_name}
 
 
@@ -272,7 +334,7 @@ def load_layout(filename: str = Query(default="layout_v1.json", max_length=110))
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Không tìm thấy file cấu hình phòng.")
     try:
-        return LayoutData.parse_raw(path.read_text(encoding="utf-8")).dict()
+        return LayoutData.parse_raw(path.read_text(encoding="utf-8-sig")).dict()
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=422, detail="File cấu hình không hợp lệ.") from exc
 
@@ -323,7 +385,12 @@ def export_bom(
 
     headers = ["Mã camera", "X (m)", "Y (m)", "Cao độ (m)", "Góc xoay (độ)",
                "FOV (độ)", "Mục tiêu", "Model", "Cáp dự kiến (m)"]
-    rows = [[row[key] for key in ("id", "x", "y", "height", "pan", "fov", "target", "model", "cableM")]
+    def spreadsheet_value(value):
+        if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r", "\n")):
+            return "'" + value
+        return value
+
+    rows = [[spreadsheet_value(row[key]) for key in ("id", "x", "y", "height", "pan", "fov", "target", "model", "cableM")]
             for row in bom["rows"]]
     if format == "csv":
         stream = io.StringIO()
@@ -357,15 +424,18 @@ def export_bom(
 
 
 def _heatmap(layout: LayoutData) -> dict[str, Any]:
-    rows = round(layout.heightM / layout.gridM)
-    cols = round(layout.widthM / layout.gridM)
+    rows = math.floor(layout.heightM / layout.gridM + 0.5)
+    cols = math.floor(layout.widthM / layout.gridM + 0.5)
     cameras = layout.cameras
+    obstacles = [obstacle.dict() for obstacle in layout.obstacles]
+    free_points = {(x, y) for x, y, _ in OptiCamGreedy(layout.widthM, layout.heightM, obstacles).generate_grid(layout.gridM)}
     cells = []
     for row in range(rows):
         for col in range(cols):
             x, y = (col + 0.5) * layout.gridM, (row + 0.5) * layout.gridM
             ppm = 0.0
-            for source in cameras:
+            solid = (x, y) not in free_points
+            for source in ([] if solid else cameras):
                 camera = {
                     "x": float(source.get("x", 0)),
                     "y": float(source.get("y", 0)),
@@ -375,14 +445,14 @@ def _heatmap(layout: LayoutData) -> dict[str, Any]:
                     "height": float(source.get("height", 2.4)),
                     "range": float(source.get("range", 10)),
                 }
-                ppm = max(ppm, camera_ppm(camera, (x, y), layout.obstacles, layout.targetHeight))
+                ppm = max(ppm, camera_ppm(camera, (x, y), obstacles, layout.targetHeight))
             tier = next(
                 (name for threshold, name in ((250, "identification"), (125, "recognition"),
                                                (62, "observation"), (25, "detection"))
                  if ppm >= threshold),
                 "blind",
             )
-            cells.append({"row": row, "col": col, "x": x, "y": y, "ppm": round(ppm, 1), "dori": tier})
+            cells.append({"row": row, "col": col, "x": x, "y": y, "ppm": round(ppm, 1), "dori": tier, "solid": solid})
     return {"rows": rows, "cols": cols, "cellSizeM": layout.gridM, "cells": cells}
 
 
@@ -420,7 +490,7 @@ async def import_project(file: UploadFile = File(...)) -> dict[str, Any]:
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File bundle vượt quá giới hạn 5 MB.")
     try:
-        bundle = json.loads(raw.decode("utf-8"))
+        bundle = json.loads(raw.decode("utf-8-sig"))
         if not isinstance(bundle, dict) or bundle.get("format") != "opticam-bundle":
             raise ValueError("invalid bundle format")
         LayoutData.parse_obj(bundle.get("layout"))

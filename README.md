@@ -21,12 +21,9 @@ python -m uvicorn main:app --reload --port 8000
 **Terminal 2 — frontend**
 ```powershell
 Set-Location .\frontend
-npm.cmd ci --legacy-peer-deps
+npm.cmd ci
 npm.cmd run dev
 ```
-
-`--legacy-peer-deps` cần thiết với bộ phiên bản hiện tại: Vite 8 và `@vitejs/plugin-react`
-4 khai báo peer dependency chưa khớp, dù build và test đã chạy thành công.
 
 Mở giao diện tại <http://localhost:3000>. Tài liệu API tương tác ở
 <http://localhost:8000/docs>; kiểm tra backend tại <http://localhost:8000/api/v1/health>.

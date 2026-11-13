@@ -24,10 +24,22 @@ export interface CandOpts {
 
 /** Tập ứng viên (điểm neo tường × góc xoay) và PPM của từng ứng viên trên các ô sàn trống — tính 1 lần. */
 export function buildCandidates(l: Layout, free: Zone[], { anchorStep = l.gridM, angleStep = 15, cameraProfile }: CandOpts = {}): Candidate[] {
+  if (!Number.isFinite(anchorStep) || anchorStep <= 0 || !Number.isFinite(angleStep) || angleStep <= 0) throw new Error('Bước lấy mẫu phải lớn hơn 0.');
+  // Bound candidate memory for dense layouts before allocating typed arrays.
+  while (anchorStep < Math.max(l.widthM, l.heightM) && wallAnchors(l.widthM, l.heightM, anchorStep).length * Math.ceil(360 / angleStep) * free.length > 1_000_000) anchorStep *= 2;
   const obstacles = blockerObstacles(l), out: Candidate[] = [];
   for (const [ax, ay] of wallAnchors(l.widthM, l.heightM, anchorStep)) {
     for (let pan = 0; pan < 360; pan += angleStep) {
-      const cam = { ...makeCamera('', ax, ay, pan), ...cameraProfile }, ppm = new Float32Array(free.length);
+      const defaults = makeCamera('', ax, ay, pan);
+      const cam = {
+        ...defaults,
+        fov: cameraProfile?.fov ?? defaults.fov,
+        res: cameraProfile?.res ?? defaults.res,
+        range: cameraProfile?.range ?? defaults.range,
+        height: cameraProfile?.height ?? defaults.height,
+        model: cameraProfile?.model ?? defaults.model
+      };
+      const ppm = new Float32Array(free.length);
       let any = false;
       free.forEach((z, j) => { const p = ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight); if (p > 0) { ppm[j] = p; any = true; } });
       if (any) out.push({ cam, ppm });
@@ -41,10 +53,12 @@ export function buildCandidates(l: Layout, free: Zone[], { anchorStep = l.gridM,
  * weighted=false → Baseline 2 (mọi ô W=1). Số hạng 0.001 chỉ để phá hoà (vẫn dưới-mô-đun).
  */
 export function greedyPlace(l: Layout, zones: Zone[], K = 3, weighted = true, opts?: CandOpts): Camera[] {
+  if (!Number.isInteger(K) || K < 0 || K > 20) throw new Error('Ngân sách camera phải là số nguyên từ 0 đến 20.');
   const free = zones.filter((z) => !z.solid), wt = free.map((z) => (weighted ? z.w : 1));
   const candidateSets = new Map<string, Candidate[]>();
   const candsByCamera = Array.from({ length: K }, (_, index) => {
-    const cameraProfile = opts?.cameraProfiles?.[index] ?? opts?.cameraProfile;
+    const source = opts?.cameraProfiles?.[index] ?? opts?.cameraProfile;
+    const cameraProfile = source && { fov: source.fov, res: source.res, range: source.range, height: source.height, model: source.model };
     const key = JSON.stringify([opts?.anchorStep ?? l.gridM, opts?.angleStep ?? 15, cameraProfile ?? null]);
     if (!candidateSets.has(key)) candidateSets.set(key, buildCandidates(l, free, { ...opts, cameraProfile }));
     return candidateSets.get(key)!;
@@ -62,12 +76,13 @@ export function greedyPlace(l: Layout, zones: Zone[], K = 3, weighted = true, op
     let best = -1, bestGain = -1;
     const cands = candsByCamera[k - 1];
     cands.forEach((c, i) => { const g = gainOf(c.ppm); if (g > bestGain) { bestGain = g; best = i; } });
-    if (best < 0) break;
+    if (best < 0) continue;
     const byW: Record<number, number> = {};
     gainOf(cands[best].ppm, byW);
     const topWeight = Number(Object.entries(byW).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1);
     const { cam, ppm } = cands[best];
-    out.push({ ...cam, id: `CAM-0${k}`, target: TARGET[riskBand(topWeight)] });
+    out.push({ ...cam, id: `CAM-${String(k).padStart(2, '0')}`, target: TARGET[riskBand(topWeight)] });
+    cands.splice(best, 1);
     for (let j = 0; j < ppm.length; j++) cur[j] = Math.max(cur[j], ppm[j]);
   }
   return out;

@@ -4,7 +4,7 @@ export type Selection = { kind: 'cam' | 'obs' | 'person'; id: string } | null;
 export type Segment = { a: [number, number]; b: [number, number] } | null; // mét
 export type PriorityBand = 'low' | 'medium' | 'high';
 
-export const PAD = 24;      // lề Stage (px)
+export const PAD = 58;      // lề Stage (px)
 export const HANDLE = 40;   // khoảng cách tay cầm xoay (px)
 export const DORI_COLOR: Record<string, string> = {
   identification: 'rgba(22,163,74,.3)', recognition: 'rgba(132,204,22,.28)', observation: 'rgba(250,204,21,.28)',
@@ -34,11 +34,29 @@ export function riskColor(weight: number): string {
   return `rgba(${Math.round(red)},${Math.round(green)},${Math.round(blue)},${alpha.toFixed(3)})`;
 }
 export const OBS_FILL = {
-  pos: 'rgba(199,163,112,.58)',
-  entrance: 'rgba(180,204,199,.58)',
-  shelf: 'rgba(156,188,183,.38)'
+  pos: '#d6c4a5',
+  entrance: '#f7f7ef',
+  shelf: '#e4e5db'
 } as const;
 
 /** Gộp cập nhật state theo requestAnimationFrame khi kéo thả (giữ 60 FPS khi nhiều camera). */
 let raf = 0;
 export const scheduleFrame = (fn: () => void) => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fn); };
+
+/** Deterministic label placement shared by drawing and heatmap text masking. */
+export function cameraLabelBoxes(cameras: { id: string; x: number; y: number }[], roomW: number, roomH: number, ppm: number, labelScale = 1) {
+  const placed: { x: number; y: number; width: number; height: number }[] = [];
+  return cameras.map(camera => {
+    const width = Math.min(116 * labelScale, Math.max(54, roomW * ppm - 16)), height = Math.min(36 * labelScale, roomH * ppm - 16);
+    const cx = camera.x * ppm, cy = camera.y * ppm;
+    const x = Math.max(8, Math.min(cx < roomW * ppm / 2 ? cx + 18 * labelScale : cx - width - 18 * labelScale, roomW * ppm - width - 8));
+    const baseY = cy < roomH * ppm / 2 ? cy + 26 * labelScale : cy - height - 20 * labelScale;
+    let y = Math.max(8, Math.min(baseY, roomH * ppm - height - 8));
+    for (let attempt = 0; attempt < cameras.length; attempt++) {
+      if (!placed.some(box => x < box.x + box.width + 4 && x + width + 4 > box.x && y < box.y + box.height + 4 && y + height + 4 > box.y)) break;
+      y = cy < roomH * ppm / 2 ? y + height + 5 : y - height - 5;
+      if (y < 8 || y + height > roomH * ppm - 8) { y = Math.max(8, Math.min(baseY, roomH * ppm - height - 8)); break; }
+    }
+    const box = { x, y, width, height }; placed.push(box); return box;
+  });
+}

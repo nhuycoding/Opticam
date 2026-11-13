@@ -6,7 +6,7 @@ Set-Location 'D:\Download\opticam_tong_hop\OptiCam_BanGiao\backend'
 
 # LAN DAU - FRONTEND (MO POWERSHELL THU HAI)
 Set-Location 'D:\Download\opticam_tong_hop\OptiCam_BanGiao\frontend'
-npm.cmd ci --legacy-peer-deps
+npm.cmd ci
 npm.cmd run dev
 
 # CAC LAN SAU - BACKEND

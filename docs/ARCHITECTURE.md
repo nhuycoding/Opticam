@@ -41,6 +41,8 @@ opticam/
 - `core/geometry.ts`: góc, snap, phép chiếu hình chữ nhật, SAT, kiểm tra tia và điểm neo.
 - `core/optics.ts`: phân vùng rủi ro, tính PPM/DORI, scorecard.
 - `core/optimizer.ts`: Greedy client, baseline 4 góc và vét cạn dùng trong thí nghiệm.
+- `core/localSolver.ts` và `core/optimizer.worker.ts`: chạy Greedy dự phòng, giảm camera và
+  so sánh trên Web Worker, giải phóng worker khi hoàn tất hoặc hủy.
 - `core/api.ts`: chuyển layout/ma trận thành payload, gửi `POST /api/v1/optimize`,
   chuẩn hóa response; timeout/lỗi sẽ fallback sang optimizer client.
 - `core/io.ts`: chuẩn hóa layout cũ/mới, tải file, export/parse bundle JSON.

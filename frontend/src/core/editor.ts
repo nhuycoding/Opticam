@@ -1,5 +1,5 @@
 import type { Camera, Layout, Obstacle, ObsType } from '../types';
-import { clamp, obsPoly, placeObstacle, round2, satCollide, snap, snapToWall } from './geometry';
+import { clamp, obstacleFitsRoom, obsPoly, placeObstacle, round2, satCollide, snap, snapToWall } from './geometry';
 
 export const TEMPLATES: Record<ObsType, Omit<Obstacle, 'id' | 'x' | 'y'>> = {
   shelf: { type: 'shelf', label: 'Kệ hàng', w: 4, h: 0.5, elev: 1.8, angle: 0, riskCategory: 'standard' },
@@ -27,7 +27,7 @@ export function addObstacle(l: Layout, type: ObsType): Layout | null {
   pts.sort((a, b) => key(a) - key(b));
   for (const margin of type === 'shelf' ? [0.5, 0] : [0]) for (const [cx, cy] of pts) {
     const n = placeObstacle(base, cx, cy, W, H, g);
-    if (!hits(l, n, margin)) return { ...l, obstacles: [...l.obstacles, n] };
+    if (obstacleFitsRoom(n, W, H) && !hits(l, n, margin)) return { ...l, obstacles: [...l.obstacles, n] };
   }
   return null;
 }
@@ -38,13 +38,16 @@ export const removeObstacle = (l: Layout, id: string): Layout => ({ ...l, obstac
 export function resizeObstacle(l: Layout, id: string, w: number, h: number): Layout {
   const o = l.obstacles.find((x) => x.id === id); if (!o) return l;
   const n = placeObstacle({ ...o, w: clamp(w, 0.2, l.widthM), h: clamp(h, 0.2, l.heightM) }, o.x + o.w / 2, o.y + o.h / 2, l.widthM, l.heightM, l.gridM);
-  return hits(l, n, 0, id) ? l : { ...l, obstacles: l.obstacles.map((x) => (x.id === id ? n : x)) };
+  return !obstacleFitsRoom(n, l.widthM, l.heightM) || hits(l, n, 0, id) ? l : { ...l, obstacles: l.obstacles.map((x) => (x.id === id ? n : x)) };
 }
 
 /** Đổi kích thước tường bao: kẹp lại vật cản, khoá lại cửa vào tường, snap lại camera, xoá cọ tô (lưới đổi). */
 export function resizeRoom(l: Layout, W: number, H: number): Layout {
+  if (!Number.isFinite(W) || !Number.isFinite(H)) return l;
   const w = round2(clamp(snap(W, l.gridM), 3, 40)), h = round2(clamp(snap(H, l.gridM), 3, 40));
+  if (Math.ceil(w / l.gridM) * Math.ceil(h / l.gridM) > 12000) return l;
   const obstacles = l.obstacles.map((o) => placeObstacle(o, o.x + o.w / 2, o.y + o.h / 2, w, h, l.gridM));
+  if (obstacles.some((o, i) => !obstacleFitsRoom(o, w, h) || obstacles.slice(i + 1).some((other) => satCollide(obsPoly(o), obsPoly(other))))) return l;
   const cameras: Camera[] = l.cameras.map((c) => { const [x, y] = snapToWall(c.x, c.y, w, h, l.gridM); return { ...c, x, y }; });
   return { ...l, widthM: w, heightM: h, obstacles, cameras, risk: {}, riskStrokes: [] };
 }

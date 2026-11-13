@@ -1,81 +1,45 @@
-import { Group, Line, Text } from 'react-konva';
+import { Group, Line, Rect, Text } from 'react-konva';
 import type { Layout } from '../../types';
-import { PAD } from './shared';
+import { obsPoly } from '../../core/geometry';
 
-function meterMarks(length: number) {
-  const marks = Array.from({ length: Math.floor(length) + 1 }, (_, index) => index);
-  if (length - marks[marks.length - 1] > 0.05) marks.push(length);
-  return marks;
+const ink = '#777f6c';
+function marks(length: number) {
+  const values = Array.from({ length: Math.floor(length) + 1 }, (_, i) => i);
+  if (length - values[values.length - 1] > .05) values.push(length);
+  return values;
 }
-
-export function PlanAnnotationsLayer({ layout }: { layout: Layout }) {
-  const { widthM, heightM, pixelsPerMeter: ppm } = layout;
-  const widthPx = widthM * ppm, heightPx = heightM * ppm;
-  const xMarks = meterMarks(widthM), yMarks = meterMarks(heightM);
-  const verticalShelves = layout.obstacles.filter((obstacle) =>
-    obstacle.type === 'shelf' && Math.abs(Math.sin((obstacle.angle * Math.PI) / 180)) < 0.015 && obstacle.h >= obstacle.w
-  );
-  const aisles: { x: number; y: number; length: number }[] = [];
-
-  for (let i = 0; i < verticalShelves.length; i++) {
-    for (let j = i + 1; j < verticalShelves.length; j++) {
-      const first = verticalShelves[i], second = verticalShelves[j];
-      const left = first.x <= second.x ? first : second;
-      const right = left === first ? second : first;
-      const gapStart = left.x + left.w, gapEnd = right.x;
-      const yStart = Math.max(left.y, right.y), yEnd = Math.min(left.y + left.h, right.y + right.h);
-      if (gapEnd - gapStart < 0.75 || yEnd - yStart < 1.2) continue;
-
-      const blocked = layout.obstacles.some((obstacle) =>
-        obstacle.id !== left.id && obstacle.id !== right.id && obstacle.type !== 'entrance' &&
-        obstacle.x < gapEnd && obstacle.x + obstacle.w > gapStart &&
-        obstacle.y < yEnd && obstacle.y + obstacle.h > yStart
-      );
-      if (!blocked) aisles.push({ x: (gapStart + gapEnd) / 2, y: yStart + 0.35, length: yEnd - yStart - 0.7 });
-    }
+export function PlanAnnotationsLayer({ layout: L }: { layout: Layout }) {
+  const ppm = L.pixelsPerMeter, W = L.widthM * ppm, H = L.heightM * ppm;
+  const blocks = L.obstacles.filter(o => o.type !== 'entrance').map(o => {
+    const points = obsPoly(o);
+    const x = Math.min(...points.map(p => p[0])), y = Math.min(...points.map(p => p[1]));
+    return { id: o.id, type: o.type, x, y, w: Math.max(...points.map(p => p[0])) - x, h: Math.max(...points.map(p => p[1])) - y };
+  });
+  const shelves = blocks.filter(o => o.type === 'shelf' && o.h >= o.w && L.obstacles.some(source => source.id === o.id && Math.abs(Math.sin(source.angle * Math.PI / 90)) < .001)).sort((a,b) => a.x-b.x);
+  const aisles: { x: number; y: number; w: number; h: number }[] = [];
+  for (let i = 0; i < shelves.length; i++) for (let j = i + 1; j < shelves.length; j++) {
+    const a = shelves[i], b = shelves[j], x = a.x + a.w, w = b.x - x;
+    if (w < .6 || w > 3) continue;
+    const y = Math.max(a.y,b.y), h = Math.min(a.y+a.h,b.y+b.h)-y;
+    if (h < 1.2 || aisles.length >= 24) continue;
+    if (blocks.some(o => o.id !== a.id && o.id !== b.id && o.x < b.x-.01 && o.x+o.w > x+.01 && o.y < y+h && o.y+o.h > y)) continue;
+    aisles.push({x,y,w,h});
   }
-
-  return (
-    <>
-      <Line points={[0, -8, widthPx, -8]} stroke="rgba(197,218,208,.42)" strokeWidth={0.8} />
-      {xMarks.map((meter) => {
-        const x = meter * ppm;
-        return (
-          <GroupMark key={`x-${meter}`} x={x} y={-8} label={meter === 0 ? '0' : `${meter} m`} horizontal />
-        );
-      })}
-      <Line points={[-8, 0, -8, heightPx]} stroke="rgba(197,218,208,.42)" strokeWidth={0.8} />
-      {yMarks.map((meter) => (
-        <GroupMark key={`y-${meter}`} x={-8} y={meter * ppm} label={meter === 0 ? '0' : `${meter} m`} />
-      ))}
-      {aisles.map((aisle, index) => (
-        <Group key={`aisle-${index}`}>
-          <Line points={[aisle.x * ppm, aisle.y * ppm, aisle.x * ppm, (aisle.y + aisle.length) * ppm]}
-            stroke="rgba(175,205,192,.42)" strokeWidth={1} dash={[3, 6]} />
-          <Text x={(aisle.x - 0.34) * ppm} y={(aisle.y + aisle.length / 2) * ppm - 5} width={0.68 * ppm} height={10}
-            text="LỐI ĐI" align="center" fontSize={10} fontStyle="bold" letterSpacing={0.7} fill="#e1ece7" opacity={0.96} />
-        </Group>
-      ))}
-    </>
-  );
-}
-
-function GroupMark({ x, y, label, horizontal = false }: { x: number; y: number; label: string; horizontal?: boolean }) {
-  return (
-    <>
-      {horizontal
-        ? <Line points={[x, y, x, y + 5]} stroke="rgba(197,218,208,.6)" strokeWidth={0.8} />
-        : <Line points={[x, y, x + 5, y]} stroke="rgba(197,218,208,.6)" strokeWidth={0.8} />}
-      <Text
-        x={horizontal ? x - 16 : x - 23}
-        y={horizontal ? y - 14 : y - 5}
-        width={horizontal ? 32 : 20}
-        height={13}
-        text={label}
-        align={horizontal ? 'center' : 'right'}
-        fontSize={10}
-        fill="#e0ebe6"
-      />
-    </>
-  );
+  return <>
+    <Line points={[0,-24,W,-24]} stroke={ink} strokeWidth={.7} />
+    {marks(L.widthM).map(m => <Group key={`x${m}`}><Line points={[m*ppm,-28,m*ppm,-19]} stroke={ink} strokeWidth={.7} /><Text x={m*ppm-17} y={-43} width={34} align="center" text={`${m}`} fontSize={9} fill={ink} /></Group>)}
+    <Line points={[-24,0,-24,H]} stroke={ink} strokeWidth={.7} />
+    {marks(L.heightM).map(m => <Group key={`y${m}`}><Line points={[-28,m*ppm,-19,m*ppm]} stroke={ink} strokeWidth={.7} /><Text x={-48} y={m*ppm-5} width={19} align="right" text={`${m}`} fontSize={9} fill={ink} /></Group>)}
+    <Line points={[0,H+16,0,H+35,W,H+35,W,H+16]} stroke={ink} strokeWidth={.7} />
+    {[0,W].map(x => <Line key={x} points={[x-4,H+39,x+4,H+31]} stroke={ink} strokeWidth={1} />)}
+    <Rect x={W/2-39} y={H+27} width={78} height={17} fill="#fafbf6" />
+    <Text x={W/2-39} y={H+29} width={78} text={`${L.widthM.toFixed(2)} m`} align="center" fontSize={11} fill="#59634f" />
+    <Line points={[W+16,0,W+31,0,W+31,H,W+16,H]} stroke={ink} strokeWidth={.7} />
+    <Group x={W+31} y={H/2} rotation={90}><Rect x={-35} y={-8} width={70} height={16} fill="#fafbf6" /><Text x={-35} y={-5} width={70} align="center" text={`${L.heightM.toFixed(2)} m`} fontSize={11} fill="#59634f" /></Group>
+    {aisles.map((a,i) => <Group key={i}>
+      <Line points={[(a.x+a.w/2)*ppm,(a.y+.25)*ppm,(a.x+a.w/2)*ppm,(a.y+a.h-.25)*ppm]} stroke="#94a087" strokeWidth={.7} dash={[4,6]} />
+      <Rect x={a.x*ppm+4} y={(a.y+a.h/2)*ppm-16} width={Math.max(0,a.w*ppm-8)} height={32} fill="#f5f5ed" opacity={.9} cornerRadius={2} />
+      <Text x={a.x*ppm} y={(a.y+a.h/2)*ppm-10} width={a.w*ppm} align="center" text={`LỐI ĐI\n${a.w.toFixed(2)} m`} fontSize={8} lineHeight={1.5} fill="#68735c" />
+    </Group>)}
+  </>;
 }

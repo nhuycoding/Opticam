@@ -126,13 +126,14 @@ có các góc pan `0°, 15°, ..., 345°`. Cấu hình camera mặc định củ
 Gain(c) = Σ_cell W_cell × max(0, F(PPM_c) - F(PPM_best_so_far))
 ```
 
-Chọn ứng viên có Gain lớn nhất, cập nhật PPM tốt nhất trên từng ô rồi lặp. Backend dừng
-khi ít nhất 95% ô sàn trống đạt `PPM ≥ 25`, hết camera có Gain dương, hoặc đã dùng hết
-`cameraBudgetK`. Không đạt mục tiêu thì response vẫn trả phương án tốt nhất tìm được cùng
+Chọn ứng viên có Gain lớn nhất, cập nhật PPM tốt nhất trên từng ô rồi lặp. Backend xét
+tối đa `cameraBudgetK` profile và chọn camera khi profile có ứng viên quan sát được ô trống.
+Mỗi ứng viên trong cùng profile được chọn tối đa một lần. Không đạt mục tiêu thì response vẫn trả phương án tốt nhất tìm được cùng
 `target_coverage_reached = false`.
 
 Để giới hạn công việc, backend giới hạn kích thước lưới 12.000 ô và tối đa khoảng
-1.000.000 phép đánh giá ô ứng viên; khi cần, bước neo được tăng theo hệ số 2. Greedy client
+1.000.000 phép đánh giá ô ứng viên cho mỗi profile; khi cần, bước neo được tăng theo hệ số 2
+đến khi còn bốn góc phòng. Lưới sát giới hạn có thể cần khoảng 1.152.000 phép đánh giá ở bốn góc. Greedy client
 có cùng mục tiêu DORI có trọng số, nhưng dùng tập neo/góc và quy tắc phá hòa riêng. Vì vậy
 kết quả backend và client fallback có thể khác vị trí camera.
 

@@ -43,7 +43,7 @@ function randomLayout(seed: number): Layout {
     const ok = add({ id: `shelf_${n}`, type: 'shelf', label: `Kệ ${n + 1}`, x: snap(1 + r() * (W - len - 2), 0.5), y: snap(1 + r() * (H - 3), 0.5), w: len, h: 0.5, elev: 1.8, angle: vert ? 90 : 0 }, 0.5);
     if (ok) n++;
   }
-  return { version: '1.0', name: `random_${seed}`, widthM: W, heightM: H, gridM: 0.5, pixelsPerMeter: 68, obstacles: obs, risk: {}, cameras: [] };
+  return { version: '1.0', name: `random_${seed}`, widthM: W, heightM: H, gridM: 0.5, pixelsPerMeter: 68, obstacles: obs, risk: {}, riskStrokes: [], targetHeight: 1.6, cameras: [] };
 }
 
 const kpi = (s: Score) => s.red >= 95 && s.yellow >= 80;

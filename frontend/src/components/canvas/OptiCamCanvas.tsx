@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Layer, Line, Stage, Text } from 'react-konva';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Circle, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
 import type { Camera, Cell, Layout, Obstacle, Person, RiskStroke, Weight } from '../../types';
 import { distToObs, round2, wallAnchors } from '../../core/geometry';
@@ -11,10 +11,11 @@ import { HeatmapLayer } from './HeatmapLayer';
 import { ObstacleNode } from './ObstacleNode';
 import { PersonNode } from './PersonNode';
 import { PersonInfo } from './PersonInfo';
-import { HANDLE, PAD, priorityColor, riskColor, type PriorityBand, type Segment, type Selection, type Tool, type ViewMode } from './shared';
+import { cameraLabelBoxes, HANDLE, PAD, priorityColor, riskColor, type PriorityBand, type Segment, type Selection, type Tool, type ViewMode } from './shared';
 import { RiskLegend } from './RiskLegend';
 
 export interface CanvasProps {
+  readOnly?: boolean;
   layout: Layout; cells: Cell[]; view: ViewMode; tool: Tool; brush: Weight | null; selected: Selection;
   riskFilter: PriorityBand | null; focusCell: { r: number; c: number } | null;
   onRiskFilter: (filter: PriorityBand | null) => void;
@@ -35,28 +36,41 @@ export function OptiCamCanvas(p: CanvasProps) {
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const lastPaintPoint = useRef<[number, number] | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ width: 640, height: 440 });
+  const worldWidth = L.widthM * ppm + PAD * 2, worldHeight = L.heightM * ppm + PAD * 2;
   const [zoom, setZoom] = useState(1), [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const anchors = useMemo(() => wallAnchors(L.widthM, L.heightM, L.gridM), [L.widthM, L.heightM, L.gridM]);
-  const numberMasks = useMemo(() => L.cameras.flatMap((camera) => {
-    const cx = camera.x * ppm, cy = camera.y * ppm, label = `${camera.id} (${camera.pan}°)`;
-    const width = Math.min(Math.max(112, label.length * 7.5 + 20), Math.max(60, L.widthM * ppm - 8)), height = 24;
-    const x = cx + width + 12 <= L.widthM * ppm ? cx + 12 : cx - width - 12;
-    let y = cy < L.heightM * ppm * 0.25 ? cy + 34 : cy - height - 14;
-    if (y + height > L.heightM * ppm - 4) y = cy - HANDLE - height - 10;
-    const masks = [{ x, y, width, height }, { x: cx - 12, y: cy - 12, width: 24, height: 24 }];
-    if (p.selected?.kind === 'cam' && p.selected.id === camera.id) {
-      const angle = (camera.pan * Math.PI) / 180, handleX = cx + HANDLE * Math.cos(angle), handleY = cy + HANDLE * Math.sin(angle);
-      masks.push({ x: handleX - 8, y: handleY - 8, width: 16, height: 16 });
+  const labelScale = 1 / Math.max(.55, zoom);
+  const labelBoxes = useMemo(() => cameraLabelBoxes(L.cameras, L.widthM, L.heightM, ppm, labelScale), [L.cameras, L.widthM, L.heightM, ppm, labelScale]);
+  const numberMasks = useMemo(() => {
+    const masks = [...labelBoxes, ...L.cameras.map(camera => ({ x: camera.x * ppm - 14 * labelScale, y: camera.y * ppm - 14 * labelScale, width: 28 * labelScale, height: 28 * labelScale }))];
+    const camera = p.selected?.kind === 'cam' ? L.cameras.find(camera => camera.id === p.selected?.id) : undefined;
+    if (camera) {
+      const angle = camera.pan * Math.PI / 180;
+      masks.push({ x: camera.x * ppm + HANDLE * Math.cos(angle) - 9 * labelScale, y: camera.y * ppm + HANDLE * Math.sin(angle) - 9 * labelScale, width: 18 * labelScale, height: 18 * labelScale });
     }
     return masks;
-  }), [L.cameras, L.widthM, L.heightM, ppm, p.selected]);
-  const lock = p.tool === 'measure' || p.brush !== null; // khoá kéo thả khi đang cọ/đo
+  }, [labelBoxes, L.cameras, ppm, p.selected, labelScale]);
+  const lock = p.readOnly || p.tool === 'measure' || p.brush !== null; // khoá kéo thả khi đang cọ/đo
 
   useEffect(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, [L.widthM, L.heightM, ppm]);
+    const element = viewportRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setViewport({ width: Math.floor(entry.contentRect.width), height: Math.floor(entry.contentRect.height) });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const fitView = useCallback(() => {
+    const fitScale = Math.min(1.35, (viewport.width - 84) / worldWidth, (viewport.height - 64) / worldHeight);
+    setZoom(fitScale);
+    setPan({ x: 32 + (viewport.width - worldWidth * fitScale) / 2, y: (viewport.height - worldHeight * fitScale) / 2 });
+  }, [viewport.width, viewport.height, worldWidth, worldHeight]);
+
+  useEffect(() => { fitView(); setHover(null); }, [fitView, L.name]);
 
   useEffect(() => {
     if (!p.focusCell || !p.stageRef.current) return;
@@ -64,39 +78,31 @@ export function OptiCamCanvas(p: CanvasProps) {
     const targetX = PAD + (p.focusCell.c + 0.5) * cellPx, targetY = PAD + (p.focusCell.r + 0.5) * cellPx;
     setZoom(nextZoom);
     setPan({ x: stage.width() / 2 - targetX * nextZoom, y: stage.height() / 2 - targetY * nextZoom });
-  }, [p.focusCell?.r, p.focusCell?.c, cellPx]);
+  }, [p.focusCell, cellPx]);
 
   const zoomAt = (factor: number, anchor?: { x: number; y: number }) => {
     const stage = p.stageRef.current;
     if (!stage) return;
     const position = anchor ?? { x: stage.width() / 2, y: stage.height() / 2 };
-    const currentZoom = stage.scaleX(), nextZoom = Math.max(0.25, Math.min(2.5, currentZoom * factor));
+    const currentZoom = stage.scaleX(), nextZoom = Math.max(0.05, Math.min(2.5, currentZoom * factor));
     const worldX = (position.x - stage.x()) / currentZoom, worldY = (position.y - stage.y()) / currentZoom;
     setZoom(nextZoom);
     setPan({ x: position.x - worldX * nextZoom, y: position.y - worldY * nextZoom });
   };
 
-  const fitView = () => {
-    const stage = p.stageRef.current, viewport = viewportRef.current;
-    if (!stage || !viewport) return;
-    const fitScale = Math.min(1, (viewport.clientWidth - 8) / stage.width(), (viewport.clientHeight - 8) / stage.height());
-    setZoom(Math.max(0.25, fitScale));
-    setPan({ x: 0, y: 0 });
-  };
+  const resetView = () => { setZoom(1); setPan({ x: (viewport.width - worldWidth) / 2, y: (viewport.height - worldHeight) / 2 }); };
 
-  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
-
-  const stagePosition = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const stagePosition = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const stage = e.target.getStage(), pointer = stage?.getPointerPosition();
     if (!stage || !pointer) return null;
     return { x: (pointer.x - stage.x()) / stage.scaleX(), y: (pointer.y - stage.y()) / stage.scaleY() };
   };
 
-  const meters = (e: Konva.KonvaEventObject<MouseEvent>): [number, number] | null => {
+  const meters = (e: Konva.KonvaEventObject<PointerEvent>): [number, number] | null => {
     const pos = stagePosition(e);
     return pos ? [round2((pos.x - PAD) / ppm), round2((pos.y - PAD) / ppm)] : null;
   };
-  const cellAt = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const cellAt = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const m = meters(e), world = stagePosition(e), rect = viewportRef.current?.getBoundingClientRect();
     if (!m || !world || !rect) return null;
     const c = Math.floor(m[0] / L.gridM), r = Math.floor(m[1] / L.gridM);
@@ -104,8 +110,8 @@ export function OptiCamCanvas(p: CanvasProps) {
       r, c, world, x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top, cell: p.cells[r * cols + c]
     };
   };
-  const paintAt = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!p.brush) return;
+  const paintAt = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (p.readOnly || !p.brush) return;
     const point = meters(e);
     if (!point || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
     const radius = Math.max(0.05, L.gridM / Math.SQRT2);
@@ -123,7 +129,7 @@ export function OptiCamCanvas(p: CanvasProps) {
     if (strokes.length) p.onPaint(strokes);
     lastPaintPoint.current = point;
   };
-  const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const onDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (e.target === e.target.getStage()) {
       p.onSelect(null);
       if (p.tool === 'select' && p.brush === null) {
@@ -137,14 +143,14 @@ export function OptiCamCanvas(p: CanvasProps) {
     if (p.tool === 'measure') { const m = meters(e); if (m) { measuring.current = true; p.onMeasure({ a: m, b: m }); } return; }
     if (p.brush) { painting.current = true; lastPaintPoint.current = null; paintAt(e); }
   };
-  const onClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (p.tool !== 'person' || e.target.findAncestor('.person-node', true)) return;
+  const onClick = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (p.readOnly || p.tool !== 'person' || e.target.findAncestor('.person-node', true)) return;
     const point = meters(e);
     if (!point || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
     if (canPlacePerson(point[0], point[1], L.widthM, L.heightM, L.obstacles)) p.onAddPerson(point[0], point[1]);
     else p.onInvalidPerson();
   };
-  const onMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+  const onMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (panStart.current) {
       const pointer = e.target.getStage()?.getPointerPosition(), start = panStart.current;
       if (pointer) setPan({ x: start.panX + pointer.x - start.x, y: start.panY + pointer.y - start.y });
@@ -194,20 +200,21 @@ export function OptiCamCanvas(p: CanvasProps) {
       <button onClick={fitView}>Vừa khung</button>
       <button onClick={resetView}>100%</button>
     </div>
-    <div ref={viewportRef} className="stage-wrap" aria-label="Sơ đồ bố trí camera và mặt bằng cửa hàng" style={{ cursor: isPanning ? 'grabbing' : p.tool === 'measure' || p.tool === 'person' || p.brush !== null ? 'crosshair' : 'grab' }}>
-      <Stage ref={p.stageRef} width={L.widthM * ppm + PAD * 2} height={L.heightM * ppm + PAD * 2}
+    <div ref={viewportRef} className="stage-wrap" aria-label="Sơ đồ bố trí camera và mặt bằng cửa hàng" style={{ cursor: isPanning ? 'grabbing' : p.tool === 'measure' || p.tool === 'person' && !p.readOnly || p.brush !== null ? 'crosshair' : 'grab' }}>
+      <Stage ref={p.stageRef} width={viewport.width} height={viewport.height}
         x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}
-        onMouseDown={onDown} onMouseMove={onMove} onClick={onClick}
-        onMouseUp={() => { painting.current = false; measuring.current = false; panStart.current = null; setIsPanning(false); lastPaintPoint.current = null; }}
-        onMouseLeave={() => { painting.current = false; measuring.current = false; panStart.current = null; setIsPanning(false); lastPaintPoint.current = null; setHover(null); }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerClick={onClick}
+        onPointerUp={() => { painting.current = false; measuring.current = false; panStart.current = null; setIsPanning(false); lastPaintPoint.current = null; }}
+        onPointerLeave={() => { painting.current = false; measuring.current = false; panStart.current = null; setIsPanning(false); lastPaintPoint.current = null; setHover(null); }}
         onWheel={(e) => {
           e.evt.preventDefault();
-          if (e.evt.altKey) p.onRotate(e.evt.deltaY < 0 ? 1 : -1);
+          if (e.evt.altKey && !p.readOnly) p.onRotate(e.evt.deltaY < 0 ? 1 : -1);
           else {
             const pointer = e.target.getStage()?.getPointerPosition();
             zoomAt(e.evt.deltaY < 0 ? 1.1 : 0.9, pointer ?? undefined);
           }
         }}>
+        <Layer listening={false}><Rect width={worldWidth} height={worldHeight} fill="#fafbf6" /></Layer>
         <BaseGridLayer layout={L} showGrid={p.showGrid && p.view !== 'risk'} showAnchors={p.showAnchors} anchors={anchors} />
         <HeatmapLayer layout={L} cells={p.cells} cellPx={cellPx} view={p.view} drawMsRef={p.drawMsRef}
           riskFilter={p.riskFilter}
@@ -223,8 +230,8 @@ export function OptiCamCanvas(p: CanvasProps) {
             <Circle x={hover.worldX - PAD} y={hover.worldY - PAD} radius={Math.max(4, cellPx / Math.SQRT2)}
               stroke={priorityColor(p.brush)} strokeWidth={2} fill={riskColor(p.brush)} listening={false} />
           )}
-          {L.cameras.map((c) => (
-            <CameraNode key={c.id} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
+          {L.cameras.map((c, index) => (
+            <CameraNode key={c.id} labelScale={labelScale} labelBox={labelBoxes[index]} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
               selected={p.selected?.kind === 'cam' && p.selected.id === c.id} onSelect={p.onSelect} onCamera={p.onCamera} />
           ))}
           {m && <>
@@ -241,7 +248,7 @@ export function OptiCamCanvas(p: CanvasProps) {
         </Layer>
       </Stage>
       {hover && p.tool === 'select' && p.brush === null && (
-        <div className="tip" role="tooltip" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+        <div className="tip" role="tooltip" style={{ left: Math.max(8, Math.min(hover.x + 14, viewport.width - 236)), top: Math.max(8, Math.min(hover.y + 14, viewport.height - 134)) }}>
           <b>{hover.cell.cx.toFixed(2)} m, {hover.cell.cy.toFixed(2)} m</b><br />
           W {hover.cell.w.toFixed(1)} · {hover.cell.w >= 4 ? 'Cao' : hover.cell.w >= 2 ? 'Vừa' : 'Thấp'}{hover.cell.solid ? ' · ô bị vật cản' : ''}<br />
           {hover.cell.solid ? 'Không tính vùng phủ' : hover.cell.ppm > 0 ? 'Được camera phủ' : 'Chưa được camera phủ'} · {Math.round(hover.cell.ppm)} PPM<br />
@@ -252,13 +259,12 @@ export function OptiCamCanvas(p: CanvasProps) {
       {p.selected?.kind === 'person' && (() => {
         const person = p.people.find((item) => item.id === p.selected?.id);
         if (!person) return null;
-        const stageW = L.widthM * ppm + PAD * 2, stageH = L.heightM * ppm + PAD * 2;
-        const popupWidth = 258, gap = 20, personX = person.x * ppm + PAD;
-        const right = personX + 19 + gap, left = personX - 19 - gap - popupWidth;
-        const leftFits = left >= 8, rightFits = right + popupWidth <= stageW - 8;
-        const roomOnLeft = left - 8, roomOnRight = stageW - right - popupWidth;
-        const popupLeft = rightFits ? right : leftFits ? left : roomOnRight >= roomOnLeft ? right : left;
-        const top = Math.max(8, Math.min(person.y * ppm + PAD - 145, stageH - 290));
+        const popupWidth = Math.min(258, viewport.width - 16);
+        const personX = pan.x + (person.x * ppm + PAD) * zoom;
+        const personY = pan.y + (person.y * ppm + PAD) * zoom;
+        const preferredLeft = personX + 24 + popupWidth <= viewport.width ? personX + 24 : personX - popupWidth - 24;
+        const popupLeft = Math.max(8, Math.min(preferredLeft, viewport.width - popupWidth - 8));
+        const top = Math.max(8, Math.min(personY - 145, viewport.height - 290));
         return <PersonInfo person={person} readings={assessPersonAt(L, person.x, person.y)} left={popupLeft} top={top} onClose={() => p.onSelect(null)} />;
       })()}
     </div>

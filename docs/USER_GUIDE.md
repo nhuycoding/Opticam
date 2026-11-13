@@ -25,8 +25,8 @@ trên trình duyệt.
    mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
 3. Kéo camera trên tường để đổi vị trí; chọn camera rồi kéo tay cầm màu cam để đổi hướng theo nấc 15°.
    Chọn camera rồi chỉnh chất lượng, model, pan, FOV, tầm xa và chiều cao trong Inspector.
-   Ô số cho phép xóa giá trị cũ để nhập lại; nhấn `Enter` để áp dụng, `Esc` hoặc rời ô để
-   hủy nội dung đang nhập.
+   Ô số cho phép xóa giá trị cũ để nhập lại; nhấn `Enter` hoặc rời ô để áp dụng, `Esc` để
+   hủy nội dung đang nhập. Giá trị ngoài phạm vi được báo ngay dưới ô.
 4. Chọn vật cản để đổi tên/kích thước/chiều cao; xoay bằng nút xoay hoặc phím `R`.
    Cửa được khóa vào cạnh tường; vật cản không được chồng lấn.
 5. Chọn **DORI**, **Rủi ro**, hoặc **Tắt lớp phủ** phía trên canvas để đổi lớp phủ.
@@ -34,11 +34,12 @@ trên trình duyệt.
    lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới. Heatmap rủi ro dùng
    thang đơn sắc theo độ ưu tiên; lưới nhỏ hơn 0.5 m ẩn số, ở 0.5 m hiện mọi W, lưới lớn hơn chỉ hiện W ≥ 2.
    Chú giải bên dưới sơ đồ lọc Thấp/Vừa/Cao.
-6. Chọn **Tối ưu vị trí · 3 camera** để nhận vị trí đề xuất. Mở menu mũi tên cạnh nút để chọn
-   **Tối ưu … camera hiện có** hoặc **Tìm số camera ít nhất đạt KPI**. Chế độ tìm số ít nhất lần lượt đánh giá các tiền tố của
+6. Chọn ngân sách **Số camera** (1–20), rồi bấm **Tối ưu vị trí** để nhận vị trí đề xuất. Mở menu mũi tên cạnh nút để chọn
+   **Tối ưu … camera hiện có** hoặc **Giảm camera theo KPI (Greedy)**. Chế độ giảm camera lần lượt đánh giá các tiền tố của
    phương án Greedy, dừng ở số camera ít nhất đạt cả hai KPI. Cấu hình FOV, độ phân giải,
    tầm xa, chiều cao và model được giữ theo thứ tự camera đã nhập; vị trí và hướng được tối ưu
-   lại. Nếu không đạt KPI với số camera hiện có, ứng dụng giữ toàn bộ phương án tốt nhất và
+   lại. Nút **Hủy** dừng tác vụ đang tính. Nếu chỉnh mặt bằng trong lúc tối ưu, ứng dụng
+   yêu cầu tính lại theo cấu hình mới. Nếu không đạt KPI với số camera hiện có, ứng dụng giữ toàn bộ phương án tốt nhất và
    thông báo tỷ lệ thực tế trên Scorecard/toast.
 7. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ. Nút **Vừa khung**,
    **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas; giữ `Alt` khi cuộn

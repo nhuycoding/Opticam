@@ -1,3 +1,5 @@
+import { floorOutline } from '../../core/footprint';
+import { traceOutline } from './planDrawing';
 import { useEffect, useState } from 'react';
 import { Circle, Group, Image as KImage, Layer, Rect, Shape } from 'react-konva';
 import type { Layout } from '../../types';
@@ -20,10 +22,12 @@ function useImg(src?: string) {
 /** LAYER 1 — nền tĩnh (listening=false): ảnh nền theo mét, lưới 0.5 m, tường bao, điểm neo. */
 export function BaseGridLayer({ layout: L, showGrid, showAnchors, anchors }: { layout: Layout; showGrid: boolean; showAnchors: boolean; anchors: Pt[] }) {
   const ppm = L.pixelsPerMeter, px = (m: number) => m * ppm, W = px(L.widthM), H = px(L.heightM);
+  const outline = floorOutline(L);
   const bg = useImg(L.background?.dataUrl), g = px(L.gridM);
   return (
     <Layer x={PAD} y={PAD} listening={false}>
-      <Rect width={W} height={H} fill="#f3f3e9" />
+      <Shape sceneFunc={(ctx, shape) => { traceOutline(ctx, outline, ppm); ctx.fillStrokeShape(shape); }} fill="#f3f3e9" />
+      <Group clipFunc={ctx => traceOutline(ctx, outline, ppm)}>
       <Shape sceneFunc={(ctx) => {
         const tile = ppm;
         ctx.setAttr('fillStyle', 'rgba(152,156,125,.025)');
@@ -46,14 +50,22 @@ export function BaseGridLayer({ layout: L, showGrid, showAnchors, anchors }: { l
         for (let y = 1; y < L.heightM; y++) { ctx.moveTo(0, px(y)); ctx.lineTo(W, px(y)); }
         ctx.setAttr('strokeStyle', 'rgba(104,115,89,.18)'); ctx.setAttr('lineWidth', 0.9); ctx.stroke();
       }} />}
-      <Rect x={-5} y={-5} width={W + 10} height={H + 10} stroke="#c3c6b7" strokeWidth={8} />
-      <Rect width={W} height={H} stroke="#545f4d" strokeWidth={1.5} />
-      <Rect x={-9} y={-9} width={W + 18} height={H + 18} stroke="#858e77" strokeWidth={1} />
-      <Shape sceneFunc={(ctx) => {
+      </Group>
+      <Shape sceneFunc={(ctx, shape) => { traceOutline(ctx, outline, ppm); ctx.strokeShape(shape); }} stroke="#c3c6b7" strokeWidth={9} lineJoin="miter" />
+      <Shape sceneFunc={(ctx, shape) => { traceOutline(ctx, outline, ppm); ctx.strokeShape(shape); }} stroke="#647156" strokeWidth={1.4} />
+      <Shape sceneFunc={ctx => {
         ctx.beginPath();
-        for (let x = 0; x < W; x += 7) { ctx.moveTo(x - 3, -8); ctx.lineTo(x + 2, -2); ctx.moveTo(x - 3, H + 2); ctx.lineTo(x + 2, H + 8); }
-        for (let y = 0; y < H; y += 7) { ctx.moveTo(-8, y - 3); ctx.lineTo(-2, y + 2); ctx.moveTo(W + 2, y - 3); ctx.lineTo(W + 8, y + 2); }
-        ctx.setAttr('strokeStyle', '#8f9780'); ctx.setAttr('lineWidth', 0.6); ctx.stroke();
+        outline.forEach((a, i) => {
+          const b = outline[(i + 1) % outline.length];
+          const length = Math.hypot(b[0] - a[0], b[1] - a[1]) * ppm;
+          const ux = (b[0] - a[0]) * ppm / length, uy = (b[1] - a[1]) * ppm / length;
+          for (let t = 0; t < length; t += 8) {
+            const x = a[0] * ppm + ux * t, y = a[1] * ppm + uy * t;
+            ctx.moveTo(x - uy * 3 - ux * 2, y + ux * 3 - uy * 2);
+            ctx.lineTo(x + uy * 3 + ux * 2, y - ux * 3 + uy * 2);
+          }
+        });
+        ctx.setAttr('strokeStyle', '#8f9780'); ctx.setAttr('lineWidth', .5); ctx.stroke();
       }} />
       {showAnchors && anchors.map(([x, y]) => <Circle key={`${x}_${y}`} x={px(x)} y={px(y)} radius={3} fill="#fff" stroke="#765d42" strokeWidth={1} />)}
     </Layer>

@@ -5,6 +5,11 @@ from __future__ import annotations
 import math
 from typing import Any, Sequence
 
+if __package__:
+    from .footprint import point_in_floor, segment_in_floor
+else:
+    from footprint import point_in_floor, segment_in_floor
+
 FACE_HEIGHT_M = 1.6
 DORI_FACTORS = ((250, 1.0), (125, 0.75), (62, 0.4), (25, 0.2), (0, 0.0))
 
@@ -159,6 +164,7 @@ def camera_ppm(
     point: tuple[float, float],
     obstacles: Sequence[Any],
     target_height: float = FACE_HEIGHT_M,
+    floor_polygon=None,
 ) -> float:
     dx, dy = point[0] - camera["x"], point[1] - camera["y"]
     distance = math.hypot(dx, dy)
@@ -169,6 +175,8 @@ def camera_ppm(
     if angle_diff > camera["fov"] / 2:
         return 0.0
     origin = (camera["x"], camera["y"])
+    if floor_polygon and not segment_in_floor(origin, point, floor_polygon):
+        return 0.0
     if any(segment_hits_obstacle(origin, point, obstacle, camera["height"], target_height) for obstacle in obstacles):
         return 0.0
     slant_distance = math.hypot(distance, abs(camera["height"] - target_height))
@@ -186,7 +194,9 @@ class OptiCamGreedy:
         target_height: float = FACE_HEIGHT_M,
         risk_strokes: Sequence[Any] = (),
         legacy_risk: dict[str, float] | None = None,
+        floor_polygon=None,
     ):
+        self.floor_polygon = floor_polygon
         self.room_width = room_width
         self.room_length = room_length
         self.obstacles = [obstacle.dict() if hasattr(obstacle, "dict") else obstacle for obstacle in obstacles_data]
@@ -206,6 +216,8 @@ class OptiCamGreedy:
         for row in range(rows):
             for col in range(cols):
                 x, y = (col + 0.5) * cell_size, (row + 0.5) * cell_size
+                if self.floor_polygon and not point_in_floor((x, y), self.floor_polygon):
+                    continue
                 if blocked_matrix is not None and blocked_matrix[row][col]:
                     continue
                 if blocked_matrix is None and any(
@@ -249,12 +261,12 @@ class OptiCamGreedy:
             point = (x, y)
             if fov_deg >= 360:
                 distance = math.hypot(x - cam_x, y - cam_y)
-                visible = distance <= radius and not any(
+                visible = distance <= radius and (not self.floor_polygon or segment_in_floor((cam_x, cam_y), point, self.floor_polygon)) and not any(
                     segment_hits_obstacle((cam_x, cam_y), point, obstacle, camera_height, self.target_height)
                     for obstacle in self.obstacles
                 )
             else:
-                visible = camera_ppm(camera, point, self.obstacles, self.target_height) >= 25
+                visible = camera_ppm(camera, point, self.obstacles, self.target_height, self.floor_polygon) >= 25
             if visible:
                 covered.add(index)
         return covered
@@ -290,7 +302,7 @@ class OptiCamGreedy:
                 for camera in group:
                     if camera in selected:
                         continue
-                    ppm_values = [camera_ppm(camera, (x, y), self.obstacles, self.target_height)
+                    ppm_values = [camera_ppm(camera, (x, y), self.obstacles, self.target_height, self.floor_polygon)
                                   for x, y, _ in grid_points]
                     if any(ppm_values):
                         scores = [dori_factor(ppm) * weight for ppm, (_, _, weight) in zip(ppm_values, grid_points)]

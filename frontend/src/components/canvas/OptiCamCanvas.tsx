@@ -1,3 +1,4 @@
+import { pointInFloor } from '../../core/footprint';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
@@ -40,7 +41,7 @@ export function OptiCamCanvas(p: CanvasProps) {
   const worldWidth = L.widthM * ppm + PAD * 2, worldHeight = L.heightM * ppm + PAD * 2;
   const [zoom, setZoom] = useState(1), [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const anchors = useMemo(() => wallAnchors(L.widthM, L.heightM, L.gridM), [L.widthM, L.heightM, L.gridM]);
+  const anchors = useMemo(() => wallAnchors(L.widthM, L.heightM, L.gridM, L.floorPolygon), [L.widthM, L.heightM, L.gridM, L.floorPolygon]);
   const labelScale = 1 / Math.max(.55, zoom);
   const labelBoxes = useMemo(() => cameraLabelBoxes(L.cameras, L.widthM, L.heightM, ppm, labelScale), [L.cameras, L.widthM, L.heightM, ppm, labelScale]);
   const numberMasks = useMemo(() => {
@@ -58,6 +59,7 @@ export function OptiCamCanvas(p: CanvasProps) {
     const element = viewportRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
       setViewport({ width: Math.floor(entry.contentRect.width), height: Math.floor(entry.contentRect.height) });
     });
     observer.observe(element);
@@ -104,7 +106,7 @@ export function OptiCamCanvas(p: CanvasProps) {
   };
   const cellAt = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const m = meters(e), world = stagePosition(e), rect = viewportRef.current?.getBoundingClientRect();
-    if (!m || !world || !rect) return null;
+    if (!m || !world || !rect || (L.floorPolygon && !pointInFloor(m, L.floorPolygon))) return null;
     const c = Math.floor(m[0] / L.gridM), r = Math.floor(m[1] / L.gridM);
     return c < 0 || r < 0 || c >= cols || r * cols + c >= p.cells.length ? null : {
       r, c, world, x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top, cell: p.cells[r * cols + c]
@@ -113,7 +115,7 @@ export function OptiCamCanvas(p: CanvasProps) {
   const paintAt = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (p.readOnly || !p.brush) return;
     const point = meters(e);
-    if (!point || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
+    if (!point || (L.floorPolygon && !pointInFloor(point, L.floorPolygon)) || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
     const radius = Math.max(0.05, L.gridM / Math.SQRT2);
     const previous = lastPaintPoint.current;
     const distance = previous ? Math.hypot(point[0] - previous[0], point[1] - previous[1]) : 0;
@@ -146,8 +148,8 @@ export function OptiCamCanvas(p: CanvasProps) {
   const onClick = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (p.readOnly || p.tool !== 'person' || e.target.findAncestor('.person-node', true)) return;
     const point = meters(e);
-    if (!point || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
-    if (canPlacePerson(point[0], point[1], L.widthM, L.heightM, L.obstacles)) p.onAddPerson(point[0], point[1]);
+    if (!point || (L.floorPolygon && !pointInFloor(point, L.floorPolygon)) || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
+    if (canPlacePerson(point[0], point[1], L.widthM, L.heightM, L.obstacles, L.floorPolygon)) p.onAddPerson(point[0], point[1]);
     else p.onInvalidPerson();
   };
   const onMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
@@ -221,7 +223,7 @@ export function OptiCamCanvas(p: CanvasProps) {
           hoveredCell={hover ? { r: hover.cell.r, c: hover.cell.c } : null} focusCell={p.focusCell} showBoundaries={p.showGrid} zoom={zoom} numberMasks={numberMasks} />
         <Layer x={PAD} y={PAD} listening={!lock && p.tool === 'select'}>
           {L.obstacles.map((o) => (
-            <ObstacleNode key={o.id} obs={o} all={L.obstacles} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
+            <ObstacleNode floorPolygon={L.floorPolygon} key={o.id} obs={o} all={L.obstacles} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
               selected={p.selected?.kind === 'obs' && p.selected.id === o.id} onSelect={p.onSelect} onObstacle={p.onObstacle} />
           ))}
         </Layer>
@@ -231,7 +233,7 @@ export function OptiCamCanvas(p: CanvasProps) {
               stroke={priorityColor(p.brush)} strokeWidth={2} fill={riskColor(p.brush)} listening={false} />
           )}
           {L.cameras.map((c, index) => (
-            <CameraNode key={c.id} labelScale={labelScale} labelBox={labelBoxes[index]} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
+            <CameraNode floorPolygon={L.floorPolygon} key={c.id} labelScale={labelScale} labelBox={labelBoxes[index]} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
               selected={p.selected?.kind === 'cam' && p.selected.id === c.id} onSelect={p.onSelect} onCamera={p.onCamera} />
           ))}
           {m && <>
@@ -241,7 +243,7 @@ export function OptiCamCanvas(p: CanvasProps) {
         </Layer>
         <Layer x={PAD} y={PAD} listening={!lock}>
           {p.people.map((person) => (
-            <PersonNode key={person.id} person={person} ppm={ppm} roomW={L.widthM} roomH={L.heightM} obstacles={L.obstacles}
+            <PersonNode key={person.id} person={person} ppm={ppm} roomW={L.widthM} roomH={L.heightM} obstacles={L.obstacles} floorPolygon={L.floorPolygon}
               selected={p.selected?.kind === 'person' && p.selected.id === person.id}
               onSelect={p.onSelect} onMove={p.onPerson} />
           ))}

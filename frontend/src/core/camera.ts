@@ -8,3 +8,19 @@ export type CameraQualityId = (typeof CAMERA_QUALITY_PRESETS)[number]['id'] | 'c
 
 export const cameraQualityForResolution = (resolution: number): CameraQualityId =>
   CAMERA_QUALITY_PRESETS.find((preset) => preset.resolution === resolution)?.id ?? 'custom';
+import type { Camera } from '../types';
+
+export const DEFAULT_CAMERA_TILT = 20;
+export const verticalFovFor = (horizontalFov: number) =>
+  2 * Math.atan(Math.tan(horizontalFov * Math.PI / 360) / (16 / 9)) * 180 / Math.PI;
+
+/** Thông số xem phối cảnh. Các dự án cũ dùng cảm biến 16:9 và góc chúc 20°. */
+export function cameraProjection(camera: Camera) {
+  const vfov = camera.vfov ?? verticalFovFor(camera.fov);
+  return {
+    tilt: camera.tilt ?? DEFAULT_CAMERA_TILT,
+    vfov,
+    aspect: Math.tan(camera.fov * Math.PI / 360) / Math.tan(vfov * Math.PI / 360)
+  };
+}
+

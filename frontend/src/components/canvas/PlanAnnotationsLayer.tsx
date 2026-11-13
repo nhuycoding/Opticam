@@ -1,4 +1,4 @@
-import { Group, Line, Rect, Text } from 'react-konva';
+import { Arrow, Group, Line, Rect, Text } from 'react-konva';
 import type { Layout } from '../../types';
 import { obsPoly } from '../../core/geometry';
 
@@ -8,7 +8,7 @@ function marks(length: number) {
   if (length - values[values.length - 1] > .05) values.push(length);
   return values;
 }
-export function PlanAnnotationsLayer({ layout: L }: { layout: Layout }) {
+export function PlanAnnotationsLayer({ layout: L, showWalkways = false }: { layout: Layout; showWalkways?: boolean }) {
   const ppm = L.pixelsPerMeter, W = L.widthM * ppm, H = L.heightM * ppm;
   const blocks = L.obstacles.filter(o => o.type !== 'entrance').map(o => {
     const points = obsPoly(o);
@@ -26,6 +26,10 @@ export function PlanAnnotationsLayer({ layout: L }: { layout: Layout }) {
     aisles.push({x,y,w,h});
   }
   return <>
+    {showWalkways && L.walkways?.map((route, i) => <Group key={`route-${i}`} opacity={.65}>
+      <Arrow points={route.points.flatMap(([x,y]) => [x*ppm,y*ppm])} stroke="#78916c" fill="#78916c" strokeWidth={1.4} dash={[5,6]} pointerLength={5} pointerWidth={5} tension={.08} />
+      <Text x={route.points[1][0]*ppm+6} y={route.points[1][1]*ppm-13} text={route.label} fontSize={9} fill="#536c49" />
+    </Group>)}
     <Line points={[0,-24,W,-24]} stroke={ink} strokeWidth={.7} />
     {marks(L.widthM).map(m => <Group key={`x${m}`}><Line points={[m*ppm,-28,m*ppm,-19]} stroke={ink} strokeWidth={.7} /><Text x={m*ppm-17} y={-43} width={34} align="center" text={`${m}`} fontSize={9} fill={ink} /></Group>)}
     <Line points={[-24,0,-24,H]} stroke={ink} strokeWidth={.7} />

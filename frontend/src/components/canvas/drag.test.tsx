@@ -60,3 +60,19 @@ describe.each([0.35, 1, 2])('Drag coordinates at zoom %s', (zoom) => {
     expect(person.props.dragBoundFunc.call(node, invalid)).toEqual(valid);
   });
 });
+
+it('preserves camera coordinates exactly on a sloping wall when committing a drag', () => {
+  const polygon: [number,number][] = [[0,0],[9,0],[7.5,9],[1.5,9]];
+  const props = {cam: makeCamera('SLOPE',9,0,180),ppm:68,roomW:9,roomH:9,grid:.25,selected:false,onSelect:vi.fn(),onCamera:vi.fn(),floorPolygon:polygon};
+  const circle = descendants(renderCamera(props)).find(element=>element.props.draggable)!;
+  vi.stubGlobal('requestAnimationFrame',(cb:FrameRequestCallback)=>{cb(0);return 1;});
+  vi.stubGlobal('cancelAnimationFrame',vi.fn());
+  try {
+    const identity=new Transform();
+    const node={getParent:()=>({getAbsoluteTransform:()=>identity})};
+    const point=circle.props.dragBoundFunc.call(node,{x:8.7*68,y:3.7*68});
+    circle.props.onDragMove({target:{x:()=>point.x,y:()=>point.y}});
+    const camera=props.onCamera.mock.calls[0][0];
+    expect(camera.x).toBeCloseTo(9-camera.y/6,9);
+  } finally {vi.unstubAllGlobals();}
+});

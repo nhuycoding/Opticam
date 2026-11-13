@@ -1,3 +1,5 @@
+import { FixtureArt } from './FixtureArt';
+import { footprintFits, floorOutline, placeWallFixture } from '../../core/footprint';
 import { memo, useRef, useState } from 'react';
 import { Circle, Group, Line, Rect, Shape, Text } from 'react-konva';
 import type { Obstacle } from '../../types';
@@ -5,20 +7,21 @@ import { obstacleFitsRoom, obsPoly, placeObstacle, satCollide } from '../../core
 import { OBS_FILL, type Selection } from './shared';
 
 interface Props {
+  floorPolygon?: [number, number][];
   obs: Obstacle; all: Obstacle[]; ppm: number; roomW: number; roomH: number; grid: number; selected: boolean;
   onSelect: (s: Selection) => void; onObstacle: (o: Obstacle) => void;
 }
 
 /** Vật cản kéo thả: snap lưới 0.5 m, SAT chống chồng lấn (tự hoàn tác), cửa tự khoá vào tường. */
-export const ObstacleNode = memo(function ObstacleNode({ obs: o, all, ppm, roomW, roomH, grid, selected, onSelect, onObstacle }: Props) {
+export const ObstacleNode = memo(function ObstacleNode({ floorPolygon, obs: o, all, ppm, roomW, roomH, grid, selected, onSelect, onObstacle }: Props) {
   const [conflict, setConflict] = useState(false);
   const origin = useRef({ x: 0, y: 0 });
   const test = (cx: number, cy: number) => {
-    const n = placeObstacle(o, cx, cy, roomW, roomH, grid);
-    return { n, hit: !obstacleFitsRoom(n, roomW, roomH) || all.some((q) => q.id !== o.id && satCollide(obsPoly(n), obsPoly(q))) };
+    const n = o.fixture === 'wall-shelf' || (o.type === 'entrance' && floorPolygon) ? placeWallFixture(o, [cx, cy], floorPolygon ?? floorOutline({ widthM: roomW, heightM: roomH })) ?? o : placeObstacle(o, cx, cy, roomW, roomH, grid);
+    return { n, hit: !obstacleFitsRoom(n, roomW, roomH) || !footprintFits(n, floorPolygon) || all.some((q) => q.id !== o.id && satCollide(obsPoly(n), obsPoly(q))) };
   };
   const wPx = o.w * ppm, hPx = o.h * ppm;
-  const isShelf = o.type === 'shelf', isPos = o.type === 'pos', isEntrance = o.type === 'entrance';
+  const isShelf = o.type === 'shelf' && (!o.fixture || o.fixture === 'gondola'), isPos = o.type === 'pos', isEntrance = o.type === 'entrance';
   const border = conflict ? '#c74747' : selected ? '#92704b' : '#8b937d';
   const shelfAlongY = hPx >= wPx;
   const shelfLength = shelfAlongY ? hPx : wPx;
@@ -31,7 +34,8 @@ export const ObstacleNode = memo(function ObstacleNode({ obs: o, all, ppm, roomW
   const labelY = isPos ? hPx * .55 : Math.max(0, hPx / 2 - 15);
   const labelHeight = isPos ? Math.max(12, hPx * .42) : Math.min(30, hPx);
   const labelFontSize = Math.min(10, Math.max(7, Math.min(wPx / 5.4, labelHeight / 2.4)));
-  const showLabel = !isEntrance && wPx >= 54 && labelHeight >= 22;
+  const verticalLabel = hPx > wPx * 1.7 && wPx >= 18 && hPx >= 64;
+  const showLabel = !isEntrance && !verticalLabel && wPx >= 54 && labelHeight >= (isPos ? 16 : 22);
   return (
     <Group x={(o.x + o.w / 2) * ppm} y={(o.y + o.h / 2) * ppm} offsetX={wPx / 2} offsetY={hPx / 2} rotation={o.angle} draggable
       onPointerDown={() => onSelect({ kind: 'obs', id: o.id })}
@@ -45,6 +49,7 @@ export const ObstacleNode = memo(function ObstacleNode({ obs: o, all, ppm, roomW
       }}>
       {isEntrance && <Rect x={0} y={-11} width={wPx} height={hPx+22} fill="#fafbf6" listening={false} />}
       <Rect width={wPx} height={hPx} fill={OBS_FILL[o.type]} cornerRadius={2} shadowColor="#38412c" shadowBlur={3} shadowOffsetX={2} shadowOffsetY={3} shadowOpacity={.09} stroke={border} strokeWidth={selected ? 2 : 1} />
+      {o.fixture && o.fixture !== 'gondola' && o.type !== 'pos' && <FixtureArt obstacle={o} width={wPx} height={hPx} ppm={ppm} roomW={roomW} roomH={roomH} />}
       {isShelf && wPx > 12 && hPx > 12 && <>
         <Rect x={4} y={4} width={wPx - 8} height={hPx - 8} fill="#f3f2e9" cornerRadius={2} stroke="#bec4ad" strokeWidth={0.7} />
         {Array.from({ length: shelfSections }, (_, i) => {
@@ -116,6 +121,10 @@ export const ObstacleNode = memo(function ObstacleNode({ obs: o, all, ppm, roomW
         {[[0,0],[wPx,0],[0,hPx],[wPx,hPx]].map(([x,y],i) => <Rect key={i} x={x-2} y={y-2} width={4} height={4} fill="#fffef8" stroke="#92704b" strokeWidth={.8} listening={false} />)}
         <Text x={0} y={-19} width={wPx} text={`${o.w.toFixed(2)} m`} align="center" fontSize={9} fill="#765d42" listening={false} />
       </>}
+      {verticalLabel && !isEntrance && <Group x={wPx/2} y={hPx/2} rotation={-90} listening={false}>
+        <Rect x={-Math.min(150,hPx-8)/2} y={-11} width={Math.min(150,hPx-8)} height={22} fill="#f7f6ee" opacity={.94} cornerRadius={2}/>
+        <Text x={-Math.min(150,hPx-8)/2} y={-8} width={Math.min(150,hPx-8)} height={18} text={`${o.label} · ${o.elev} m`} fontSize={9} fill="#536047" align="center" verticalAlign="middle"/>
+      </Group>}
       {showLabel && <Rect x={Math.max(1,wPx*.08)} y={labelY} width={wPx*.84} height={labelHeight} fill={isPos ? '#d6c4a5' : '#f7f6ed'} opacity={.96} cornerRadius={2} listening={false} />}
       {showLabel && <Text x={isPos ? 2 : 0} y={labelY} width={wPx - (isPos ? 4 : 0)} height={labelHeight}
         text={`${o.label}\nH ${o.elev} m`} align="center" verticalAlign="middle" fill="#536047" fontSize={labelFontSize} fontStyle="bold" listening={false} />}

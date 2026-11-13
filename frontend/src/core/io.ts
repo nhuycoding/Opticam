@@ -1,3 +1,5 @@
+import { footprintFits, pointInFloor, validateFloorPolygon } from './footprint';
+import type { Fixture } from '../types';
 import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type RiskStroke, type Score, type ShelfRiskCategory } from '../types';
 import { buildBom } from './bom';
 import { clamp, norm360, obstacleFitsRoom } from './geometry';
@@ -22,6 +24,8 @@ export function normalizeCameras(list: any[], widthM: number, heightM: number): 
       pan: norm360(num(c.pan ?? c.pan_angle ?? c.angle, 0)),
       fov: clamp(num(c.fov, 85), 30, 140), res: clamp(num(c.res, 2560), 640, 7680),
       range: clamp(num(c.range, 10), 1, 30), height: clamp(num(c.height, 2.4), 1.8, 4),
+      ...(c.tilt !== undefined ? { tilt: clamp(num(c.tilt, 20), 0, 85) } : {}),
+      ...(c.vfov !== undefined ? { vfov: clamp(num(c.vfov, 55), 10, 120) } : {}),
       target: typeof c.target === 'string' ? c.target : undefined,
       model: typeof c.model === 'string' ? c.model : undefined
     };
@@ -34,6 +38,7 @@ export function normalizeLayout(raw: any): Layout {
   if (!L || typeof L !== 'object' || !Array.isArray(L.obstacles)) throw new Error('File không đúng định dạng layout OptiCam.');
   const widthM = num(L.widthM ?? L.width, 10), heightM = num(L.heightM ?? L.height, 6);
   if (widthM < 3 || heightM < 3 || widthM > 40 || heightM > 40) throw new Error('Kích thước mặt bằng ngoài khoảng 3–40 m.');
+  const floorPolygon = validateFloorPolygon(L.floorPolygon, widthM, heightM);
   const gridM = num(L.gridM ?? L.grid_size, 0.5);
   if (gridM < 0.1 || gridM > 2) throw new Error('Kích thước ô phải trong khoảng 0,1–2 m.');
   if (Math.ceil(widthM / gridM) * Math.ceil(heightM / gridM) > 12000) throw new Error('Mặt bằng vượt giới hạn 12.000 ô. Hãy tăng kích thước ô.');
@@ -61,6 +66,7 @@ export function normalizeLayout(raw: any): Layout {
     if (obstacleIds.has(id)) throw new Error(`Mã vật cản bị trùng ${id}.`);
     obstacleIds.add(id);
     const obstacle: Obstacle = {
+      ...( ['wall-shelf', 'gondola', 'fridge', 'freezer', 'food-counter', 'seating', 'partition', 'column'].includes(o.fixture) ? { fixture: o.fixture as Fixture } : {}),
       id, type: o.type, label: String(o.label ?? o.name ?? o.type),
       x: num(o.x, 0), y: num(o.y, 0), w: num(o.w ?? o.width, 1), h: num(o.h ?? o.height, 1),
       elev: num(o.elev ?? o.elevation, o.type === 'shelf' ? 1.8 : 1.1), angle: num(o.angle, 0),
@@ -69,12 +75,13 @@ export function normalizeLayout(raw: any): Layout {
       riskR0,
       riskR: Math.max(riskR0 + 0.1, num(o.riskR, defaults.radius))
     };
-    if (obstacle.w <= 0 || obstacle.h <= 0 || obstacle.elev < 0 || !obstacleFitsRoom(obstacle, widthM, heightM)) {
+    if (obstacle.w <= 0 || obstacle.h <= 0 || obstacle.elev < 0 || !obstacleFitsRoom(obstacle, widthM, heightM) || !footprintFits(obstacle, floorPolygon)) {
       throw new Error(`Vật cản #${i + 1} có kích thước hoặc vị trí ngoài mặt bằng.`);
     }
     return obstacle;
   });
   const cameras = normalizeCameras(L.cameras ?? [], widthM, heightM);
+  if (floorPolygon && cameras.some(camera => !pointInFloor([camera.x, camera.y], floorPolygon))) throw new Error('Camera nằm ngoài đường bao cửa hàng.');
   const targetHeight = PERSON_TARGETS.find((target) => target.height === L.targetHeight)?.height ?? 1.6;
   const riskStrokes: RiskStroke[] = Array.isArray(L.riskStrokes)
     ? L.riskStrokes.filter((stroke: any) => Number.isFinite(stroke?.x) && Number.isFinite(stroke?.y) &&
@@ -98,6 +105,10 @@ export function normalizeLayout(raw: any): Layout {
     throw new Error('Ảnh nền trong file không hợp lệ.');
   }
   return {
+    floorPolygon,
+    description: typeof L.description === 'string' ? L.description : undefined,
+    designNotes: Array.isArray(L.designNotes) ? L.designNotes.filter((note: unknown) => typeof note === 'string').slice(0, 12) : undefined,
+    walkways: Array.isArray(L.walkways) ? L.walkways.filter((route: any) => typeof route.label === 'string' && Array.isArray(route.points) && route.points.length >= 2 && route.points.length <= 32 && route.points.every((point: any) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite) && (!floorPolygon || pointInFloor(point as [number, number], floorPolygon)))).slice(0, 12) : undefined,
     version: String(L.version ?? '1.0'), name: String(L.name ?? 'Layout'), widthM, heightM,
     gridM, pixelsPerMeter: clamp(num(L.pixelsPerMeter, 68), 30, 120), targetHeight,
     background: bg ? { dataUrl: bg.dataUrl, widthM: clamp(bg.widthM, 0.1, 400), opacity: clamp(bg.opacity, 0, 1), visible: bg.visible !== false } : undefined, obstacles, risk: {}, riskStrokes: [...legacyStrokes, ...riskStrokes], cameras

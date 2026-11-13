@@ -1,3 +1,4 @@
+import { boundaryAnchors, snapToBoundary } from './footprint';
 import type { Obstacle } from '../types';
 
 export type Pt = [number, number];
@@ -79,8 +80,9 @@ export const rayBlocked = (a: Pt, b: Pt, polys: Pt[][]) =>
   polys.some((p) => p.some((v, i) => segHit(a, b, v, p[(i + 1) % p.length])));
 
 /** Điểm neo ứng viên dọc tường bao, bước = gridM. */
-export function wallAnchors(W: number, H: number, step: number): Pt[] {
+export function wallAnchors(W: number, H: number, step: number, polygon?: Pt[]): Pt[] {
   if (![W, H, step].every((value) => Number.isFinite(value) && value > 0)) throw new Error('Kích thước và bước neo phải lớn hơn 0.');
+  if (polygon) return boundaryAnchors(polygon, step);
   const set = new Map<string, Pt>();
   const add = (x: number, y: number) => set.set(`${x.toFixed(2)}_${y.toFixed(2)}`, [round2(x), round2(y)]);
   for (let i = 0; i <= Math.floor(W / step); i++) { add(i * step, 0); add(i * step, H); }
@@ -90,7 +92,8 @@ export function wallAnchors(W: number, H: number, step: number): Pt[] {
 }
 
 /** Snap-to-Wall: ép vị trí về điểm neo gần nhất trên 4 cạnh tường. */
-export function snapToWall(x: number, y: number, W: number, H: number, step: number): Pt {
+export function snapToWall(x: number, y: number, W: number, H: number, step: number, polygon?: Pt[]): Pt {
+  if (polygon) return snapToBoundary([x, y], polygon, step);
   const cx = clamp(x, 0, W), cy = clamp(y, 0, H);
   const d = [cx, W - cx, cy, H - cy], m = Math.min(...d);
   if (m === d[0]) return [0, clamp(snap(cy, step), 0, H)];

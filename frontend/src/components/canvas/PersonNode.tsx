@@ -13,10 +13,11 @@ interface Props {
   roomW: number;
   roomH: number;
   obstacles: Obstacle[];
+  floorPolygon?: [number, number][];
   onMove: (person: Person) => void;
 }
 
-export const PersonNode = memo(function PersonNode({ person, ppm, selected, roomW, roomH, obstacles, onSelect, onMove }: Props) {
+export const PersonNode = memo(function PersonNode({ person, ppm, selected, roomW, roomH, obstacles, floorPolygon, onSelect, onMove }: Props) {
   const x = person.x * ppm, y = person.y * ppm;
   const lastValid = useRef({ x, y });
   return (
@@ -31,7 +32,7 @@ export const PersonNode = memo(function PersonNode({ person, ppm, selected, room
         const transform = this.getParent()!.getAbsoluteTransform();
         const local = transform.copy().invert().point(pos);
         const nextX = local.x / ppm, nextY = local.y / ppm;
-        if (canPlacePerson(nextX, nextY, roomW, roomH, obstacles)) {
+        if (canPlacePerson(nextX, nextY, roomW, roomH, obstacles, floorPolygon)) {
           lastValid.current = pos;
           return pos;
         }
@@ -40,8 +41,8 @@ export const PersonNode = memo(function PersonNode({ person, ppm, selected, room
       onDragEnd={(event) => {
         const next = {
           ...person,
-          x: round2(Math.max(0, Math.min(event.target.x() / ppm, roomW))),
-          y: round2(Math.max(0, Math.min(event.target.y() / ppm, roomH)))
+          x: floorPolygon ? event.target.x() / ppm : round2(Math.max(0, Math.min(event.target.x() / ppm, roomW))),
+          y: floorPolygon ? event.target.y() / ppm : round2(Math.max(0, Math.min(event.target.y() / ppm, roomH)))
         };
         onMove(next);
       }}

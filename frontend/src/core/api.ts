@@ -1,3 +1,4 @@
+import { pointInFloor } from './footprint';
 import type { Camera, Layout, Zone } from '../types';
 import { normalizeCameras } from './io';
 import { solveLocally } from './localSolver';
@@ -13,8 +14,8 @@ export function toApiPayload(l: Layout, zones: Zone[], cameraBudgetK: number, ca
   const blockedMatrix = Array.from({ length: rows }, (_, r) => zones.slice(r * cols, (r + 1) * cols).map((z) => (z.solid ? 1 : 0)));
   return {
     cameraBudgetK,
-    cameraProfiles: cameraProfiles?.map(({ fov, res, range, height, model }) => ({ fov, res, range, height, model })),
-    layout: { version: l.version, name: l.name, widthM: l.widthM, heightM: l.heightM, gridM: l.gridM, targetHeight: l.targetHeight, obstacles: l.obstacles },
+    cameraProfiles: cameraProfiles?.map(({ fov, res, range, height, model, tilt, vfov }) => ({ fov, res, range, height, model, tilt, vfov })),
+    layout: { version: l.version, name: l.name, widthM: l.widthM, heightM: l.heightM, gridM: l.gridM, targetHeight: l.targetHeight, floorPolygon: l.floorPolygon, obstacles: l.obstacles },
     grid: { rows, cols, cellSizeM: l.gridM },
     riskMatrix,      // [row][col] ∈ [1, 5], continuous weights including manual strokes
     blockedMatrix    // [row][col] ∈ {0, 1}     (1 = ô bị kệ/POS chiếm)
@@ -24,6 +25,7 @@ export function toApiPayload(l: Layout, zones: Zone[], cameraBudgetK: number, ca
 export function fromApiResponse(json: any, l: Layout): Camera[] {
   const list = json?.cameras ?? json?.data?.cameras;
   const cams = normalizeCameras(list, l.widthM, l.heightM);
+  if (l.floorPolygon && cams.some(camera => !pointInFloor([camera.x, camera.y], l.floorPolygon!))) throw new Error('Camera nằm ngoài đường bao.');
   if (!cams.length) throw new Error('Backend không trả về camera nào.');
   return cams;
 }

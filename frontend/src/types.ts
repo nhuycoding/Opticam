@@ -1,4 +1,5 @@
 export type ObsType = 'shelf' | 'pos' | 'entrance';
+export type Fixture = 'wall-shelf' | 'gondola' | 'fridge' | 'freezer' | 'food-counter' | 'seating' | 'partition' | 'column';
 export type ShelfRiskCategory = 'high' | 'standard' | 'bulky' | 'custom';
 export type Weight = number;
 export type Dori = 'identification' | 'recognition' | 'observation' | 'detection' | 'blind';
@@ -13,6 +14,7 @@ export type TargetHeight = typeof PERSON_TARGETS[number]['height'];
 export interface Obstacle {
   id: string; type: ObsType; label: string;
   x: number; y: number; w: number; h: number;
+  fixture?: Fixture;
   elev: number;   // cao độ (m): kệ 1.8, POS 1.1, cửa 2.4
   angle: number;  // độ, bước 15
   riskCategory?: ShelfRiskCategory;
@@ -25,6 +27,8 @@ export interface Camera {
   id: string; x: number; y: number;
   pan: number;    // góc xoay ngang, bước Δθ = 15°
   fov: number; res: number; range: number; height: number;
+  tilt?: number;  // góc chúc xuống so với phương ngang, độ
+  vfov?: number;  // FOV dọc, mặc định suy ra từ FOV ngang và tỷ lệ 16:9
   target?: string; model?: string;
 }
 
@@ -55,6 +59,10 @@ export interface Layout {
   version: string; name: string;
   widthM: number; heightM: number; gridM: number; pixelsPerMeter: number;
   targetHeight: TargetHeight;
+  floorPolygon?: [number, number][];
+  description?: string;
+  designNotes?: string[];
+  walkways?: { label: string; points: [number, number][] }[];
   background?: Background;
   obstacles: Obstacle[];
   risk: Record<string, Weight>;   // Legacy per-cell overrides, key "row_col"

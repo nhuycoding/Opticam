@@ -1,8 +1,9 @@
+import { floorArea } from '../core/footprint';
 import { useEffect, useRef, useState } from 'react';
-import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type ShelfRiskCategory, type TargetHeight } from '../types';
+import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type ShelfRiskCategory, type Fixture, type TargetHeight } from '../types';
 import type { Selection, Segment } from './canvas/shared';
 import { AREA_MAX, AREA_MIN } from '../core/editor';
-import { CAMERA_QUALITY_PRESETS, cameraQualityForResolution, type CameraQualityId } from '../core/camera';
+import { CAMERA_QUALITY_PRESETS, cameraQualityForResolution, cameraProjection, type CameraQualityId } from '../core/camera';
 import { RISK_DEFAULTS, SHELF_RISK_PROFILES } from '../core/optics';
 
 interface Props {
@@ -11,8 +12,8 @@ interface Props {
   onSelect: (selection: Selection) => void;
   onTargetHeight: (height: TargetHeight) => void;
   onGrid: (gridM: number) => void;
-  onObs: (id: string, patch: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR'>>) => void;
-  onCam: (id: string, patch: Partial<Pick<Camera, 'fov' | 'res' | 'height' | 'pan' | 'range' | 'model'>>) => void;
+  onObs: (id: string, patch: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR' | 'fixture'>>) => void;
+  onCam: (id: string, patch: Partial<Pick<Camera, 'fov' | 'res' | 'height' | 'pan' | 'range' | 'model' | 'tilt' | 'vfov'>>) => void;
   onRoom: (w: number, h: number) => void; onScale: (ppm: number) => void; onCalibrate: (realM: number) => void;
 }
 function NumberInput({ value, min, max, step, onCommit, style }: {
@@ -73,7 +74,7 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
   const [customResolutionFor, setCustomResolutionFor] = useState<string | null>(null);
   const obs = sel?.kind === 'obs' ? L.obstacles.find((o) => o.id === sel.id) : undefined;
   const cam = sel?.kind === 'cam' ? L.cameras.find((c) => c.id === sel.id) : undefined;
-  const area = L.widthM * L.heightM, mLen = measure ? Math.hypot(measure.b[0] - measure.a[0], measure.b[1] - measure.a[1]) : 0;
+  const area = floorArea(L), mLen = measure ? Math.hypot(measure.b[0] - measure.a[0], measure.b[1] - measure.a[1]) : 0;
   return (
     <div className="panel inspector-panel">
       <h3>{sel ? 'Thuộc tính đối tượng' : mode === 'room' ? 'Kích thước & bố trí' : mode === 'risk' ? 'Ưu tiên theo vật thể' : 'Thông số & đánh giá'}</h3>
@@ -120,14 +121,14 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
         <CalibrateRow measured={mLen} onApply={onCalibrate} />
       )}
       </div></details>
-      {!sel && <div className="object-list">{(mode === 'camera' ? L.cameras.map(c => ({ id: c.id, label: c.id, note: `${c.res}px · FOV ${c.fov}°`, kind: 'cam' as const })) : L.obstacles.map(o => ({ id: o.id, label: o.label, note: mode === 'risk' ? `W ${(o.riskWmax ?? RISK_DEFAULTS[o.type].wmax).toFixed(1)}` : `${o.w} × ${o.h} m`, kind: 'obs' as const }))).map(item => <button key={item.id} onClick={() => onSelect({ kind: item.kind, id: item.id })}><span>{item.label}</span><small>{item.note}</small></button>)}</div>}
+      {!sel && <div className="object-list">{(mode === 'camera' ? L.cameras.map(c => ({ id: c.id, label: c.id, note: c.target ?? `${c.res}px · FOV ${c.fov}°`, kind: 'cam' as const })) : L.obstacles.map(o => ({ id: o.id, label: o.label, note: mode === 'risk' ? `W ${(o.riskWmax ?? RISK_DEFAULTS[o.type].wmax).toFixed(1)}` : `${o.w} × ${o.h} m`, kind: 'obs' as const }))).map(item => <button key={item.id} onClick={() => onSelect({ kind: item.kind, id: item.id })}><span>{item.label}</span><small>{item.note}</small></button>)}</div>}
       {obs && <>
         {mode === 'risk' && (() => {
           const defaults = RISK_DEFAULTS[obs.type];
           const riskCategory = obs.riskCategory ?? 'standard';
           return <>
         <h3>Ưu tiên vùng quanh vật thể</h3>
-        {obs.type === 'shelf' && <>
+        {obs.type === 'shelf' && (!obs.fixture || ['wall-shelf', 'gondola'].includes(obs.fixture)) && <>
           <label className="field">Nhóm hàng (CRAVED)
             <select value={riskCategory} onChange={(e) => {
               const category = e.target.value as ShelfRiskCategory;
@@ -155,6 +156,9 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
         })()}
         {mode !== 'risk' && <>
         <h3>Vật cản · {obs.label}</h3>
+        {obs.type === 'shelf' && <label className="field">Loại nội thất<select value={obs.fixture ?? 'gondola'} onChange={event => onObs(obs.id, { fixture: event.target.value as Fixture })}>
+          <option value="gondola">Kệ hai mặt</option><option value="wall-shelf">Kệ một mặt sát tường</option><option value="fridge">Tủ mát</option><option value="freezer">Tủ đông</option><option value="food-counter">Quầy đồ ăn / pha chế</option><option value="seating">Bàn ngồi</option><option value="partition">Vách ngăn</option><option value="column">Cột</option>
+        </select></label>}
         <label className="field">Tên<input value={obs.label} onChange={(e) => onObs(obs.id, { label: e.target.value })} /></label>
         <div className="row">
           <Num label="Dài (m)" value={obs.w} min={0.2} max={20} step={0.5} onChange={(v) => onObs(obs.id, { w: v })} />
@@ -165,6 +169,7 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
       </>}
       {cam && <>
         <h3>Camera · {cam.id}</h3>
+        {cam.target && <p className="camera-role">Khu vực phụ trách · {cam.target}</p>}
         <p className="muted small">Chỉnh thông số camera đang chọn. Góc xoay điều khiển hướng nhìn; góc quay là độ rộng vùng phủ (FOV).</p>
         <label className="field">Model / tên camera
           <input value={cam.model ?? ''} placeholder="Ví dụ: OptiCam IP 4MP" onChange={(e) => onCam(cam.id, { model: e.target.value })} />
@@ -194,6 +199,15 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
           <Num label="Tầm xa (m)" value={cam.range} min={1} max={30} step={0.5} onChange={(v) => onCam(cam.id, { range: v })} />
           <Num label="Cao (m)" value={cam.height} min={1.8} max={4} step={0.1} onChange={(v) => onCam(cam.id, { height: v })} />
         </div>
+        <details className="inspector-settings">
+          <summary>Góc nhìn camera trong 3D</summary>
+          <div className="inspector-settings-content">
+            <Num label="Góc chúc xuống (°)" value={cameraProjection(cam).tilt} min={0} max={85} step={1} onChange={tilt => onCam(cam.id, { tilt })} />
+            <Num label="Trường nhìn dọc (°)" value={Math.round(cameraProjection(cam).vfov * 10) / 10} min={10} max={120} step={1} onChange={vfov => onCam(cam.id, { vfov })} />
+            <button onClick={() => onCam(cam.id, { vfov: undefined })}>Tự tính FOV dọc theo 16:9</button>
+            <p className="muted small">Các thông số này điều khiển góc xem phối cảnh 3D. Phân tích DORI dùng FOV ngang và độ cao mục tiêu trên mặt bằng.</p>
+          </div>
+        </details>
       </>}
       {mode === 'camera' && sel?.kind !== 'cam' && <p className="muted small">Chọn camera trên sơ đồ để chỉnh chất lượng, hướng xoay và góc quan sát.</p>}
     </div>

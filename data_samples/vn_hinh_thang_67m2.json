@@ -1,0 +1,313 @@
+{
+  "version": "1.1",
+  "name": "VN 04 · Mặt bằng hình thang 67,5 m²",
+  "widthM": 9,
+  "heightM": 9,
+  "gridM": 0.25,
+  "pixelsPerMeter": 68,
+  "targetHeight": 1.6,
+  "description": "Mặt tiền rộng, phần cuối hẹp hơn; hai cạnh bên là tường xiên thật của mặt bằng.",
+  "designNotes": [
+    "Mặt tiền rộng, phần cuối hẹp hơn; hai cạnh bên là tường xiên thật của mặt bằng.",
+    "Kệ tường được chia thành mô-đun ngắn theo tường xiên, kệ đảo đặt thẳng để giữ lối đi rõ ràng.",
+    "Quầy thu ngân cạnh cửa, quầy đồ nóng ở đầu cửa hàng, tủ mát và tủ đông ở phía sâu.",
+    "Camera bố trí theo vai trò cửa vào, thu ngân, dọc hai dãy hàng và vùng hàng lạnh phía sau."
+  ],
+  "obstacles": [
+    {
+      "id": "entry",
+      "type": "entrance",
+      "label": "Cửa kính",
+      "x": 6,
+      "y": 0,
+      "w": 1.6,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "pos",
+      "type": "pos",
+      "fixture": "food-counter",
+      "label": "Thu ngân",
+      "x": 3.65,
+      "y": 0.85,
+      "w": 1.7,
+      "h": 0.75,
+      "elev": 1.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 5,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "food",
+      "type": "shelf",
+      "fixture": "food-counter",
+      "label": "Đồ nóng / đồ uống",
+      "x": 0.8,
+      "y": 0.15,
+      "w": 2.3,
+      "h": 0.65,
+      "elev": 1.05,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "seat",
+      "type": "shelf",
+      "fixture": "seating",
+      "label": "Bàn cửa kính",
+      "x": 0.7,
+      "y": 1.2,
+      "w": 1.9,
+      "h": 0.45,
+      "elev": 0.8,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 1,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "left-1",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Chăm sóc cá nhân",
+      "x": 0.009031839017011767,
+      "y": 3.169328026830498,
+      "w": 1.6,
+      "h": 0.45,
+      "elev": 1.8,
+      "angle": -99.46232220802563,
+      "riskCategory": "custom",
+      "riskWmax": 4.5,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "left-2",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Gia dụng",
+      "x": 0.6765994065845795,
+      "y": 6.574733432235903,
+      "w": 1.4,
+      "h": 0.45,
+      "elev": 1.8,
+      "angle": -99.46232220802563,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "right-1",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Bánh / snack",
+      "x": 7.628805998820827,
+      "y": 2.942300999803471,
+      "w": 1.2,
+      "h": 0.45,
+      "elev": 1.8,
+      "angle": 99.46232220802563,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "right-2",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Mì / đồ khô",
+      "x": 6.991643836658664,
+      "y": 6.315273972776444,
+      "w": 1.35,
+      "h": 0.45,
+      "elev": 1.8,
+      "angle": 99.46232220802563,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "g1",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Bánh kẹo",
+      "x": 2.45,
+      "y": 3,
+      "w": 0.75,
+      "h": 3,
+      "elev": 1.45,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "g2",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Thực phẩm khô",
+      "x": 4.7,
+      "y": 3,
+      "w": 0.75,
+      "h": 3,
+      "elev": 1.45,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "fridge",
+      "type": "shelf",
+      "fixture": "fridge",
+      "label": "Tủ mát nước / sữa",
+      "x": 2,
+      "y": 8.25,
+      "w": 4.8,
+      "h": 0.75,
+      "elev": 2.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "freezer",
+      "type": "shelf",
+      "fixture": "freezer",
+      "label": "Kem",
+      "x": 5.7,
+      "y": 6.8,
+      "w": 1,
+      "h": 0.6,
+      "elev": 0.9,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 2,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    }
+  ],
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "x": 9,
+      "y": 0,
+      "pan": 180,
+      "fov": 75,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Cửa kính"
+    },
+    {
+      "id": "CAM-02",
+      "x": 3.1,
+      "y": 0,
+      "pan": 60,
+      "fov": 75,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Thu ngân và hàng chờ"
+    },
+    {
+      "id": "CAM-03",
+      "x": 1.5,
+      "y": 9,
+      "pan": 285,
+      "fov": 85,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Dọc kệ giữa và tủ mát"
+    },
+    {
+      "id": "CAM-04",
+      "x": 7.5,
+      "y": 9,
+      "pan": 255,
+      "fov": 85,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Dãy tường xiên / hàng lạnh"
+    }
+  ],
+  "walkways": [
+    {
+      "label": "Lối mua sắm",
+      "points": [
+        [
+          6.8,
+          0.4
+        ],
+        [
+          6.6,
+          2.3
+        ],
+        [
+          6.4,
+          6.3
+        ],
+        [
+          5.3,
+          6.4
+        ],
+        [
+          4.2,
+          7.6
+        ],
+        [
+          2.1,
+          7.6
+        ],
+        [
+          1.7,
+          4.6
+        ]
+      ]
+    }
+  ],
+  "risk": {},
+  "riskStrokes": [],
+  "floorPolygon": [
+    [
+      0,
+      0
+    ],
+    [
+      9,
+      0
+    ],
+    [
+      7.5,
+      9
+    ],
+    [
+      1.5,
+      9
+    ]
+  ]
+}

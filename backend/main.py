@@ -19,8 +19,10 @@ from openpyxl import Workbook
 from pydantic import BaseModel, Field, root_validator, validator, conint
 
 if __package__:
+    from .footprint import validate_polygon, boundary_anchors, point_in_floor
     from .greedy_optimizer import OptiCamGreedy, camera_ppm
 else:
+    from footprint import validate_polygon, boundary_anchors, point_in_floor
     from greedy_optimizer import OptiCamGreedy, camera_ppm
 
 app = FastAPI(title="OptiCam Backend API", version="1.0")
@@ -66,6 +68,8 @@ class CameraProfile(FiniteModel):
     res: float = Field(default=2560, ge=640, le=7680)
     range: float = Field(default=10, ge=1, le=30)
     height: float = Field(default=2.4, ge=1.8, le=4)
+    tilt: float | None = Field(default=None, ge=0, le=85)
+    vfov: float | None = Field(default=None, ge=10, le=120)
     model: str | None = "Dome IP 4MP (2560px, ống kính 2.8mm)"
 
 
@@ -131,6 +135,7 @@ class LayoutData(FiniteModel):
     widthM: float = Field(gt=0, le=40)
     heightM: float = Field(gt=0, le=40)
     gridM: float = Field(default=0.5, ge=0.1, le=2)
+    floorPolygon: list[tuple[float, float]] | None = Field(default=None, min_items=3, max_items=32)
     targetHeight: float = Field(default=1.6, ge=0.5, le=2)
     obstacles: list[Obstacle] = Field(default_factory=list, max_items=500)
     risk: dict[str, float] = Field(default_factory=dict)
@@ -159,9 +164,11 @@ class LayoutData(FiniteModel):
             raise ValueError("room dimensions must be at least 3 meters")
         if math.ceil(width / grid) * math.ceil(height / grid) > MAX_GRID_CELLS:
             raise ValueError(f"layout cannot exceed {MAX_GRID_CELLS} grid cells")
+        polygon = values.get("floorPolygon")
+        validate_polygon(polygon, width, height)
         for index, camera in enumerate(values.get("cameras", [])):
             camera["id"] = camera["id"] or f"CAM-{index + 1:02}"
-            if not 0 <= camera["x"] <= width or not 0 <= camera["y"] <= height:
+            if not 0 <= camera["x"] <= width or not 0 <= camera["y"] <= height or (polygon and not point_in_floor((camera["x"], camera["y"]), polygon)):
                 raise ValueError("camera coordinates must be inside the room")
         ids = [camera["id"] for camera in values.get("cameras", []) if camera["id"]]
         if len(ids) != len(set(ids)):
@@ -212,7 +219,9 @@ class ProjectExportRequest(FiniteModel):
     score: dict[str, Any] = Field(default_factory=dict)
 
 
-def _wall_anchors(width: float, height: float, step: float) -> list[tuple[float, float]]:
+def _wall_anchors(width: float, height: float, step: float, floor_polygon=None) -> list[tuple[float, float]]:
+    if floor_polygon:
+        return boundary_anchors(floor_polygon, step)
     points: set[tuple[float, float]] = set()
     x_steps = max(1, math.ceil(width / step))
     y_steps = max(1, math.ceil(height / step))
@@ -238,15 +247,15 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
     ]
     optimizer = OptiCamGreedy(
         layout.widthM, layout.heightM, layout.obstacles, layout.targetHeight,
-        layout.riskStrokes, layout.risk
+        layout.riskStrokes, layout.risk, layout.floorPolygon
     )
     cells = optimizer.generate_grid(grid, request.riskMatrix, request.blockedMatrix)
 
     anchor_step = max(grid, 0.5)
-    anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step)
+    anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step, layout.floorPolygon)
     while cells and anchor_step < max(layout.widthM, layout.heightM) and len(anchors) * 24 * len(cells) > MAX_CANDIDATE_CELL_EVALUATIONS:
         anchor_step *= 2
-        anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step)
+        anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step, layout.floorPolygon)
 
     candidate_groups: list[list[dict[str, Any]]] = []
     candidate_group_cache: dict[str, list[dict[str, Any]]] = {}
@@ -428,7 +437,7 @@ def _heatmap(layout: LayoutData) -> dict[str, Any]:
     cols = math.floor(layout.widthM / layout.gridM + 0.5)
     cameras = layout.cameras
     obstacles = [obstacle.dict() for obstacle in layout.obstacles]
-    free_points = {(x, y) for x, y, _ in OptiCamGreedy(layout.widthM, layout.heightM, obstacles).generate_grid(layout.gridM)}
+    free_points = {(x, y) for x, y, _ in OptiCamGreedy(layout.widthM, layout.heightM, obstacles, floor_polygon=layout.floorPolygon).generate_grid(layout.gridM)}
     cells = []
     for row in range(rows):
         for col in range(cols):
@@ -445,7 +454,7 @@ def _heatmap(layout: LayoutData) -> dict[str, Any]:
                     "height": float(source.get("height", 2.4)),
                     "range": float(source.get("range", 10)),
                 }
-                ppm = max(ppm, camera_ppm(camera, (x, y), obstacles, layout.targetHeight))
+                ppm = max(ppm, camera_ppm(camera, (x, y), obstacles, layout.targetHeight, layout.floorPolygon))
             tier = next(
                 (name for threshold, name in ((250, "identification"), (125, "recognition"),
                                                (62, "observation"), (25, "detection"))

@@ -1,3 +1,5 @@
+import { floorOutline } from './footprint';
+import { snapToWall } from './geometry';
 import type { Camera, Layout, Weight, Zone } from '../types';
 import { snapAngle, wallAnchors } from './geometry';
 import { blockerObstacles, DORI_FACTOR, doriOf, evaluate, ppmAt, riskBand } from './optics';
@@ -9,7 +11,14 @@ export const makeCamera = (id: string, x: number, y: number, pan: number): Camer
 export const manualFourCorners = (l: Layout): Camera[] => [
   makeCamera('CAM-01', 0, 0, 45), makeCamera('CAM-02', l.widthM, 0, 135),
   makeCamera('CAM-03', l.widthM, l.heightM, 225), makeCamera('CAM-04', 0, l.heightM, 315)
-].map((c) => ({ ...c, target: 'Góc tường (đặt thủ công)' }));
+ ].map((c) => {
+  if (!l.floorPolygon) return { ...c, target: 'Góc tường (đặt thủ công)' };
+  const [x, y] = snapToWall(c.x, c.y, l.widthM, l.heightM, l.gridM, l.floorPolygon);
+  const points = floorOutline(l);
+  const cx = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+  const cy = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+  return { ...c, x, y, pan: snapAngle(Math.atan2(cy - y, cx - x) * 180 / Math.PI), target: 'Tường bao (đặt thủ công)' };
+});
 
 const TARGET = { red: 'Vùng trọng yếu', yellow: 'Vùng ưu tiên', green: 'Lối đi chung' } as const;
 const F = (p: number) => DORI_FACTOR[doriOf(p)];
@@ -18,17 +27,17 @@ export interface Candidate { cam: Camera; ppm: Float32Array }
 export interface CandOpts {
   anchorStep?: number;
   angleStep?: number;
-  cameraProfile?: Pick<Camera, 'fov' | 'res' | 'range' | 'height' | 'model'>;
-  cameraProfiles?: Array<Pick<Camera, 'fov' | 'res' | 'range' | 'height' | 'model'>>;
+  cameraProfile?: Pick<Camera, 'fov' | 'res' | 'range' | 'height' | 'model' | 'tilt' | 'vfov'>;
+  cameraProfiles?: Array<Pick<Camera, 'fov' | 'res' | 'range' | 'height' | 'model' | 'tilt' | 'vfov'>>;
 }
 
 /** Tập ứng viên (điểm neo tường × góc xoay) và PPM của từng ứng viên trên các ô sàn trống — tính 1 lần. */
 export function buildCandidates(l: Layout, free: Zone[], { anchorStep = l.gridM, angleStep = 15, cameraProfile }: CandOpts = {}): Candidate[] {
   if (!Number.isFinite(anchorStep) || anchorStep <= 0 || !Number.isFinite(angleStep) || angleStep <= 0) throw new Error('Bước lấy mẫu phải lớn hơn 0.');
   // Bound candidate memory for dense layouts before allocating typed arrays.
-  while (anchorStep < Math.max(l.widthM, l.heightM) && wallAnchors(l.widthM, l.heightM, anchorStep).length * Math.ceil(360 / angleStep) * free.length > 1_000_000) anchorStep *= 2;
+  while (anchorStep < Math.max(l.widthM, l.heightM) && wallAnchors(l.widthM, l.heightM, anchorStep, l.floorPolygon).length * Math.ceil(360 / angleStep) * free.length > 1_000_000) anchorStep *= 2;
   const obstacles = blockerObstacles(l), out: Candidate[] = [];
-  for (const [ax, ay] of wallAnchors(l.widthM, l.heightM, anchorStep)) {
+  for (const [ax, ay] of wallAnchors(l.widthM, l.heightM, anchorStep, l.floorPolygon)) {
     for (let pan = 0; pan < 360; pan += angleStep) {
       const defaults = makeCamera('', ax, ay, pan);
       const cam = {
@@ -37,11 +46,13 @@ export function buildCandidates(l: Layout, free: Zone[], { anchorStep = l.gridM,
         res: cameraProfile?.res ?? defaults.res,
         range: cameraProfile?.range ?? defaults.range,
         height: cameraProfile?.height ?? defaults.height,
-        model: cameraProfile?.model ?? defaults.model
+        model: cameraProfile?.model ?? defaults.model,
+        tilt: cameraProfile?.tilt,
+        vfov: cameraProfile?.vfov
       };
       const ppm = new Float32Array(free.length);
       let any = false;
-      free.forEach((z, j) => { const p = ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight); if (p > 0) { ppm[j] = p; any = true; } });
+      free.forEach((z, j) => { const p = ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight, l.floorPolygon); if (p > 0) { ppm[j] = p; any = true; } });
       if (any) out.push({ cam, ppm });
     }
   }
@@ -58,7 +69,7 @@ export function greedyPlace(l: Layout, zones: Zone[], K = 3, weighted = true, op
   const candidateSets = new Map<string, Candidate[]>();
   const candsByCamera = Array.from({ length: K }, (_, index) => {
     const source = opts?.cameraProfiles?.[index] ?? opts?.cameraProfile;
-    const cameraProfile = source && { fov: source.fov, res: source.res, range: source.range, height: source.height, model: source.model };
+    const cameraProfile = source && { fov: source.fov, res: source.res, range: source.range, height: source.height, model: source.model, tilt: source.tilt, vfov: source.vfov };
     const key = JSON.stringify([opts?.anchorStep ?? l.gridM, opts?.angleStep ?? 15, cameraProfile ?? null]);
     if (!candidateSets.has(key)) candidateSets.set(key, buildCandidates(l, free, { ...opts, cameraProfile }));
     return candidateSets.get(key)!;
@@ -104,7 +115,7 @@ export function minimumCamerasForTargets(
   yellowTarget = 80
 ): MinimumCameraSolution {
   const optimized = greedyPlace(l, zones, cameraProfiles.length, true, {
-    cameraProfiles: cameraProfiles.map(({ fov, res, range, height, model }) => ({ fov, res, range, height, model }))
+    cameraProfiles: cameraProfiles.map(({ fov, res, range, height, model, tilt, vfov }) => ({ fov, res, range, height, model, tilt, vfov }))
   });
   let best = optimized;
   let bestScore = evaluate({ ...l, cameras: best }, zones).score;

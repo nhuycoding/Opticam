@@ -1,3 +1,4 @@
+import { pointInFloor, segmentInFloor } from './footprint';
 import { PERSON_REGIONS, type Camera, type Cell, type Dori, type Layout, type Obstacle, type PersonRegion, type Score, type ShelfRiskCategory, type Weight, type Zone } from '../types';
 import { deg, distToObs, norm360, rad, segmentRectInterval, type Pt } from './geometry';
 
@@ -43,7 +44,8 @@ export const doriOf = (ppm: number): Dori =>
 export const blockerObstacles = (l: Layout): Obstacle[] => l.obstacles.filter((o) => o.type !== 'entrance');
 
 /** PPM uses the selected person height and blocks sightlines intersecting an obstacle volume. */
-export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], targetHeight = FACE_Z): number {
+export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], targetHeight = FACE_Z, floorPolygon?: Pt[]): number {
+  if (floorPolygon && !segmentInFloor([cam.x, cam.y], [x, y], floorPolygon)) return 0;
   const dx = x - cam.x, dy = y - cam.y, d = Math.hypot(dx, dy);
   if (d < 0.2 || d > cam.range) return 0;
   let diff = Math.abs(norm360(deg(Math.atan2(dy, dx))) - cam.pan);
@@ -65,7 +67,7 @@ export function assessPersonAt(l: Layout, x: number, y: number): Array<PersonReg
   const obstacles = blockerObstacles(l);
   return PERSON_REGIONS.map((region) => {
     const ppm = l.cameras.reduce(
-      (best, cam) => Math.max(best, ppmAt(cam, x, y, obstacles, region.height)),
+      (best, cam) => Math.max(best, ppmAt(cam, x, y, obstacles, region.height, l.floorPolygon)),
       0
     );
     return { ...region, ppm, dori: doriOf(ppm) };
@@ -78,7 +80,7 @@ export function buildZones(l: Layout): Zone[] {
   const zones: Zone[] = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const cx = (c + 0.5) * l.gridM, cy = (r + 0.5) * l.gridM;
-    const solid = l.obstacles.some((o) => o.type !== 'entrance' && distToObs(cx, cy, o) < 1e-9);
+    const solid = (l.floorPolygon && !pointInFloor([cx, cy], l.floorPolygon)) || l.obstacles.some((o) => o.type !== 'entrance' && distToObs(cx, cy, o) < 1e-9);
     let w: Weight = 1;
     for (const obstacle of l.obstacles) {
       const defaults = RISK_DEFAULTS[obstacle.type];
@@ -92,7 +94,7 @@ export function buildZones(l: Layout): Zone[] {
     }
     const legacyOverride = l.risk[`${r}_${c}`];
     if (Number.isFinite(legacyOverride)) w = legacyOverride;
-    zones.push({ r, c, cx, cy, w, solid });
+    zones.push({ r, c, cx, cy, w, solid: Boolean(solid) });
   }
   for (const stroke of l.riskStrokes) {
     const minCol = Math.max(0, Math.ceil((stroke.x - stroke.radius) / l.gridM - 0.5));
@@ -114,7 +116,7 @@ export function evaluate(l: Layout, zones: Zone[]): { cells: Cell[]; score: Scor
   const cells: Cell[] = zones.map((z) => {
     if (z.solid) return { ...z, ppm: 0, dori: 'blind' as Dori };
     let ppm = 0;
-    for (const cam of l.cameras) ppm = Math.max(ppm, ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight));
+    for (const cam of l.cameras) ppm = Math.max(ppm, ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight, l.floorPolygon));
     const dori = doriOf(ppm);
     const band = riskBand(z.w);
     if (band === 'red') { redN++; redMinPpm = Math.min(redMinPpm, ppm); if (ppm >= DORI_MIN.identification) redOk++; }

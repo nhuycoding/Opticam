@@ -2,7 +2,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OptiCamCanvas, type CanvasProps } from './OptiCamCanvas';
 import { PRESETS, withManualCams } from '../../data/presets';
-import { cameraLabelBoxes } from './shared';
+import { CameraNode } from './CameraNode';
+import { makeCamera } from '../../core/optimizer';
 
 vi.mock('react-konva', () => Object.fromEntries(['Stage','Layer','Shape','Group','Circle','Line','Rect','Text','Wedge','Ellipse','Image'].map(name => [name, name.toLowerCase()])));
 let renderer: ReactTestRenderer | undefined;
@@ -28,15 +29,15 @@ describe('Plan preview editing guards', () => {
   });
 });
 
-describe('Camera annotation bounds', () => {
-  it.each([.3, 1, 2])('keeps dense camera labels inside the room at zoom %s', zoom => {
-    const cameras = Array.from({ length: 20 }, (_, i) => ({ id: String(i), x: i % 2 ? 3 : 0, y: (i % 10) / 3 }));
-    const boxes = cameraLabelBoxes(cameras, 3, 3, 30, 1 / Math.max(.55, zoom));
-    for (const box of boxes) {
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(90);
-      expect(box.y + box.height).toBeLessThanOrEqual(90);
-    }
+describe('Numbered camera markers', () => {
+  it.each([.3, 1, 2])('shows an upright number without floating specifications at zoom %s', zoom => {
+    const scale = 1 / Math.max(.55, zoom);
+    act(() => { renderer = create(<CameraNode number="02" cam={makeCamera('CUSTOM-ID', 0, 0, 135)} ppm={68} roomW={10} roomH={6} grid={.5} selected={false} labelScale={scale} onSelect={vi.fn()} onCamera={vi.fn()} />); });
+    const labels = renderer!.root.findAllByType('text' as any);
+    expect(labels).toHaveLength(1);
+    expect(labels[0].props.text).toBe('02');
+    expect(labels[0].props.rotation).toBeUndefined();
+    expect(labels[0].props.listening).toBe(false);
+    expect(labels[0].props.fontSize).toBeCloseTo(11 * scale);
   });
 });

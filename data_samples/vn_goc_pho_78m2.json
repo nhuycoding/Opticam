@@ -1,0 +1,355 @@
+{
+  "version": "1.1",
+  "name": "VN 02 · Góc phố vát góc 78 m²",
+  "widthM": 10,
+  "heightM": 8,
+  "gridM": 0.25,
+  "pixelsPerMeter": 68,
+  "targetHeight": 1.6,
+  "description": "Cửa hàng hai mặt tiền có góc vát, hai cửa vào, quầy thu ngân phía trước và khu ngồi cạnh kính.",
+  "designNotes": [
+    "Cửa hàng hai mặt tiền có góc vát, hai cửa vào, quầy thu ngân phía trước và khu ngồi cạnh kính.",
+    "Kệ đảo chạy song song; các khoảng giữa dãy rộng 1,30 m, có lối ngang trước tủ mát.",
+    "Kệ một mặt bám tường đặc; cạnh mặt tiền dành cho cửa kính, không bị kệ cao che kín.",
+    "Camera có vai trò riêng tại hai cửa, quầy thu ngân, đầu dãy, tủ mát và khu đồ ăn."
+  ],
+  "obstacles": [
+    {
+      "id": "entry",
+      "type": "entrance",
+      "label": "Cửa kính",
+      "x": 6.4,
+      "y": 0,
+      "w": 1.6,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "side-entry",
+      "type": "entrance",
+      "label": "Cửa mặt bên",
+      "x": 9.24,
+      "y": 3.14,
+      "w": 1.4,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 90,
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "pos",
+      "type": "pos",
+      "fixture": "food-counter",
+      "label": "Thu ngân",
+      "x": 3.8,
+      "y": 0.8,
+      "w": 2,
+      "h": 0.8,
+      "elev": 1.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 5,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "coffee",
+      "type": "shelf",
+      "fixture": "food-counter",
+      "label": "Cà phê / đồ nóng",
+      "x": 0.3,
+      "y": 0.1,
+      "w": 2.6,
+      "h": 0.65,
+      "elev": 1.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "eat",
+      "type": "shelf",
+      "fixture": "seating",
+      "label": "Bàn kính mặt tiền",
+      "x": 0.2,
+      "y": 1.3,
+      "w": 0.5,
+      "h": 1.9,
+      "elev": 0.8,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 1,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "promo",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Khuyến mãi",
+      "x": 6,
+      "y": 2.4,
+      "w": 1,
+      "h": 0.65,
+      "elev": 1.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "back-left",
+      "type": "shelf",
+      "fixture": "fridge",
+      "label": "Tủ mát nước",
+      "x": 0.3,
+      "y": 7.25,
+      "w": 4.5,
+      "h": 0.75,
+      "elev": 2.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "back-right",
+      "type": "shelf",
+      "fixture": "fridge",
+      "label": "Sữa / thực phẩm mát",
+      "x": 5.7,
+      "y": 7.25,
+      "w": 3.9,
+      "h": 0.75,
+      "elev": 2.1,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "left-wall",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Chăm sóc cá nhân",
+      "x": 0,
+      "y": 3.5,
+      "w": 0.45,
+      "h": 2.3,
+      "elev": 1.8,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 4.5,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "right-wall",
+      "type": "shelf",
+      "fixture": "wall-shelf",
+      "label": "Hàng gia dụng",
+      "x": 9.55,
+      "y": 4,
+      "w": 0.45,
+      "h": 2,
+      "elev": 1.8,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "g1",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Bánh kẹo",
+      "x": 2,
+      "y": 3.4,
+      "w": 0.8,
+      "h": 2.1,
+      "elev": 1.45,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "g2",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Mì / đồ khô",
+      "x": 4.1,
+      "y": 3.4,
+      "w": 0.8,
+      "h": 2.1,
+      "elev": 1.45,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "g3",
+      "type": "shelf",
+      "fixture": "gondola",
+      "label": "Snack / thực phẩm",
+      "x": 6.2,
+      "y": 3.4,
+      "w": 0.8,
+      "h": 2.1,
+      "elev": 1.45,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 3,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    },
+    {
+      "id": "freezer",
+      "type": "shelf",
+      "fixture": "freezer",
+      "label": "Kem",
+      "x": 8.2,
+      "y": 4.3,
+      "w": 0.6,
+      "h": 1.4,
+      "elev": 0.9,
+      "angle": 0,
+      "riskCategory": "custom",
+      "riskWmax": 2,
+      "riskR0": 0.45,
+      "riskR": 1.4
+    }
+  ],
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "x": 10,
+      "y": 4,
+      "pan": 225,
+      "fov": 95,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Cửa chính và cửa bên"
+    },
+    {
+      "id": "CAM-02",
+      "x": 3,
+      "y": 0,
+      "pan": 45,
+      "fov": 75,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Giao dịch và hàng chờ"
+    },
+    {
+      "id": "CAM-03",
+      "x": 0,
+      "y": 6.5,
+      "pan": 330,
+      "fov": 85,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Kệ đảo và đầu dãy"
+    },
+    {
+      "id": "CAM-04",
+      "x": 10,
+      "y": 8,
+      "pan": 210,
+      "fov": 85,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Tủ mát / lối sau"
+    },
+    {
+      "id": "CAM-05",
+      "x": 0,
+      "y": 0,
+      "pan": 75,
+      "fov": 80,
+      "res": 2560,
+      "range": 18,
+      "height": 2.8,
+      "model": "Dome IP 4MP · lắp cao 2,8 m",
+      "target": "Quầy đồ nóng và chỗ ngồi"
+    }
+  ],
+  "walkways": [
+    {
+      "label": "Lối chính",
+      "points": [
+        [
+          7.3,
+          0.4
+        ],
+        [
+          8.6,
+          2.7
+        ],
+        [
+          7.6,
+          3.5
+        ],
+        [
+          7.6,
+          6.1
+        ],
+        [
+          1.2,
+          6.1
+        ],
+        [
+          1.2,
+          3
+        ]
+      ]
+    }
+  ],
+  "risk": {},
+  "riskStrokes": [],
+  "floorPolygon": [
+    [
+      0,
+      0
+    ],
+    [
+      8,
+      0
+    ],
+    [
+      10,
+      2
+    ],
+    [
+      10,
+      8
+    ],
+    [
+      0,
+      8
+    ]
+  ]
+}

@@ -55,6 +55,23 @@ def test_optimize_rejects_mismatched_matrices() -> None:
     assert client.post("/api/v1/optimize", json=payload).status_code == 422
 
 
+def test_camera_3d_lens_settings_survive_optimization_and_validation():
+    payload = optimize_payload()
+    payload["cameraBudgetK"] = 1
+    payload["cameraProfiles"] = [{"tilt": 35, "vfov": 62}]
+    response = client.post("/api/v1/optimize", json=payload)
+    assert response.status_code == 200
+    assert response.json()["cameras"][0]["tilt"] == 35
+    assert response.json()["cameras"][0]["vfov"] == 62
+    layout = sample_layout()
+    layout["cameras"][0].update(tilt=35, vfov=62)
+    parsed = main.LayoutData.parse_obj(layout)
+    assert parsed.cameras[0]["tilt"] == 35
+    assert parsed.cameras[0]["vfov"] == 62
+    payload["cameraProfiles"][0]["vfov"] = 180
+    assert client.post("/api/v1/optimize", json=payload).status_code == 422
+
+
 def test_continuous_risk_weights_are_validated_and_used_by_api() -> None:
     assert risk_weight_at(1.75, 5, 1, 2.5) == 3
     pos = {"type": "pos", "x": 1, "y": 1, "w": 1, "h": 1, "elev": 1.1}

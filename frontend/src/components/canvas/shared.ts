@@ -42,21 +42,3 @@ export const OBS_FILL = {
 /** Gộp cập nhật state theo requestAnimationFrame khi kéo thả (giữ 60 FPS khi nhiều camera). */
 let raf = 0;
 export const scheduleFrame = (fn: () => void) => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fn); };
-
-/** Deterministic label placement shared by drawing and heatmap text masking. */
-export function cameraLabelBoxes(cameras: { id: string; x: number; y: number }[], roomW: number, roomH: number, ppm: number, labelScale = 1) {
-  const placed: { x: number; y: number; width: number; height: number }[] = [];
-  return cameras.map(camera => {
-    const width = Math.min(116 * labelScale, Math.max(54, roomW * ppm - 16)), height = Math.min(36 * labelScale, roomH * ppm - 16);
-    const cx = camera.x * ppm, cy = camera.y * ppm;
-    const x = Math.max(8, Math.min(cx < roomW * ppm / 2 ? cx + 18 * labelScale : cx - width - 18 * labelScale, roomW * ppm - width - 8));
-    const baseY = cy < roomH * ppm / 2 ? cy + 26 * labelScale : cy - height - 20 * labelScale;
-    let y = Math.max(8, Math.min(baseY, roomH * ppm - height - 8));
-    for (let attempt = 0; attempt < cameras.length; attempt++) {
-      if (!placed.some(box => x < box.x + box.width + 4 && x + width + 4 > box.x && y < box.y + box.height + 4 && y + height + 4 > box.y)) break;
-      y = cy < roomH * ppm / 2 ? y + height + 5 : y - height - 5;
-      if (y < 8 || y + height > roomH * ppm - 8) { y = Math.max(8, Math.min(baseY, roomH * ppm - height - 8)); break; }
-    }
-    const box = { x, y, width, height }; placed.push(box); return box;
-  });
-}

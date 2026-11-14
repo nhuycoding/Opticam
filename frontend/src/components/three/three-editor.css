@@ -1,0 +1,20 @@
+.three-edit-toolbar,.pov-blur-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding: 7px 12px; border-bottom: 1px solid #dedfd3; background: #faf9f2; }
+.three-interaction-mode,.three-add-furniture { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.three-edit-toolbar button { min-height: 29px; padding: 5px 8px; font-size: 9px; white-space: nowrap; }
+.three-edit-toolbar select { min-height: 29px; width: 116px; padding: 4px 6px; font-size: 9px; }
+.three-interaction-mode button { background: transparent; border-color: transparent; }
+.three-interaction-mode button.on { background: #e6e6da; color: #565c43; }
+.pov-blur-controls { justify-content: flex-start; color: #626c5c; font-size: 9px; }
+.pov-blur-controls label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pov-blur-controls input[type=checkbox] { accent-color: #765d42; }
+.pov-blur-strength input[type=range] { width: 100px; }
+.pov-blur-controls > span { margin-left: auto; color: #8a8d7e; font-size: 8px; }
+.scene-object-actions { display: flex; gap: 7px; margin: 12px 0; }
+.scene-object-actions button { flex: 1; }
+@media (max-width: 650px) {
+  .three-edit-toolbar,.pov-blur-controls { padding: 6px; gap: 6px; }
+  .three-interaction-mode,.three-add-furniture { flex-wrap: wrap; }
+  .three-edit-toolbar button { padding: 5px 6px; font-size: 8px; }
+  .three-edit-toolbar select { width: 110px; }
+  .pov-blur-controls > span { display: none; }
+}

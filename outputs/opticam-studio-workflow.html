@@ -1,0 +1,401 @@
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap");
+#oc-directions { color:light-dark(#25313b,#e6e9ed);font-family:Inter,Arial,sans-serif; }
+#oc-directions * { box-sizing:border-box; }
+#oc-directions [hidden] { display:none!important; }
+#oc-directions .oc-stage { min-height:650px; }
+#oc-directions .oc-app { --oc-bg:light-dark(#f1f3f5,#141b23);--oc-panel:light-dark(#fff,#1c2530);--oc-ink:light-dark(#25313b,#e6e9ed);--oc-sub:light-dark(#677480,#a4b0bc);--oc-edge:light-dark(#dce1e6,#36434f);--oc-accent:light-dark(#2e62bb,#8ab5ff);--oc-soft:light-dark(#eaf1fe,#293d58);--oc-paper:light-dark(#fafbfd,#111a24);--oc-wall:light-dark(#52606b,#b5c0cc);--oc-item:light-dark(#e9edf0,#34424e);--oc-success:light-dark(#3a785c,#8cc3a3); background:var(--oc-bg);color:var(--oc-ink);min-height:650px;font-size:13px;line-height:1.5; }
+#oc-directions .oc-app button,#oc-directions .oc-app input,#oc-directions .oc-app select { font:inherit; }
+#oc-directions .oc-app button { background:var(--oc-panel);color:var(--oc-ink);border:1px solid var(--oc-edge);border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px; }
+#oc-directions .oc-app button:hover { background:var(--oc-soft); }
+#oc-directions .oc-app button[aria-pressed=true] { background:var(--oc-soft);border-color:var(--oc-accent);color:var(--oc-accent); }
+#oc-directions .oc-app .oc-primary { background:var(--oc-accent);border-color:var(--oc-accent);color:light-dark(#fff,#15273c);font-weight:600; }
+#oc-directions .oc-top { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 18px;border-bottom:1px solid var(--oc-edge);background:var(--oc-panel); }
+#oc-directions .oc-brand { display:flex;align-items:center;gap:10px;font-weight:650;font-size:16px;letter-spacing:-.5px; }
+#oc-directions .oc-project { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+#oc-directions .oc-project-name { border-left:1px solid var(--oc-edge);padding-left:14px;color:var(--oc-sub);font-size:12px; }
+#oc-directions .oc-actions { display:flex;align-items:center;gap:7px;flex-wrap:wrap; }
+#oc-directions .oc-main { display:grid;grid-template-columns:150px minmax(0,1fr) 224px;min-height:524px; }
+#oc-directions .oc-tree { padding:16px 10px;background:var(--oc-panel);border-right:1px solid var(--oc-edge); }
+#oc-directions .oc-tree button { width:100%;justify-content:flex-start;margin-bottom:5px;border-color:transparent;background:transparent; }
+#oc-directions .oc-caption { color:var(--oc-sub);font-size:11px;margin:0 0 12px;letter-spacing:.05em; }
+#oc-directions .oc-tree-divider { height:1px;background:var(--oc-edge);margin:15px 0; }
+#oc-directions .oc-work { display:flex;flex-direction:column;min-width:0;padding:12px;gap:10px; }
+#oc-directions .oc-modebar { display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap; }
+#oc-directions .oc-modebar .oc-actions { gap:3px; }
+#oc-directions .oc-modebar button { font-size:12px;min-height:32px;padding:4px 8px; }
+#oc-directions .oc-zoom { color:var(--oc-sub);font-size:12px; }
+#oc-directions .oc-drawing { position:relative;flex:1;min-height:360px; }
+#oc-directions canvas { display:block;width:100%;height:100%;min-height:360px; }
+#oc-directions .oc-props { background:var(--oc-panel);border-left:1px solid var(--oc-edge);padding:16px; }
+#oc-directions h3 { font-size:16px;font-weight:600;letter-spacing:-.3px;margin:0 0 3px; }
+#oc-directions .oc-muted { color:var(--oc-sub);font-size:12px; }
+#oc-directions .oc-prop-head { padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--oc-edge); }
+#oc-directions .oc-field { display:block;color:var(--oc-sub);font-size:12px;margin-bottom:13px; }
+#oc-directions .oc-field input,#oc-directions .oc-field select { display:block;width:100%;min-width:0;padding:6px 8px;min-height:34px;border:1px solid var(--oc-edge);border-radius:4px;margin-top:5px;background:var(--oc-panel);color:var(--oc-ink); }
+#oc-directions .oc-dual { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+#oc-directions .oc-reading { display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--oc-edge);font-size:12px; }
+#oc-directions .oc-reading strong { font-variant-numeric:tabular-nums;font-weight:600; }
+#oc-directions .oc-foot { display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 18px;background:var(--oc-panel);border-top:1px solid var(--oc-edge);font-size:12px; }
+#oc-directions .oc-foot span { color:var(--oc-sub); }
+#oc-directions .oc-status { font-size:12px;color:var(--oc-sub);min-height:18px; }
+#oc-directions .oc-inline-tools { display:flex;align-items:center;gap:5px; }
+#oc-directions .oc-inline-tools i { width:16px;height:16px; }
+#oc-directions .oc-app i[data-lucide] { width:16px;height:16px;display:inline-block; }
+#oc-directions .oc-studio { --oc-bg:light-dark(#eeede9,#201f1d);--oc-panel:light-dark(#faf9f6,#292723);--oc-ink:light-dark(#35362f,#ece8de);--oc-sub:light-dark(#77786e,#b5b0a3);--oc-edge:light-dark(#dedcd4,#47443d);--oc-accent:light-dark(#795c3f,#d0ae83);--oc-soft:light-dark(#f0e6d8,#43392e);--oc-paper:light-dark(#f8f6ef,#24231f);--oc-wall:light-dark(#6a6c61,#c7c2b1);--oc-item:light-dark(#e6e1d4,#49473e); }
+#oc-directions .oc-studio .oc-top { padding:16px 22px; }
+#oc-directions .oc-studio .oc-main { grid-template-columns:minmax(0,1fr);position:relative;padding:20px 22px 8px;min-height:496px; }
+#oc-directions .oc-studio .oc-work { padding:0; }
+#oc-directions .oc-studio .oc-drawing { min-height:360px; }
+#oc-directions .oc-studio .oc-worktitle { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap; }
+#oc-directions .oc-worktitle h3 { font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:24px;letter-spacing:-.5px; }
+#oc-directions .oc-float-tools { position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:var(--oc-panel);border:1px solid var(--oc-edge);border-radius:9px;padding:5px;display:flex;gap:3px;box-shadow:0 6px 20px light-dark(#36352b12,#0003); }
+#oc-directions .oc-float-tools button { border-color:transparent;background:transparent; }
+#oc-directions .oc-studio .oc-foot { padding:14px 22px; }
+#oc-directions .oc-design-reading { display:flex;gap:24px;align-items:center;flex-wrap:wrap; }
+#oc-directions .oc-design-reading div { display:grid;gap:2px; }
+#oc-directions .oc-design-reading strong { font-size:20px;line-height:1.15;font-weight:500;font-variant-numeric:tabular-nums; }
+#oc-directions .oc-guide { --oc-accent:light-dark(#345b50,#9cc8b3);--oc-soft:light-dark(#e6eee8,#2e443b); }
+#oc-directions .oc-guide .oc-main { grid-template-columns:190px minmax(0,1fr) 224px; }
+#oc-directions .oc-guide .oc-tree { padding:24px 14px; }
+#oc-directions .oc-guide .oc-tree button { display:grid;grid-template-columns:25px 1fr;text-align:left;justify-content:stretch;padding:10px 8px; }
+#oc-directions .oc-guide .oc-tree button small { display:block;font-size:11px;color:var(--oc-sub); }
+#oc-directions .oc-guide .oc-tree button strong { font-size:13px;font-weight:500; }
+#oc-directions .oc-step-title { font-size:18px;font-weight:600;margin:4px 0; }
+#oc-directions .oc-guide .oc-work { padding:18px; }
+#oc-directions .oc-guide .oc-drawing { min-height:320px; }
+#oc-directions .oc-guide canvas { min-height:320px; }
+#oc-directions .oc-summary { display:grid;gap:12px;margin-top:16px; }
+#oc-directions .oc-summary p { margin:0;font-size:12px;color:var(--oc-sub); }
+@media(max-width:780px) { #oc-directions .oc-main,#oc-directions .oc-guide .oc-main { grid-template-columns:120px minmax(0,1fr); } #oc-directions .oc-props { grid-column:1/-1;border-left:0;border-top:1px solid var(--oc-edge);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px; } #oc-directions .oc-prop-head,#oc-directions .oc-step-panel { grid-column:1/-1; } #oc-directions .oc-stage,#oc-directions .oc-app { min-height:960px; } }
+@media(max-width:500px) { #oc-directions .oc-stage,#oc-directions .oc-app { min-height:1260px; } #oc-directions .oc-main,#oc-directions .oc-guide .oc-main { grid-template-columns:minmax(0,1fr); } #oc-directions .oc-tree { border-right:0;border-bottom:1px solid var(--oc-edge);display:flex;gap:5px;flex-wrap:wrap;padding:10px; } #oc-directions .oc-tree button { width:auto;margin:0; } #oc-directions .oc-tree .oc-caption,#oc-directions .oc-tree-divider,#oc-directions .oc-tree .oc-static-item { display:none; } #oc-directions .oc-guide .oc-tree { padding:10px; } #oc-directions .oc-guide .oc-tree button { display:flex;min-height:44px; } #oc-directions .oc-guide .oc-tree button small { display:none; } #oc-directions .oc-guide .oc-tree button i { display:none; } #oc-directions .oc-app button { min-height:44px; } #oc-directions .oc-project-name { border:0;padding:0; } #oc-directions .oc-drawing,#oc-directions canvas { min-height:300px; } #oc-directions .oc-studio .oc-main { padding:14px 10px 8px; } #oc-directions .oc-float-tools { position:static;transform:none;justify-content:center;flex-wrap:wrap;width:100%;margin-top:8px; } #oc-directions .oc-props { padding:14px; } #oc-directions .oc-top { padding:12px; } #oc-directions .oc-design-reading { gap:18px; } #oc-directions .oc-field input,#oc-directions .oc-field select { font-size:16px; } }
+</style>
+<style>
+#oc-directions .oc-hybrid .oc-top { padding:16px 22px; }
+#oc-directions .oh-project { display:grid;gap:2px; }
+#oc-directions .oh-project small { color:var(--oc-sub);font-size:12px; }
+#oc-directions .oh-steps { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:12px 22px;background:var(--oc-panel);border-bottom:1px solid var(--oc-edge); }
+#oc-directions .oh-steps button { border:0;border-radius:0;background:transparent;gap:8px;padding:10px 6px;box-shadow:inset 0 -2px transparent; }
+#oc-directions .oh-steps button[aria-pressed=true] { background:transparent;box-shadow:inset 0 -2px var(--oc-accent); }
+#oc-directions .oh-number { display:grid;place-items:center;width:23px;height:23px;border:1px solid var(--oc-edge);border-radius:50%;font-size:12px; }
+#oc-directions .oh-steps button[aria-pressed=true] .oh-number { color:var(--oc-panel);background:var(--oc-accent);border-color:var(--oc-accent); }
+#oc-directions .oc-hybrid .oc-main { grid-template-columns:minmax(0,1fr) 250px;padding:0;min-height:450px; }
+#oc-directions .oc-hybrid .oc-work { padding:20px; }
+#oc-directions .oc-hybrid .oc-worktitle h3 { font-family:'Instrument Serif',Georgia,serif;font-size:27px; }
+#oc-directions .oc-hybrid .oc-props { padding:22px 18px;display:block;grid-column:auto; }
+#oc-directions .oc-hybrid .oc-drawing { min-height:330px; }
+#oc-directions .oc-hybrid canvas { min-height:330px; }
+#oc-directions .oh-layer { display:flex;gap:4px;flex-wrap:wrap;justify-content:center; }
+#oc-directions .oh-layer button { border-color:transparent;background:transparent;font-size:12px; }
+#oc-directions .oh-panel-title { margin:0 0 18px;padding-bottom:15px;border-bottom:1px solid var(--oc-edge);font-size:15px; }
+#oc-directions .oh-summary { margin:16px 0 0;color:var(--oc-sub);font-size:12px;line-height:1.6; }
+#oc-directions .oh-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+#oc-directions .oh-result { display:flex;align-items:baseline;gap:8px;padding:15px 0;border-bottom:1px solid var(--oc-edge); }
+#oc-directions .oh-result strong { font-size:28px;font-weight:500;letter-spacing:-.8px; }
+#oc-directions .oh-result span { font-size:12px;color:var(--oc-sub); }
+#oc-directions .oh-comparison { margin-top:20px; }
+#oc-directions .oh-comparison button { width:100%;font-size:12px; }
+@media(max-width:700px){#oc-directions .oc-hybrid .oc-main { grid-template-columns:minmax(0,1fr); }#oc-directions .oc-hybrid .oc-props { grid-column:1/-1;border-left:0;border-top:1px solid var(--oc-edge); }#oc-directions .oh-steps { padding:8px; }#oc-directions .oh-steps button { flex-direction:column;font-size:12px;gap:5px; }#oc-directions .oc-hybrid .oc-work { padding:15px; }#oc-directions .oc-hybrid .oc-foot { padding:15px; }#oc-directions .oc-hybrid .oh-actions { width:100%;justify-content:space-between; }}
+</style>
+<div id="oc-directions">
+<div class="oc-app oc-studio oc-hybrid" data-design="hybrid" aria-label="Studio kiến trúc với quy trình thiết kế bốn bước">
+<header class="oc-top">
+  <div class="oc-brand"><i data-lucide="aperture" aria-hidden="true"></i>OptiCam</div>
+  <div class="oh-project"><strong>Cửa hàng Nguyễn Trãi</strong><small>10 × 6 m · Phương án giám sát</small></div>
+</header>
+<nav class="oh-steps" aria-label="Các bước thiết kế">
+  <button data-step="room" aria-pressed="false"><span class="oh-number">1</span>Mặt bằng</button>
+  <button data-step="risk" aria-pressed="false"><span class="oh-number">2</span>Ưu tiên</button>
+  <button data-step="cameras" aria-pressed="true"><span class="oh-number">3</span>Camera</button>
+  <button data-step="results" aria-pressed="false"><span class="oh-number">4</span>Kết quả</button>
+</nav>
+<div class="oc-main">
+  <section class="oc-work" aria-label="Sơ đồ cửa hàng">
+    <div class="oc-worktitle"><div><p class="oc-caption">THIẾT KẾ PHƯƠNG ÁN</p><h3 data-step-title>Bố trí camera</h3></div><span class="oc-muted" data-scheme>3 camera</span></div>
+    <div class="oc-drawing"><canvas aria-label="Mặt bằng 10 × 6 mét với cửa, quầy POS, ba dãy kệ và các camera"></canvas></div>
+    <div class="oh-layer" role="group" aria-label="Lớp hiển thị">
+      <button data-layer="off" aria-pressed="true"><i data-lucide="square-dashed" aria-hidden="true"></i>Mặt bằng</button>
+      <button data-layer="risk" aria-pressed="false"><i data-lucide="layers" aria-hidden="true"></i>Ưu tiên</button>
+      <button data-layer="dori" aria-pressed="false"><i data-lucide="scan-eye" aria-hidden="true"></i>Độ phủ</button>
+    </div>
+  </section>
+  <aside class="oc-props" aria-label="Thiết lập bước hiện tại">
+    <div data-panel="room" hidden>
+      <h4 class="oh-panel-title">Thiết lập mặt bằng</h4>
+      <label class="oc-field">Chiều rộng<input value="10 m" readonly></label>
+      <label class="oc-field">Chiều dài<input value="6 m" readonly></label>
+      <div class="oc-reading"><span>Kệ hàng</span><strong>3</strong></div>
+      <div class="oc-reading"><span>Quầy thanh toán</span><strong>1</strong></div>
+      <p class="oh-summary">Sắp xếp lối đi và các vật cản trước khi xác định khu vực giám sát.</p>
+    </div>
+    <div data-panel="risk" hidden>
+      <h4 class="oh-panel-title">Khu vực ưu tiên</h4>
+      <div class="oc-reading"><span>Quầy POS</span><strong>Cao · W 5</strong></div>
+      <div class="oc-reading"><span>Cửa ra vào</span><strong>Cao · W 5</strong></div>
+      <div class="oc-reading"><span>Kệ hàng</span><strong>Vừa · W 3</strong></div>
+      <p class="oh-summary">Các vùng màu thể hiện mức ưu tiên giám sát quanh quầy, cửa và kệ.</p>
+    </div>
+    <div data-panel="cameras">
+      <h4 class="oh-panel-title">Thiết bị dự kiến</h4>
+      <label class="oc-field">Ngân sách camera<select data-budget><option>2</option><option selected>3</option><option>4</option></select></label>
+      <div class="oc-reading"><span>Độ phân giải</span><strong>4 MP</strong></div>
+      <div class="oc-reading"><span>Góc quan sát</span><strong>85°</strong></div>
+      <div class="oc-reading"><span>Chiều cao lắp đặt</span><strong>2,4 m</strong></div>
+      <p class="oh-summary">Chạy tối ưu để xem phương án bố trí và đánh giá chất lượng quan sát.</p>
+    </div>
+    <div data-panel="results" hidden>
+      <h4 class="oh-panel-title">Hiệu quả phương án</h4>
+      <div class="oh-result"><strong data-red>96%</strong><span>Trọng yếu<br>Mục tiêu 95%</span></div>
+      <div class="oh-result"><strong data-yellow>87%</strong><span>Ưu tiên<br>Mục tiêu 80%</span></div>
+      <p class="oh-summary" data-result-note>Đạt hai mục tiêu giám sát.</p>
+      <div class="oh-comparison"><button data-action="compare" aria-pressed="false"><i data-lucide="columns-2" aria-hidden="true"></i>So sánh trước / sau</button></div>
+    </div>
+  </aside>
+</div>
+<footer class="oc-foot">
+  <div class="oc-status" aria-live="polite">Bước 3 / 4 · Thiết lập camera</div>
+  <div class="oh-actions"><button data-action="back">Quay lại</button><button class="oc-primary" data-action="next">Tối ưu phương án <i data-lucide="arrow-right" aria-hidden="true"></i></button></div>
+</footer>
+</div>
+</div>
+
+<script>
+(function () {
+    const root = document.getElementById('oc-directions');
+    const app = root.querySelector('[data-design]');
+    const kind = 'hybrid';
+    const steps = ['room', 'risk', 'cameras', 'results'];
+    const titles = { room: 'Mặt bằng cửa hàng', risk: 'Khu vực cần giám sát', cameras: 'Bố trí camera', results: 'Phương án đề xuất' };
+    const saved = window.openai?.widgetState?.modelContent?.hybrid || {};
+    const state = { step: steps.includes(saved.step) ? saved.step : 'cameras', layer: 'off', selected: 1, pan: 45, fov: 85, count: [2, 3, 4].includes(saved.count) ? saved.count : 3, before: false, gridOpacity: .22, labels: true };
+    const poses = [{ x: 0, y: 0, pan: 45 }, { x: 10, y: 6, pan: 225 }, { x: 5, y: 0, pan: 90 }, { x: 0, y: 6, pan: 315 }];
+    const canvas = app.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    const colorProbe = document.createElement('span');
+    colorProbe.hidden = true;
+    app.appendChild(colorProbe);
+    const text = selector => app.querySelector(selector);
+    function colors() {
+        const read = name => {
+            colorProbe.style.color = 'var(' + name + ')';
+            return getComputedStyle(colorProbe).color;
+        };
+        return { paper: read('--oc-paper'), wall: read('--oc-wall'), item: read('--oc-item'), ink: read('--oc-ink'), sub: read('--oc-sub'), accent: read('--oc-accent'), soft: read('--oc-soft'), green: read('--oc-success'), edge: read('--oc-edge') };
+    }
+    function draw() {
+        const box = canvas.parentElement.getBoundingClientRect();
+        if (!box.width || !box.height)
+            return;
+        const width = Math.floor(box.width), height = Math.floor(box.height), ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        canvas.style.height = height + 'px';
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        const c = colors();
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = c.paper;
+        ctx.fillRect(0, 0, width, height);
+        const scale = Math.min((width - 68) / 10, (height - 78) / 6), ox = (width - 10 * scale) / 2, oy = (height - 6 * scale) / 2;
+        const X = x => ox + x * scale, Y = y => oy + y * scale;
+        function rect(x, y, w, h, fill) { ctx.fillStyle = fill; ctx.fillRect(X(x), Y(y), w * scale, h * scale); }
+        function label(value, x, y, color, align = 'center') { ctx.fillStyle = color; ctx.font = '12px Inter,Arial,sans-serif'; ctx.textAlign = align; ctx.fillText(value, X(x), Y(y)); }
+        ctx.save();
+        ctx.globalAlpha = state.gridOpacity;
+        ctx.strokeStyle = c.edge;
+        ctx.lineWidth = .6;
+        for (let x = 0; x <= 10; x += .5) {
+            ctx.beginPath();
+            ctx.moveTo(X(x), Y(0));
+            ctx.lineTo(X(x), Y(6));
+            ctx.stroke();
+        }
+        for (let y = 0; y <= 6; y += .5) {
+            ctx.beginPath();
+            ctx.moveTo(X(0), Y(y));
+            ctx.lineTo(X(10), Y(y));
+            ctx.stroke();
+        }
+        ctx.restore();
+        if (state.layer === 'risk') {
+            for (const [x, y, r] of [[1.8, 1.7, 2.4], [1.1, .2, 2.2]]) {
+                let gradient = ctx.createRadialGradient(X(x), Y(y), scale * .3, X(x), Y(y), r * scale);
+                gradient.addColorStop(0, 'rgba(198,105,66,.35)');
+                gradient.addColorStop(1, 'rgba(198,105,66,0)');
+                ctx.fillStyle = gradient;
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(X(0), Y(0), 10 * scale, 6 * scale);
+                ctx.clip();
+                ctx.fillRect(X(0), Y(0), 10 * scale, 6 * scale);
+                ctx.restore();
+            }
+        }
+        if (state.layer === 'dori') {
+            ctx.save();
+            ctx.globalAlpha = .18;
+            rect(0, 0, 10, 6, c.green);
+            ctx.globalAlpha = .24;
+            rect(5.1, 1.5, .7, 3.6, '#c49655');
+            rect(7.2, 1.2, .7, 3.9, '#c49655');
+            ctx.restore();
+        }
+        ctx.strokeStyle = c.wall;
+        ctx.lineWidth = kind === 'hybrid' ? 6 : 3;
+        ctx.strokeRect(X(0), Y(0), 10 * scale, 6 * scale);
+        ctx.fillStyle = c.paper;
+        ctx.fillRect(X(.5), Y(0) - 4, 1.4 * scale, 8);
+        ctx.strokeStyle = c.wall;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(.5), Y(0));
+        ctx.lineTo(X(.5), Y(1.4));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(X(.5), Y(0), 1.4 * scale, 0, Math.PI / 2);
+        ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+            const x = 4 + i * 1.9;
+            if (kind === 'hybrid') {
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,.13)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetY = 3;
+                rect(x, 1.4, .9, 3.8, c.item);
+                ctx.restore();
+            }
+            else
+                rect(x, 1.4, .9, 3.8, c.item);
+            ctx.strokeStyle = c.wall;
+            ctx.lineWidth = .8;
+            ctx.strokeRect(X(x), Y(1.4), .9 * scale, 3.8 * scale);
+            for (let j = 1; j < 5; j++) {
+                ctx.beginPath();
+                ctx.moveTo(X(x), Y(1.4 + 3.8 * j / 5));
+                ctx.lineTo(X(x + .9), Y(1.4 + 3.8 * j / 5));
+                ctx.stroke();
+            }
+            if (state.labels) {
+                ctx.save();
+                ctx.translate(X(x + .45), Y(3.3));
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillStyle = c.ink;
+                ctx.font = '12px Inter,Arial,sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Kệ ' + String.fromCharCode(65 + i), 0, 4);
+                ctx.restore();
+            }
+        }
+        rect(1.1, 1.6, 1.6, 1, c.item);
+        ctx.strokeStyle = c.wall;
+        ctx.lineWidth = .8;
+        ctx.strokeRect(X(1.1), Y(1.6), 1.6 * scale, scale);
+        if (state.labels)
+            label('POS', 1.9, 2.2, c.ink);
+        const count = kind === 'hybrid' && state.before ? 4 : state.count;
+        const planPoses = kind === 'hybrid' && state.before ? [poses[0], poses[1], { x: 10, y: 0, pan: 135 }, poses[3]] : poses;
+        planPoses.slice(0, count).forEach((camera, index) => {
+            const selected = index === state.selected - 1;
+            const pan = selected && kind === 'draft' ? state.pan : camera.pan;
+            const fov = selected && kind === 'draft' ? state.fov : 85;
+            const radians = pan * Math.PI / 180;
+            if (selected || state.layer === 'dori') {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(X(0), Y(0), 10 * scale, 6 * scale);
+                ctx.clip();
+                ctx.beginPath();
+                ctx.moveTo(X(camera.x), Y(camera.y));
+                ctx.arc(X(camera.x), Y(camera.y), Math.min(7, 10) * scale, radians - fov * Math.PI / 360, radians + fov * Math.PI / 360);
+                ctx.closePath();
+                ctx.fillStyle = c.accent;
+                ctx.globalAlpha = selected ? .09 : .035;
+                ctx.fill();
+                ctx.globalAlpha = .45;
+                ctx.strokeStyle = c.accent;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.restore();
+            }
+            ctx.fillStyle = selected ? c.accent : c.paper;
+            ctx.strokeStyle = selected ? c.accent : c.wall;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(X(camera.x), Y(camera.y), 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(X(camera.x) + 8 * Math.cos(radians), Y(camera.y) + 8 * Math.sin(radians));
+            ctx.lineTo(X(camera.x) + 18 * Math.cos(radians), Y(camera.y) + 18 * Math.sin(radians));
+            ctx.stroke();
+            if (state.labels) {
+                const left = camera.x > 7;
+                label('CAM-0' + (index + 1), camera.x + (left ? -.25 : .25), camera.y + (camera.y < 1 ? .45 : -.25), selected ? c.accent : c.sub, left ? 'right' : 'left');
+            }
+        });
+        ctx.strokeStyle = c.edge;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(0), Y(0) - 20);
+        ctx.lineTo(X(10), Y(0) - 20);
+        ctx.stroke();
+        label('10,00 m', 5, -.45, c.sub);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = c.sub;
+        ctx.font = '11px Inter,Arial,sans-serif';
+        ctx.save();
+        ctx.translate(X(10) + 20, Y(3));
+        ctx.rotate(Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText('6,00 m', 0, 0);
+        ctx.restore();
+        if (state.layer !== 'off') {
+            ctx.fillStyle = c.sub;
+            ctx.font = '11px Inter,Arial,sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(state.layer === 'risk' ? 'Ưu tiên quanh POS và cửa' : 'Chất lượng quan sát DORI', 10, height - 10);
+        }
+    }
+    function persist() {
+        window.openai?.setWidgetState?.({ modelContent: { hybrid: { step: state.step, count: state.count } } }).catch(() => { });
+    }
+    function render() {
+        app.querySelectorAll('[data-step]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.step === state.step)));
+        app.querySelectorAll('[data-panel]').forEach(panel => panel.hidden = panel.dataset.panel !== state.step);
+        app.querySelectorAll('[data-layer]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.layer === state.layer)));
+        text('[data-step-title]').textContent = titles[state.step];
+        text('[data-budget]').value = String(state.count);
+        text('[data-scheme]').textContent = state.before ? 'Ban đầu · 4 camera' : state.count + ' camera';
+        text('.oc-status').textContent = 'Bước ' + (steps.indexOf(state.step) + 1) + ' / 4 · ' + titles[state.step];
+        text('[data-action="back"]').disabled = state.step === 'room';
+        text('[data-action="next"]').textContent = ({ room: 'Thiết lập ưu tiên', risk: 'Chọn camera', cameras: 'Tối ưu phương án', results: 'Điều chỉnh camera' })[state.step];
+        const metrics = state.before ? [91, 79] : ({ 2: [87, 75], 3: [96, 87], 4: [98, 92] })[state.count];
+        text('[data-red]').textContent = metrics[0] + '%';
+        text('[data-yellow]').textContent = metrics[1] + '%';
+        text('[data-result-note]').textContent = metrics[0] >= 95 && metrics[1] >= 80 ? 'Đạt hai mục tiêu giám sát.' : 'Một số vùng cần cải thiện. Bạn có thể điều chỉnh số lượng hoặc thông số camera.';
+        text('[data-action="compare"]').setAttribute('aria-pressed', String(state.before));
+        requestAnimationFrame(draw);
+    }
+    function moveTo(step) {
+        state.step = step;
+        state.before = false;
+        state.layer = step === 'risk' ? 'risk' : step === 'results' ? 'dori' : 'off';
+        render();
+        persist();
+    }
+    app.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => moveTo(button.dataset.step)));
+    app.querySelectorAll('[data-layer]').forEach(button => button.addEventListener('click', () => { state.layer = button.dataset.layer; render(); }));
+    text('[data-budget]').addEventListener('change', event => { state.count = Number(event.target.value); render(); persist(); });
+    text('[data-action="next"]').addEventListener('click', () => moveTo(state.step === 'results' ? 'cameras' : steps[steps.indexOf(state.step) + 1]));
+    text('[data-action="back"]').addEventListener('click', () => moveTo(steps[Math.max(0, steps.indexOf(state.step) - 1)]));
+    text('[data-action="compare"]').addEventListener('click', () => { state.before = !state.before; render(); });
+    new ResizeObserver(draw).observe(canvas.parentElement);
+    window.addEventListener('openai:set_globals', () => requestAnimationFrame(draw));
+    state.layer = state.step === 'risk' ? 'risk' : state.step === 'results' ? 'dori' : 'off';
+    render();
+    if (globalThis.Tweak) {
+        const tweaks = new Tweak({ container: app, onChange: render });
+        tweaks.addSlider(state, 'gridOpacity', { label: 'Độ đậm lưới', min: 0, max: 1, step: .05 });
+        tweaks.addToggle(state, 'labels', { label: 'Nhãn trên mặt bằng' });
+    }
+})();
+</script>

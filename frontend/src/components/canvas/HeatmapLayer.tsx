@@ -1,3 +1,5 @@
+import { floorOutline } from '../../core/footprint';
+import { traceOutline } from './planDrawing';
 import { memo } from 'react';
 import { Group, Layer, Shape } from 'react-konva';
 import type { Cell, Layout } from '../../types';
@@ -15,7 +17,7 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
   const cellsByPosition = new Map(cells.map((cell) => [`${cell.r}_${cell.c}`, cell]));
   return (
     <Layer x={PAD} y={PAD} listening={false}>
-      <Group clipX={0} clipY={0} clipWidth={layout.widthM * layout.pixelsPerMeter} clipHeight={layout.heightM * layout.pixelsPerMeter}><Shape visible={view !== 'off'} sceneFunc={(ctx) => {
+      <Group clipFunc={ctx => traceOutline(ctx, floorOutline(layout), layout.pixelsPerMeter)}><Shape visible={view !== 'off'} sceneFunc={(ctx) => {
         const t0 = performance.now();
         for (const c of cells) {
           if (c.solid) continue;
@@ -70,7 +72,7 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
         }
         drawMsRef.current = performance.now() - t0;
       }} /></Group>
-      <PlanAnnotationsLayer layout={layout} />
+      <PlanAnnotationsLayer layout={layout} showWalkways={view === 'off'} />
     </Layer>
   );
 });

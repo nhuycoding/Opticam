@@ -11,7 +11,7 @@ else:
     from footprint import point_in_floor, segment_in_floor
 
 FACE_HEIGHT_M = 1.6
-DORI_FACTORS = ((250, 1.0), (125, 0.75), (62, 0.4), (25, 0.2), (0, 0.0))
+DORI_FACTORS = ((250, 1.0), (125, 0.75), (62.5, 0.4), (25, 0.2), (0, 0.0))
 
 GridPoint = tuple[float, float, float]
 RISK_DEFAULTS = {

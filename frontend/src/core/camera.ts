@@ -25,3 +25,4 @@ export function cameraProjection(camera: Camera) {
     aspect: Math.tan(camera.fov * Math.PI / 360) / Math.tan(vfov * Math.PI / 360)
   };
 }
+

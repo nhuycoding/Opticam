@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Camera as CameraIcon, Eye, Move, Plus, RotateCcw, Scan, PanelsTopLeft, UserRound } from 'lucide-react';
+import { Camera as CameraIcon, Eye, Move, Plus, RotateCcw, Scan, ScanEye, PanelsTopLeft, UserRound } from 'lucide-react';
 import type { Fixture, ObsType } from '../../types';
 import { cameraProjection } from '../../core/camera';
 import { StoreScene, type StoreSceneProps } from './StoreScene';
 import { SceneFailure } from './SceneBoundary';
 import './three-editor.css';
 
-type Props = Omit<StoreSceneProps, 'reset' | 'cutaway' | 'editMode' | 'blurStrength'> & { onOverview: () => void; onEditPlan: () => void };
+type Props = Omit<StoreSceneProps, 'reset' | 'cutaway' | 'editMode' | 'observationView' | 'imageEffectSupported'> & { onOverview: () => void; onEditPlan: () => void };
 
 const FURNITURE: { label: string; type: ObsType; fixture?: Fixture }[] = [
   { label: 'Kệ hai mặt', type: 'shelf', fixture: 'gondola' },
@@ -33,10 +33,10 @@ export default function Store3D(props: Props) {
   const [reset, setReset] = useState(0), [cutaway, setCutaway] = useState(true);
   const [contextLost, setContextLost] = useState(false);
   const [editMode, setEditMode] = useState<'orbit' | 'move'>('orbit');
-  const [blurEnabled, setBlurEnabled] = useState(true), [blurStrength, setBlurStrength] = useState(0.75);
-  const [blurSupported, setBlurSupported] = useState(true);
+  const [observationView, setObservationView] = useState(false);
+  const [imageEffectSupported, setImageEffectSupported] = useState(true);
   const [furniture, setFurniture] = useState(0);
-  useEffect(() => { if (props.readOnly || props.cameraView) setEditMode('orbit'); }, [props.readOnly, props.cameraView]);
+  useEffect(() => { if (props.readOnly || props.cameraView || observationView) setEditMode('orbit'); }, [props.readOnly, props.cameraView, observationView]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 640, height: 480 });
   useEffect(() => {
@@ -48,10 +48,11 @@ export default function Store3D(props: Props) {
     observer.observe(element); return () => observer.disconnect();
   }, []);
   const projection = props.cameraView ? cameraProjection(props.cameraView) : null;
-  const canEdit = !props.readOnly && !props.cameraView;
+  const combinedView = observationView && !props.cameraView && imageEffectSupported;
+  const canEdit = !props.readOnly && !props.cameraView && !combinedView;
   const frameWidth = projection ? Math.min(size.width, size.height * projection.aspect) : size.width;
   const frameHeight = projection ? frameWidth / projection.aspect : size.height;
-  return <div className={`three-workspace${props.cameraView ? ' camera-pov' : ''}`}>
+  return <div className={`three-workspace${props.cameraView ? ' camera-pov' : ''}${combinedView ? ' observation-view' : ''}`}>
     <div className="three-toolbar">
       <div className="three-view-switch" role="group" aria-label="Góc nhìn 3D">
         <button className={!props.cameraView ? 'on' : ''} aria-pressed={!props.cameraView} onClick={props.onOverview}><PanelsTopLeft size={14} /> Tổng thể</button>
@@ -61,14 +62,16 @@ export default function Store3D(props: Props) {
         </select></label>
       </div>
       <div className="three-tools">
+        <button disabled={Boolean(props.cameraView) || !imageEffectSupported} className={combinedView ? 'on' : ''} aria-pressed={combinedView}
+          title="Chỉ hiện các bề mặt 3D được ít nhất một camera quan sát, tính cả vật cản che khuất"
+          onClick={() => setObservationView(value => !value)}><ScanEye size={14} /> Vùng quan sát</button>
         <button disabled={Boolean(props.cameraView)} aria-pressed={cutaway} title="Tự ẩn tường phía trước theo góc nhìn" onClick={() => setCutaway(value => !value)}><Eye size={14} /> Tường tự ẩn</button>
         <button disabled={Boolean(props.cameraView)} title="Đặt lại góc nhìn tổng thể" aria-label="Đặt lại góc nhìn 3D" onClick={() => setReset(value => value + 1)}><RotateCcw size={14} /></button>
       </div>
     </div>
-    {props.cameraView ? <div className="pov-blur-controls">
-      <label><input type="checkbox" checked={blurEnabled && blurSupported} disabled={!blurSupported} onChange={event => setBlurEnabled(event.target.checked)} /> Mờ theo khoảng cách</label>
-      <label className="pov-blur-strength">Mức mờ<input aria-label="Mức mờ theo khoảng cách" type="range" min={0} max={100} step={5} disabled={!blurEnabled || !blurSupported} value={Math.round(blurStrength * 100)} onChange={event => setBlurStrength(Number(event.target.value) / 100)} /></label>
-      <span>{blurSupported ? 'Mô phỏng độ rõ hình ảnh theo khoảng cách' : 'Thiết bị hiện tại dùng hình ảnh sắc nét'}</span>
+    {props.cameraView || combinedView ? <div className="camera-image-status" role="status">
+      {combinedView ? <><span><i aria-hidden="true" /> Phần màu đen nằm ngoài vùng quan sát</span><span>{props.layout.cameras.length ? `${props.layout.cameras.length} camera · Ưu tiên hình ảnh rõ nhất khi trùng vùng nhìn` : 'Chưa có camera trên mặt bằng'}</span></>
+        : <span>{imageEffectSupported ? 'Mô phỏng PPM · DORI (IEC 62676-4:2014)' : 'Thiết bị hiện tại dùng hình ảnh sắc nét'}</span>}
     </div> : <div className="three-edit-toolbar">
       <div className="three-interaction-mode" role="group" aria-label="Thao tác trong 3D">
         <button aria-pressed={editMode === 'orbit'} className={editMode === 'orbit' ? 'on' : ''} onClick={() => setEditMode('orbit')}><PanelsTopLeft size={14} /> Xoay góc nhìn</button>
@@ -86,18 +89,18 @@ export default function Store3D(props: Props) {
       <div className="three-render-frame" style={{ width: frameWidth, height: frameHeight }}>
         {contextLost ? <SceneFailure onEditPlan={props.onEditPlan} /> :
           <Canvas frameloop="demand" dpr={[1, 1.75]} shadows={props.layout.obstacles.length <= 100}
-            onCreated={({ gl }) => setBlurSupported(gl.extensions.has('EXT_color_buffer_float'))}
+            onCreated={({ gl }) => setImageEffectSupported(gl.extensions.has('EXT_color_buffer_float'))}
             camera={{ position: [15, 15, 18], fov: 43, near: 0.03, far: 500 }}
             gl={{ antialias: true, powerPreference: 'high-performance' }}
             fallback={<span>Mô hình không gian cửa hàng 3D</span>}>
             <ContextMonitor onLost={() => setContextLost(true)} />
-            <StoreScene {...props} reset={reset} cutaway={cutaway} editMode={canEdit ? editMode : 'orbit'} blurStrength={blurEnabled && blurSupported ? blurStrength : 0} />
+            <StoreScene {...props} reset={reset} cutaway={cutaway} editMode={canEdit ? editMode : 'orbit'} observationView={combinedView} imageEffectSupported={imageEffectSupported} />
           </Canvas>
         }
       </div>
-      {!props.cameraView && <div className="three-orientation" aria-hidden="true"><Scan size={13} /><span>1 m = 1 đơn vị</span></div>}
+      {!props.cameraView && <div className="three-orientation" aria-hidden="true"><Scan size={13} /><span>{combinedView ? 'Mô phỏng PPM · DORI (IEC 62676-4:2014)' : '1 m = 1 đơn vị'}</span></div>}
     </div>
     {props.cameraView ? <div className="three-view-status" aria-live="polite"><span><strong>{props.cameraView.id}</strong> · Mô phỏng góc nhìn</span><span>Cao {props.cameraView.height} m · Chúc {projection!.tilt}° · FOV {props.cameraView.fov}° × {projection!.vfov.toFixed(1)}°</span></div>
-      : <div className="three-view-status"><span>{canEdit && editMode === 'move' ? 'Kéo nội thất hoặc người để di chuyển trên sàn · Chuột phải để dịch góc nhìn' : 'Xoay bằng chuột trái · Di chuyển bằng chuột phải · Cuộn để thu phóng'}</span><span>Nhấp đúp camera để quan sát</span></div>}
+      : <div className="three-view-status"><span>{canEdit && editMode === 'move' ? 'Kéo nội thất hoặc người để di chuyển trên sàn · Chuột phải để dịch góc nhìn' : 'Xoay bằng chuột trái · Di chuyển bằng chuột phải · Cuộn để thu phóng'}</span><span>{combinedView ? 'Chỉ hiện bề mặt camera nhìn thấy' : !imageEffectSupported ? 'Thiết bị chưa hỗ trợ hiệu ứng vùng quan sát' : 'Nhấp đúp camera để quan sát'}</span></div>}
   </div>;
 }

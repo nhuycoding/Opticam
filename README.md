@@ -111,9 +111,23 @@ thông tin để xem phối cảnh. Mặc định camera chúc xuống 20°, FOV
 ngang theo tỷ lệ 16:9. Sửa hai giá trị này trong **Góc nhìn camera trong 3D** ở bảng
 thuộc tính camera của 2.5D. Khung xem giữ đúng FOV và tỷ lệ khi đổi kích thước màn hình.
 JSON và phương án tối ưu giữ lại các thông số này. **Tổng thể** quay về góc nhìn xoay tự do.
-Trong POV, **Mờ theo khoảng cách** làm các vật ở xa mờ dần, có thanh chỉnh mức mờ và
-có thể tắt. Đây là hiệu ứng minh họa. Kệ có hàng hóa dạng hộp, chai và lon dùng hình học
-đơn giản, giới hạn số lượng để giảm chi phí dựng hình.
+Trong POV và vùng quan sát, mật độ điểm ảnh được tính bằng PPM = độ phân giải ngang /
+(2 × khoảng cách 3D × tan(FOV ngang/2)), dùng chung công thức với phân tích DORI.
+Mô phỏng quy đổi kích thước một pixel camera (1/PPM mét) sang tỷ lệ hiển thị hiện tại.
+Phóng lớn mô hình sẽ làm lộ các khối pixel, còn ảnh thu nhỏ của camera độ phân giải cao
+có thể vẫn rõ. Các ngưỡng DORI của IEC 62676-4:2014 là 250 / 125 / 62,5 / 25 PPM.
+Hiệu ứng là mô phỏng mật độ điểm ảnh, chưa xét ánh sáng, nén video hoặc méo ống kính.
+
+Ở góc nhìn tổng thể 3D, bật **Vùng quan sát** để chỉ hiện những bề mặt mà ít nhất một
+camera nhìn thấy. Các phần ngoài FOV, ngoài tầm nhìn hoặc bị tủ, kệ, tường và người che
+khuất được thể hiện bằng màu đen. Mô phỏng xét cả góc chúc và FOV dọc, đồng thời chọn
+hình ảnh rõ nhất khi nhiều camera nhìn cùng một vị trí. Có thể tiếp tục xoay và thu phóng
+để quan sát. Tắt nút để bố trí nội thất trên mô hình đầy đủ.
+
+Hiệu ứng hình ảnh mang tính minh họa. Bản đồ độ sâu được tái sử dụng khi xoay góc nhìn
+và cập nhật khi đổi camera, nội thất hoặc người. Thiết bị cần hỗ trợ WebGL với bộ đệm
+HDR để dùng hiệu ứng này. Kệ có hàng hóa dạng hộp, chai và lon dùng hình học đơn giản,
+giới hạn số lượng để giảm chi phí dựng hình.
 
 Ở bước **Camera** hoặc **Kết quả**, nhập số nguyên 1–20 vào **Số camera muốn bố trí**
 rồi bấm **Tối ưu số camera đã nhập**. Có thể tiếp tục dùng tùy chọn tối ưu số camera hiện

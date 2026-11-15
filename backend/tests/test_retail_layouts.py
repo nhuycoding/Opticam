@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend import main
 from backend.footprint import point_in_floor, segment_in_floor, segment_distance
-from backend.greedy_optimizer import OptiCamGreedy, camera_ppm
+from backend.greedy_optimizer import OptiCamGreedy, camera_ppm, dori_factor
 
 SAMPLES = Path(__file__).resolve().parents[2] / 'data_samples'
 RETAIL = sorted(SAMPLES.glob('vn_*.json'))
@@ -66,3 +66,10 @@ def test_polygon_optimizer_respects_real_walls_even_with_forged_open_matrix():
     polygon=raw['floorPolygon']
     assert point_in_floor((camera['x'],camera['y']),polygon)
     assert min(segment_distance((camera['x'],camera['y']),a,polygon[(i+1)%len(polygon)]) for i,a in enumerate(polygon)) < 1e-6
+
+
+def test_dori_observation_boundary_uses_precise_pixel_density():
+    assert dori_factor(62.0) == 0.2
+    assert dori_factor(62.5) == 0.4
+    assert dori_factor(125.0) == 0.75
+    assert dori_factor(250.0) == 1.0

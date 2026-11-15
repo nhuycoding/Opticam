@@ -457,7 +457,7 @@ def _heatmap(layout: LayoutData) -> dict[str, Any]:
                 ppm = max(ppm, camera_ppm(camera, (x, y), obstacles, layout.targetHeight, layout.floorPolygon))
             tier = next(
                 (name for threshold, name in ((250, "identification"), (125, "recognition"),
-                                               (62, "observation"), (25, "detection"))
+                                               (62.5, "observation"), (25, "detection"))
                  if ppm >= threshold),
                 "blind",
             )

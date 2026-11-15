@@ -546,7 +546,7 @@ export default function App() {
           {index < 3 && <ArrowRight className="step-arrow" size={15} />}
         </button>)}
       </nav>
-      <main className="planner">
+      <main className={`planner${dimension === '3d' ? ' planner-3d' : ''}`}>
         <section className="workspace" aria-label="Không gian thiết kế">
           <div className="workspace-heading">
             <div><span className="eyebrow">BẢN VẼ BỐ TRÍ · {showBefore ? 'TRƯỚC TỐI ƯU' : 'PHƯƠNG ÁN HIỆN TẠI'}</span><h1>{dimension === '3d' ? 'Không gian cửa hàng.' : 'Mặt bằng cửa hàng.'}</h1></div>
@@ -599,7 +599,7 @@ export default function App() {
             </div>}
           </div>
           <div className="drawing-caption">
-            <div className="legend">{view === 'dori' ? (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((key) => <span key={key}><i style={{ background: DORI_COLOR[key] }} />{{ identification: 'Nhận dạng ≥250', recognition: 'Nhận biết ≥125', observation: 'Quan sát ≥62', detection: 'Phát hiện ≥25', blind: 'Dưới 25 PPM' }[key]}</span>) : <span>{view === 'risk' ? dimension === 'plan' ? 'Mức ưu tiên W · tô vùng trực tiếp trên sơ đồ' : 'Mức ưu tiên W trên sàn cửa hàng' : dimension === 'plan' ? 'Mặt bằng nhìn từ trên xuống · Kích thước theo mét' : 'Mô hình kiến trúc · Kích thước theo mét'}</span>}</div>
+            <div className="legend">{view === 'dori' ? (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((key) => <span key={key}><i style={{ background: DORI_COLOR[key] }} />{{ identification: 'Nhận dạng ≥250', recognition: 'Nhận biết ≥125', observation: 'Quan sát ≥62,5', detection: 'Phát hiện ≥25', blind: 'Dưới 25 PPM' }[key]}</span>) : <span>{view === 'risk' ? dimension === 'plan' ? 'Mức ưu tiên W · tô vùng trực tiếp trên sơ đồ' : 'Mức ưu tiên W trên sàn cửa hàng' : dimension === 'plan' ? 'Mặt bằng nhìn từ trên xuống · Kích thước theo mét' : 'Mô hình kiến trúc · Kích thước theo mét'}</span>}</div>
             <span className="drawing-scale">1 ô = {layout.gridM} m</span>
           </div>
           <div className="canvas-footer"><span>{dimension === 'plan' ? 'Kéo nền để di chuyển · Cuộn để thu phóng' : 'Xoay để quan sát · Chọn Di chuyển để bố trí vật thể'}</span><span>{sel ? `Đang chọn ${sel.id}` : 'Chọn một đối tượng để xem thuộc tính'}</span></div>

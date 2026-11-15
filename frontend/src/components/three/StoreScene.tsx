@@ -12,7 +12,7 @@ import { cameraPose, floorShape, wallSegments, type WallSegment } from './sceneG
 import { CameraModel3D } from './CameraModel3D';
 import { PersonModel3D } from './PersonModel3D';
 import { DraggableObject3D } from './DraggableObject3D';
-import { PovDistanceBlur } from './PovDistanceBlur';
+import { CameraImageEffect } from './CameraImageEffect';
 
 export interface StoreSceneProps {
   layout: Layout; cells: Cell[]; view: ViewMode; selected: Selection; people: Person[];
@@ -21,7 +21,7 @@ export interface StoreSceneProps {
   cameraView: Camera | null; reset: number; cutaway: boolean;
   onSelect: (selection: Selection) => void;
   onCameraView: (id: string) => void;
-  readOnly?: boolean; editMode?: 'orbit' | 'move'; blurStrength?: number;
+  readOnly?: boolean; editMode?: 'orbit' | 'move'; observationView?: boolean; imageEffectSupported?: boolean;
   onMoveObstacle?: (id: string, centerX: number, centerY: number) => void;
   onMovePerson?: (person: Person) => void;
   onAddObstacle?: (type: ObsType, fixture?: Fixture) => void;
@@ -65,7 +65,8 @@ function CameraController({ layout, cameraView, reset, focusCell, controlsRef, d
     } else {
       lens.fov = 43;
       lens.aspect = size.width / Math.max(1, size.height);
-      lens.far = 500;
+      lens.near = 0.1;
+      lens.far = Math.max(60, controls.maxDistance + Math.hypot(layout.widthM, layout.heightM) * 2);
       const distance = Math.max(layout.heightM, layout.widthM / Math.max(0.45, lens.aspect)) * 1.25;
       controls.target.set(layout.widthM / 2, 0.6, layout.heightM / 2);
       lens.position.set(layout.widthM / 2 + distance * 0.6, distance * 0.95, layout.heightM / 2 + distance * 0.8);
@@ -94,7 +95,7 @@ function Wall({ segment, height, cutaway }: { segment: WallSegment; height: numb
   });
   return <group position={[cx, 0, cz]} rotation={[0, -Math.atan2(bz - az, bx - ax), 0]}>
     {!segment.opening && <Block size={[length + 0.015, 0.14, 0.12]} at={[0, 0.07, 0]} color="#b7b8ab" />}
-    <group ref={group}>
+    <group ref={group} userData={{ observationWall: true }}>
       {segment.opening
         ? <Block size={[length, Math.max(0.06, height - 2.4), 0.12]} at={[0, 2.4 + Math.max(0.06, height - 2.4) / 2, 0]} color="#e1dfd3" />
         : <>
@@ -157,10 +158,11 @@ function CameraFrustum({ camera, layout }: { camera: Camera; layout: Layout }) {
 
 export function StoreScene(props: StoreSceneProps) {
   const { layout, selected, cameraView } = props;
+  const observationView = Boolean(props.observationView && !cameraView);
   const controlsRef = useRef<OrbitControls | null>(null), dragActive = useRef(false);
   const cameraViewRef = useRef(cameraView);
   cameraViewRef.current = cameraView;
-  const canMove = !props.readOnly && !cameraView && props.editMode === 'move';
+  const canMove = !props.readOnly && !cameraView && !observationView && props.editMode === 'move';
   const onInteraction = useCallback((active: boolean) => {
     dragActive.current = active;
     if (controlsRef.current) controlsRef.current.enabled = !active && !cameraViewRef.current;
@@ -173,7 +175,7 @@ export function StoreScene(props: StoreSceneProps) {
   const productLimit = Math.min(72, Math.floor(2400 / Math.max(1, layout.obstacles.length)));
   const selectedCamera = selected?.kind === 'cam' ? layout.cameras.find(c => c.id === selected.id) : undefined;
   return <>
-    <color attach="background" args={[cameraView ? '#e2e8e3' : '#f1f0e7']} />
+    <color attach="background" args={[observationView ? '#000000' : cameraView ? '#e2e8e3' : '#f1f0e7']} />
     <ambientLight intensity={0.8} />
     <hemisphereLight args={['#fffdf1', '#a5b3aa', 1.4]} />
     <directionalLight position={[-3, 15, 8]} intensity={2.2} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0005}
@@ -186,25 +188,25 @@ export function StoreScene(props: StoreSceneProps) {
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} receiveShadow onClick={event => { if (event.delta <= 5) props.onSelect(null); }}>
       <shapeGeometry args={[shape]} /><meshStandardMaterial color="#f3f0df" roughness={0.95} />
     </mesh>
-    <FloorOverlay layout={layout} cells={props.cells} view={props.view} showGrid={props.showGrid} riskFilter={props.riskFilter} />
+    {!observationView && <FloorOverlay layout={layout} cells={props.cells} view={props.view} showGrid={props.showGrid} riskFilter={props.riskFilter} />}
     {walls.map((wall, i) => <Wall key={i} segment={wall} height={wallHeight} cutaway={!cameraView && props.cutaway} />)}
     {layout.obstacles.map(o => <DraggableObject3D key={o.id} center={[o.x + o.w / 2, o.y + o.h / 2]}
       selection={{ kind: 'obs', id: o.id }} enabled={canMove && Boolean(props.onMoveObstacle)}
       onSelect={props.onSelect} onMove={(x, y) => props.onMoveObstacle?.(o.id, x, y)} onInteraction={onInteraction}>
-      <Fixture3D obstacle={o} outline={outline} productLimit={productLimit} selected={selected?.kind === 'obs' && selected.id === o.id} onSelect={props.onSelect} />
+      <Fixture3D obstacle={o} outline={outline} productLimit={productLimit} selected={!observationView && selected?.kind === 'obs' && selected.id === o.id} onSelect={props.onSelect} />
     </DraggableObject3D>)}
-    {!cameraView && layout.cameras.map(c => <CameraModel3D key={c.id} camera={c} layout={layout} selected={selected?.kind === 'cam' && selected.id === c.id} onSelect={props.onSelect} onCameraView={props.onCameraView} />)}
-    {!cameraView && selectedCamera && <CameraFrustum camera={selectedCamera} layout={layout} />}
-    {!cameraView && anchors.map(([x, z], i) => <mesh key={i} position={[x, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
+    {!cameraView && !observationView && layout.cameras.map(c => <CameraModel3D key={c.id} camera={c} layout={layout} selected={selected?.kind === 'cam' && selected.id === c.id} onSelect={props.onSelect} onCameraView={props.onCameraView} />)}
+    {!cameraView && !observationView && selectedCamera && <CameraFrustum camera={selectedCamera} layout={layout} />}
+    {!cameraView && !observationView && anchors.map(([x, z], i) => <mesh key={i} position={[x, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
       <circleGeometry args={[0.035, 8]} /><meshBasicMaterial color="#6a9790" />
     </mesh>)}
     {props.people.map(person => <DraggableObject3D key={person.id} center={[person.x, person.y]}
       selection={{ kind: 'person', id: person.id }} enabled={canMove && Boolean(props.onMovePerson)}
       onSelect={props.onSelect} onMove={(x, y) => props.onMovePerson?.({ ...person, x, y })} onInteraction={onInteraction}>
-      <PersonModel3D person={person} selected={selected?.kind === 'person' && selected.id === person.id} onSelect={props.onSelect} />
+      <PersonModel3D person={person} selected={!observationView && selected?.kind === 'person' && selected.id === person.id} onSelect={props.onSelect} />
     </DraggableObject3D>)}
-    {cameraView && (props.blurStrength ?? 0) > 0 && <PovDistanceBlur range={cameraView.range} strength={props.blurStrength!} />}
-    {props.focusCell && !cameraView && <mesh position={[(props.focusCell.c + 0.5) * layout.gridM, 0.025, (props.focusCell.r + 0.5) * layout.gridM]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
+    {(cameraView || observationView) && props.imageEffectSupported !== false && <CameraImageEffect layout={layout} people={props.people} cameraView={cameraView} />}
+    {props.focusCell && !cameraView && !observationView && <mesh position={[(props.focusCell.c + 0.5) * layout.gridM, 0.025, (props.focusCell.r + 0.5) * layout.gridM]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
       <ringGeometry args={[layout.gridM * 0.5, layout.gridM * 0.64, 32]} /><meshBasicMaterial color="#ac4f37" />
     </mesh>}
   </>;

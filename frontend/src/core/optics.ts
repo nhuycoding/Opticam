@@ -3,11 +3,11 @@ import { PERSON_REGIONS, type Camera, type Cell, type Dori, type Layout, type Ob
 import { deg, distToObs, norm360, rad, segmentRectInterval, type Pt } from './geometry';
 
 /** Ngưỡng DORI theo IEC 62676-4 (PPM) */
-export const DORI_MIN = { identification: 250, recognition: 125, observation: 62, detection: 25 } as const;
+export const DORI_MIN = { identification: 250, recognition: 125, observation: 62.5, detection: 25 } as const;
 export const DORI_FACTOR: Record<Dori, number> = { identification: 1, recognition: 0.75, observation: 0.4, detection: 0.2, blind: 0 };
 export const RISK_RED_THRESHOLD = 4;
 export const RISK_YELLOW_THRESHOLD = 2;
-export const REQUIRED_PPM = { red: 250, yellow: 125, green: 62 } as const;
+export const REQUIRED_PPM = { red: DORI_MIN.identification, yellow: DORI_MIN.recognition, green: DORI_MIN.observation } as const;
 export const FACE_Z = 1.6;            // mặt phẳng khuôn mặt (m)
 export const RISK_DEFAULTS = {
   pos: { wmax: 5, r0: 1, radius: 2.5 },
@@ -43,6 +43,11 @@ export const doriOf = (ppm: number): Dori =>
 /** All solid obstacles can block a target when the 3D sightline intersects their height. */
 export const blockerObstacles = (l: Layout): Obstacle[] => l.obstacles.filter((o) => o.type !== 'entrance');
 
+/** Nominal horizontal pixel density at a 3D camera-to-target distance. */
+export function pixelsPerMeterAtDistance(resolution: number, horizontalFov: number, distance: number): number {
+  return resolution / (2 * Math.max(0.001, distance) * Math.tan(rad(horizontalFov / 2)));
+}
+
 /** PPM uses the selected person height and blocks sightlines intersecting an obstacle volume. */
 export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], targetHeight = FACE_Z, floorPolygon?: Pt[]): number {
   if (floorPolygon && !segmentInFloor([cam.x, cam.y], [x, y], floorPolygon)) return 0;
@@ -60,7 +65,7 @@ export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], 
     return Math.min(heightAt(interval[0]), heightAt(interval[1])) <= o.elev + 1e-9;
   })) return 0;
   const r = Math.hypot(d, Math.abs(cam.height - targetHeight));
-  return cam.res / (2 * r * Math.tan(rad(cam.fov / 2)));
+  return pixelsPerMeterAtDistance(cam.res, cam.fov, r);
 }
 
 export function assessPersonAt(l: Layout, x: number, y: number): Array<PersonRegion & { ppm: number; dori: Dori }> {

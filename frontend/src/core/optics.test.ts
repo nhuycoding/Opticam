@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, withManualCams } from '../data/presets';
 import { snapAngle, snapToWall } from './geometry';
-import { assessPersonAt, buildZones, evaluate, ppmAt, riskBand, riskWeightAt } from './optics';
+import { assessPersonAt, buildZones, doriOf, evaluate, pixelsPerMeterAtDistance, ppmAt, riskBand, riskWeightAt } from './optics';
 import { bruteForce, buildCandidates, greedyPlace, minimumCamerasForTargets } from './optimizer';
 
 const cam = { id: 'c', x: 0, y: 3, pan: 0, fov: 90, res: 1920, range: 20, height: 1.6 };
 
 describe('PPM / DORI', () => {
+  it('shares the same nominal density with the 3D preview', () => {
+    expect(pixelsPerMeterAtDistance(cam.res, cam.fov, 5)).toBeCloseTo(ppmAt(cam, 5, 3, []));
+  });
+  it('classifies the exact observation boundary and the other DORI thresholds', () => {
+    expect(doriOf(62)).toBe('detection');
+    expect(doriOf(62.5)).toBe('observation');
+    expect(doriOf(125)).toBe('recognition');
+    expect(doriOf(250)).toBe('identification');
+    expect(doriOf(24.9)).toBe('blind');
+  });
   it('PPM = Res / (2 r tan(FOV/2))', () => expect(ppmAt(cam, 5, 3, [])).toBeCloseTo(192, 1));
   it('camera độ phân giải cao hơn và FOV hẹp hơn cho PPM cao hơn', () => {
     const baseline = ppmAt(cam, 5, 3, []);

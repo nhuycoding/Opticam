@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOUSE, PerspectiveCamera, Ray, Vector3 } from 'three';
 import { StoreScene, type StoreSceneProps } from './StoreScene';
 import { DraggableObject3D } from './DraggableObject3D';
+import { CameraImageEffect } from './CameraImageEffect';
+import { CameraModel3D } from './CameraModel3D';
+import { Fixture3D } from './Fixtures3D';
 import { PRESETS } from '../../data/presets';
 
 const mocks = vi.hoisted(() => ({ controls: [] as any[], state: null as any }));
@@ -18,7 +21,7 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', async () => {
 vi.mock('./CameraModel3D', () => ({ CameraModel3D: () => null }));
 vi.mock('./PersonModel3D', () => ({ PersonModel3D: () => null }));
 vi.mock('./Fixtures3D', () => ({ Fixture3D: () => <mesh />, Block: () => null }));
-vi.mock('./PovDistanceBlur', () => ({ PovDistanceBlur: () => null }));
+vi.mock('./CameraImageEffect', () => ({ CameraImageEffect: () => null }));
 
 let renderer: ReactTestRenderer;
 beforeEach(() => {
@@ -81,5 +84,16 @@ describe('scene editing and navigation guards', () => {
     expect(capture.releasePointerCapture).toHaveBeenCalledWith(1);
     expect(p.onMoveObstacle).not.toHaveBeenCalled();
     expect(mocks.controls[0].enabled).toBe(false);
+  });
+
+  it('renders physical surfaces without camera helpers or selection outlines in the observation view', () => {
+    const p = props();
+    p.layout.cameras = [{ id: 'CAM', x: 0, y: 0, pan: 45, fov: 85, res: 2560, height: 2.8, range: 15 }];
+    act(() => { renderer = create(<StoreScene {...p} observationView selected={{ kind: 'obs', id: 'shelf' }} showAnchors showGrid />); });
+    expect(renderer.root.findAllByType(DraggableObject3D).every(node => node.props.enabled === false)).toBe(true);
+    expect(renderer.root.findAllByType(CameraModel3D)).toHaveLength(0);
+    expect(renderer.root.findByType(Fixture3D).props.selected).toBe(false);
+    expect(renderer.root.findByType(CameraImageEffect).props.cameraView).toBeNull();
+    expect(renderer.root.findByType('color' as any).props.args).toEqual(['#000000']);
   });
 });

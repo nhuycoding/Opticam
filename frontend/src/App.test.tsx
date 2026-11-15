@@ -34,6 +34,49 @@ beforeEach(() => {
 afterEach(() => { act(() => renderer.unmount()); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe('Studio workflow', () => {
+  it('adds and moves ceiling cameras in 3D, shares them with the plan and undoes a move', async () => {
+    await click('3D');
+    act(() => renderer.root.findByType(Store3D).props.onAddCamera(3, .5, 'ceiling'));
+    let scene = renderer.root.findByType(Store3D).props;
+    const added = scene.layout.cameras.at(-1);
+    expect(added).toMatchObject({ mount: 'ceiling', x: 3, y: .5, tilt: 45 });
+    expect(added.height).toBeCloseTo(3.05);
+    // Start a separate history action so moving can be undone independently.
+    await new Promise(resolve => setTimeout(resolve, 510));
+    act(() => scene.onMoveCamera(added.id, 5, .5));
+    expect(renderer.root.findByType(Store3D).props.layout.cameras.at(-1).x).toBe(5);
+    act(() => renderer.root.findByProps({ 'aria-label': 'Hoàn tác' }).props.onClick());
+    expect(renderer.root.findByType(Store3D).props.layout.cameras.at(-1).x).toBe(3);
+    await click('2.5D');
+    expect(canvas().layout.cameras.at(-1).mount).toBe('ceiling');
+  });
+
+  it('keeps an optimized interior position when only editing a ceiling camera angle', async () => {
+    vi.mocked(requestOptimize).mockResolvedValueOnce({ cameras: [{ ...makeCamera('CAM-01', 3.12, .64, 90), mount: 'ceiling', height: 3.05, ceilingDrop: .15 }], source: 'api' });
+    await click('Tối ưu phương án');
+    const camera = canvas().layout.cameras[0];
+    act(() => canvas().onCamera({ ...camera, pan: 120 }));
+    expect(canvas().layout.cameras[0]).toMatchObject({ x: 3.12, y: .64, pan: 120 });
+  });
+
+  it('updates ceiling camera heights with the roof and stores optimization choices', async () => {
+    act(() => canvas().onSelect({ kind: 'cam', id: canvas().layout.cameras[0].id }));
+    act(() => renderer.root.findByType(Inspector).props.onCam(canvas().layout.cameras[0].id, { mount: 'ceiling' }));
+    const changed = canvas().layout.cameras[0];
+    expect(changed.mount).toBe('ceiling');
+    expect(changed.x).toBeGreaterThan(0);
+    const height = renderer.root.findByProps({ 'aria-label': 'Chiều cao trần (m)' });
+    act(() => height.props.onChange({ target: { value: '3.8' } }));
+    act(() => renderer.root.findByProps({ 'aria-label': 'Chiều cao trần (m)' }).props.onBlur());
+    expect(canvas().layout.cameras[0].height).toBeCloseTo(3.65);
+    const step = renderer.root.findAllByType('button').find(n => n.props.className?.includes('workflow-step') && n.findAllByType('strong').some(c => c.children.includes('Camera')))!;
+    act(() => step.props.onClick());
+    act(() => renderer.root.findByProps({ 'aria-label': 'Thuật toán tối ưu' }).props.onChange({ target: { value: 'greedy' } }));
+    act(() => renderer.root.findByProps({ 'aria-label': 'Vị trí cho phép tối ưu' }).props.onChange({ target: { value: 'ceiling' } }));
+    await click('Tối ưu phương án');
+    expect(vi.mocked(requestOptimize).mock.calls.at(-1)![0]).toMatchObject({ ceilingHeight: 3.8, optimization: { algorithm: 'greedy', mounts: 'ceiling' } });
+  });
+
   it('optimizes a typed camera count without deleting the existing cameras first', async () => {
     const step = renderer.root.findAllByType('button').find(n => n.props.className?.includes('workflow-step') && n.findAllByType('strong').some(c => c.children.includes('Camera')))!;
     act(() => step.props.onClick());

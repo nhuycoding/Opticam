@@ -29,6 +29,8 @@ export interface Camera {
   fov: number; res: number; range: number; height: number;
   tilt?: number;  // góc chúc xuống so với phương ngang, độ
   vfov?: number;  // FOV dọc, mặc định suy ra từ FOV ngang và tỷ lệ 16:9
+  mount?: 'wall' | 'ceiling';
+  ceilingDrop?: number; // khoảng cách từ trần đến ống kính (m), chỉ dùng khi gắn trần
   target?: string; model?: string;
 }
 
@@ -59,6 +61,8 @@ export interface Layout {
   version: string; name: string;
   widthM: number; heightM: number; gridM: number; pixelsPerMeter: number;
   targetHeight: TargetHeight;
+  ceilingHeight?: number;
+  optimization?: { algorithm: 'greedy' | 'hybrid'; mounts: 'wall' | 'mixed' | 'ceiling' };
   floorPolygon?: [number, number][];
   description?: string;
   designNotes?: string[];

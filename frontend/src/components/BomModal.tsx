@@ -60,9 +60,9 @@ export function BomModal({ layout, onClose }: { layout: Layout; onClose: () => v
         <p id="bom-description" className="muted">{layout.name} · tiêu chuẩn IEC 62676-4 DORI</p>
         <div className="scroll-x">
           <table aria-label="Danh sách thiết bị và thông số lắp đặt">
-            <thead><tr><th scope="col">Mã</th><th scope="col">Tọa độ (m)</th><th scope="col">Cao độ</th><th scope="col">Góc xoay</th><th scope="col">FOV</th><th scope="col">Mục tiêu</th><th scope="col">Model</th><th scope="col">Cáp (m)</th></tr></thead>
+            <thead><tr><th scope="col">Mã</th><th scope="col">Tọa độ (m)</th><th scope="col">Kiểu lắp</th><th scope="col">Cao độ</th><th scope="col">Góc chúc</th><th scope="col">Góc xoay</th><th scope="col">FOV</th><th scope="col">Mục tiêu</th><th scope="col">Model</th><th scope="col">Cáp (m)</th></tr></thead>
             <tbody>{b.rows.map((r) => (
-              <tr key={r.id}><td>{r.id}</td><td>({r.x.toFixed(1)}, {r.y.toFixed(1)})</td><td>{r.height} m</td><td>{r.pan}°</td><td>{r.fov}°</td><td>{r.target}</td><td>{r.model}</td><td>{r.cableM}</td></tr>
+              <tr key={r.id}><td>{r.id}</td><td>({r.x.toFixed(1)}, {r.y.toFixed(1)})</td><td>{r.mount === 'ceiling' ? 'Trần' : 'Tường'}</td><td>{r.height} m</td><td>{r.tilt}°</td><td>{r.pan}°</td><td>{r.fov}°</td><td>{r.target}</td><td>{r.model}</td><td>{r.cableM}</td></tr>
             ))}</tbody>
           </table>
         </div>

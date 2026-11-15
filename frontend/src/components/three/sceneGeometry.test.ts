@@ -7,7 +7,7 @@ import { makeCamera, greedyPlace } from '../../core/optimizer';
 import { buildZones, evaluate } from '../../core/optics';
 import { exportBundle, parseBundle } from '../../core/io';
 import { toApiPayload, fromApiResponse } from '../../core/api';
-import { cameraAssemblyPose, CAMERA_BODY_CLEARANCE, cameraPose, fixtureBodyRotation, floorShape, wallSegments } from './sceneGeometry';
+import { cameraAssemblyPose, cameraBasis, CAMERA_BODY_CLEARANCE, cameraPose, fixtureBodyRotation, floorShape, wallSegments } from './sceneGeometry';
 
 describe('shared floor plan and 3D projection', () => {
   it.each(PRESETS)('triangulates $name without filling its exterior', layout => {
@@ -69,6 +69,23 @@ describe('shared floor plan and 3D projection', () => {
     const lens = cameraPose(camera, PRESETS[0]);
     expect(lens.position.toArray()).toEqual(pose.position.toArray());
     expect(lens.position.y).toBe(camera.height);
+  });
+
+  it('anchors ceiling optics exactly at the saved point and keeps the housing beneath the ceiling', () => {
+    const layout = { ...PRESETS[0], ceilingHeight: 3.4 };
+    for (const tilt of [0, 20, 45, 75, 90]) for (const pan of [0, 45, 90, 180, 270]) {
+      const camera = { ...makeCamera('CEILING', 4, 3, pan), mount: 'ceiling' as const, height: 3.25, tilt };
+      const pose = cameraAssemblyPose(camera, layout);
+      expect(pose.position.toArray()).toEqual([4, 3.25, 3]);
+      expect(pose.mountPosition.y).toBeCloseTo(3.385);
+      const pitch = tilt * Math.PI / 180;
+      const bodyTop = pose.bodyPosition.y + pose.bodyScale * (0.15 * Math.sin(pitch) + 0.1 * Math.cos(pitch));
+      expect(bodyTop).toBeLessThanOrEqual(layout.ceilingHeight + 0.001);
+      const axes = cameraBasis(camera);
+      expect(axes.direction.dot(axes.up)).toBeCloseTo(0);
+      expect(axes.direction.dot(axes.right)).toBeCloseTo(0);
+      expect(axes.up.length()).toBeCloseTo(1);
+    }
   });
 
   it('matches the perspective camera to horizontal and vertical FOV', () => {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { BufferGeometry, CanvasTexture, DoubleSide, Float32BufferAttribute, Group, MOUSE, PerspectiveCamera, SRGBColorSpace, Vector3 } from 'three';
+import { BufferGeometry, CanvasTexture, DoubleSide, Float32BufferAttribute, Group, MOUSE, PerspectiveCamera, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Camera, Cell, Fixture, Layout, ObsType, Person } from '../../types';
-import { cameraProjection } from '../../core/camera';
+import { cameraMount, cameraProjection, ceilingHeightFor } from '../../core/camera';
 import { floorOutline } from '../../core/footprint';
 import { wallAnchors } from '../../core/geometry';
 import { DORI_COLOR, priorityBand, riskColor, type PriorityBand, type Selection, type ViewMode } from '../canvas/shared';
 import { Block, Fixture3D } from './Fixtures3D';
-import { cameraPose, floorShape, wallSegments, type WallSegment } from './sceneGeometry';
+import { cameraBasis, cameraPose, floorShape, wallSegments, type WallSegment } from './sceneGeometry';
 import { CameraModel3D } from './CameraModel3D';
 import { PersonModel3D } from './PersonModel3D';
 import { DraggableObject3D } from './DraggableObject3D';
@@ -21,9 +21,11 @@ export interface StoreSceneProps {
   cameraView: Camera | null; reset: number; cutaway: boolean;
   onSelect: (selection: Selection) => void;
   onCameraView: (id: string) => void;
-  readOnly?: boolean; editMode?: 'orbit' | 'move'; observationView?: boolean; imageEffectSupported?: boolean;
+  readOnly?: boolean; editMode?: 'orbit' | 'move' | 'ceiling'; showCeilingGrid?: boolean; observationView?: boolean; imageEffectSupported?: boolean;
   onMoveObstacle?: (id: string, centerX: number, centerY: number) => void;
   onMovePerson?: (person: Person) => void;
+  onAddCamera?: (x: number, y: number, mount: 'wall' | 'ceiling') => void;
+  onMoveCamera?: (id: string, x: number, y: number) => void;
   onAddObstacle?: (type: ObsType, fixture?: Fixture) => void;
   onAddPerson?: () => void;
   onRotateSelected?: () => void;
@@ -46,7 +48,7 @@ function CameraController({ layout, cameraView, reset, focusCell, controlsRef, d
     controls.addEventListener('change', changed);
     return () => { controls.removeEventListener('change', changed); controls.dispose(); if (controlsRef.current === controls) controlsRef.current = null; };
   }, [controls, gl, invalidate, controlsRef]);
-  useEffect(() => { controls.mouseButtons.LEFT = editMode === 'move' ? null : MOUSE.ROTATE; }, [controls, editMode]);
+  useEffect(() => { controls.mouseButtons.LEFT = editMode === 'move' || editMode === 'ceiling' ? null : MOUSE.ROTATE; }, [controls, editMode]);
   useFrame(() => { if (controls.enabled) controls.update(); });
 
   useLayoutEffect(() => {
@@ -60,9 +62,11 @@ function CameraController({ layout, cameraView, reset, focusCell, controlsRef, d
       lens.fov = projection.vfov;
       lens.aspect = projection.aspect;
       lens.far = Math.max(60, Math.hypot(layout.widthM, layout.heightM) * 2);
+      lens.up.copy(cameraBasis(cameraView).up);
       lens.position.copy(pose.position);
       lens.lookAt(pose.position.clone().add(pose.direction));
     } else {
+      lens.up.set(0, 1, 0);
       lens.fov = 43;
       lens.aspect = size.width / Math.max(1, size.height);
       lens.near = 0.1;
@@ -74,7 +78,7 @@ function CameraController({ layout, cameraView, reset, focusCell, controlsRef, d
     }
     lens.updateProjectionMatrix();
     invalidate();
-  }, [camera, controls, cameraView, reset, layout.name, layout.widthM, layout.heightM, layout.floorPolygon, size.width, size.height, invalidate, dragActive]);
+  }, [camera, controls, cameraView, reset, layout.name, layout.widthM, layout.heightM, layout.floorPolygon, layout.ceilingHeight, size.width, size.height, invalidate, dragActive]);
 
   useEffect(() => {
     if (!focusCell || cameraView) return;
@@ -139,11 +143,37 @@ function FloorOverlay({ layout, cells, view, showGrid, riskFilter }: Pick<StoreS
   </mesh>;
 }
 
+/** A footprint-clipped plane that is only interactive while placing a camera. */
+export function CeilingGrid({ layout, placing, onAdd }: { layout: Layout; placing: boolean; onAdd?: StoreSceneProps['onAddCamera'] }) {
+  const shape = useMemo(() => floorShape(layout), [layout.widthM, layout.heightM, layout.floorPolygon]);
+  const grid = useMemo(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    context.clearRect(0, 0, 64, 64);
+    context.strokeStyle = '#63857b'; context.lineWidth = 1.5;
+    context.beginPath(); context.moveTo(0, 64); context.lineTo(0, 0); context.lineTo(64, 0); context.stroke();
+    const texture = new CanvasTexture(canvas); texture.wrapS = texture.wrapT = RepeatWrapping;
+    texture.repeat.set(1 / Math.max(0.5, layout.gridM), 1 / Math.max(0.5, layout.gridM));
+    texture.colorSpace = SRGBColorSpace; return texture;
+  }, [layout.gridM]);
+  useEffect(() => () => grid?.dispose(), [grid]);
+  return <mesh name="ceiling-placement-grid" rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingHeightFor(layout) + 0.006, 0]}
+    {...(!placing ? { raycast: () => {} } : {})}
+    onClick={event => {
+      if (!placing) return;
+      event.stopPropagation();
+      if (event.delta <= 5) onAdd?.(event.point.x, event.point.z, 'ceiling');
+    }}>
+    <shapeGeometry args={[shape]} />
+    <meshBasicMaterial map={grid} color={placing ? '#a6c9bb' : '#d4e3d9'} transparent opacity={placing ? 0.3 : 0.16} depthWrite={false} side={DoubleSide} />
+  </mesh>;
+}
+
 function CameraFrustum({ camera, layout }: { camera: Camera; layout: Layout }) {
   const geometry = useMemo(() => {
     const { position, direction } = cameraPose(camera, layout);
-    const right = new Vector3().crossVectors(direction, new Vector3(0, 1, 0)).normalize();
-    const up = new Vector3().crossVectors(right, direction).normalize();
+    const { right, up } = cameraBasis(camera);
     const distance = Math.min(camera.range, 5);
     const halfW = Math.tan(camera.fov * Math.PI / 360) * distance;
     const halfH = Math.tan(cameraProjection(camera).vfov * Math.PI / 360) * distance;
@@ -171,7 +201,8 @@ export function StoreScene(props: StoreSceneProps) {
   const outline = useMemo(() => floorOutline(layout), [layout.widthM, layout.heightM, layout.floorPolygon]);
   const walls = useMemo(() => wallSegments(layout), [layout.widthM, layout.heightM, layout.floorPolygon, layout.obstacles]);
   const anchors = useMemo(() => props.showAnchors ? wallAnchors(layout.widthM, layout.heightM, Math.max(0.5, layout.gridM), layout.floorPolygon) : [], [props.showAnchors, layout.widthM, layout.heightM, layout.gridM, layout.floorPolygon]);
-  const wallHeight = Math.max(3.2, ...layout.cameras.map(c => c.height + 0.5));
+  const wallHeight = ceilingHeightFor(layout);
+  const placingCamera = !props.readOnly && !cameraView && !observationView && props.editMode === 'ceiling';
   const productLimit = Math.min(72, Math.floor(2400 / Math.max(1, layout.obstacles.length)));
   const selectedCamera = selected?.kind === 'cam' ? layout.cameras.find(c => c.id === selected.id) : undefined;
   return <>
@@ -180,7 +211,7 @@ export function StoreScene(props: StoreSceneProps) {
     <hemisphereLight args={['#fffdf1', '#a5b3aa', 1.4]} />
     <directionalLight position={[-3, 15, 8]} intensity={2.2} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0005}
       shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-camera-far={100} />
-    <CameraController layout={layout} cameraView={cameraView} reset={props.reset} focusCell={props.focusCell} controlsRef={controlsRef} dragActive={dragActive} editMode={canMove ? 'move' : 'orbit'} />
+    <CameraController layout={layout} cameraView={cameraView} reset={props.reset} focusCell={props.focusCell} controlsRef={controlsRef} dragActive={dragActive} editMode={placingCamera ? 'ceiling' : canMove ? 'move' : 'orbit'} />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.14, 0]} receiveShadow onClick={event => { if (event.delta <= 5) props.onSelect(null); }}>
       <extrudeGeometry args={[shape, { depth: 0.14, bevelEnabled: false }]} />
       <meshStandardMaterial color="#deded0" side={DoubleSide} roughness={0.94} />
@@ -189,13 +220,23 @@ export function StoreScene(props: StoreSceneProps) {
       <shapeGeometry args={[shape]} /><meshStandardMaterial color="#f3f0df" roughness={0.95} />
     </mesh>
     {!observationView && <FloorOverlay layout={layout} cells={props.cells} view={props.view} showGrid={props.showGrid} riskFilter={props.riskFilter} />}
+    <group visible={Boolean(cameraView)} userData={{ observationWall: true, physicalCeiling: true }}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, wallHeight, 0]} raycast={() => {}}>
+        <shapeGeometry args={[shape]} /><meshStandardMaterial color="#eeecdf" roughness={0.92} side={DoubleSide} />
+      </mesh>
+    </group>
+    {!cameraView && !observationView && (props.showCeilingGrid || placingCamera) && <CeilingGrid layout={layout} placing={placingCamera} onAdd={props.onAddCamera} />}
     {walls.map((wall, i) => <Wall key={i} segment={wall} height={wallHeight} cutaway={!cameraView && props.cutaway} />)}
     {layout.obstacles.map(o => <DraggableObject3D key={o.id} center={[o.x + o.w / 2, o.y + o.h / 2]}
       selection={{ kind: 'obs', id: o.id }} enabled={canMove && Boolean(props.onMoveObstacle)}
       onSelect={props.onSelect} onMove={(x, y) => props.onMoveObstacle?.(o.id, x, y)} onInteraction={onInteraction}>
       <Fixture3D obstacle={o} outline={outline} productLimit={productLimit} selected={!observationView && selected?.kind === 'obs' && selected.id === o.id} onSelect={props.onSelect} />
     </DraggableObject3D>)}
-    {!cameraView && !observationView && layout.cameras.map(c => <CameraModel3D key={c.id} camera={c} layout={layout} selected={selected?.kind === 'cam' && selected.id === c.id} onSelect={props.onSelect} onCameraView={props.onCameraView} />)}
+    {!cameraView && !observationView && layout.cameras.map(c => <DraggableObject3D key={c.id} center={[c.x, c.y]} planeHeight={c.height}
+      selection={{ kind: 'cam', id: c.id }} enabled={canMove && cameraMount(c) === 'ceiling' && Boolean(props.onMoveCamera)}
+      onSelect={props.onSelect} onMove={(x, y) => props.onMoveCamera?.(c.id, x, y)} onInteraction={onInteraction}>
+      <CameraModel3D camera={c} layout={layout} selected={selected?.kind === 'cam' && selected.id === c.id} onSelect={props.onSelect} onCameraView={props.onCameraView} />
+    </DraggableObject3D>)}
     {!cameraView && !observationView && selectedCamera && <CameraFrustum camera={selectedCamera} layout={layout} />}
     {!cameraView && !observationView && anchors.map(([x, z], i) => <mesh key={i} position={[x, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
       <circleGeometry args={[0.035, 8]} /><meshBasicMaterial color="#6a9790" />

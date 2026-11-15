@@ -17,7 +17,7 @@ import { BomModal } from './components/BomModal';
 import { Scorecard, type RiskMetrics } from './components/Scorecard';
 import { PRESETS, withManualCams } from './data/presets';
 import { buildZones, evaluate, RISK_DEFAULTS, SHELF_RISK_PROFILES } from './core/optics';
-import { makeCamera, manualFourCorners } from './core/optimizer';
+import { makeCamera, manualFourCorners, type OptimizationDiagnostics } from './core/optimizer';
 import { solveLocally } from './core/localSolver';
 import { requestOptimize } from './core/api';
 import { addObstacle, moveObstacle, removeObstacle, resizeObstacle, resizeRoom, rotateObstacle } from './core/editor';
@@ -27,7 +27,9 @@ import { canPlacePerson, MAX_PEOPLE } from './core/person';
 import { SceneInspector } from './components/three/SceneInspector';
 import { SceneBoundary } from './components/three/SceneBoundary';
 import { CameraSchedule } from './components/CameraSchedule';
-import { cameraNumber } from './core/camera';
+import { cameraNumber, cameraMount, normalizeCameraPlacement } from './core/camera';
+import { canPlaceCeilingCamera, ceilingInsertionPoint, placeEditedCamera } from './core/cameraEditing';
+import { PlanningSettings } from './components/PlanningSettings';
 import { CameraCountOptimizer } from './components/CameraCountOptimizer';
 import type { Camera, Fixture, Layout, Obstacle, ObsType, Person, RiskStroke, Score, ShelfRiskCategory, Weight } from './types';
 
@@ -47,7 +49,7 @@ export default function App() {
   const [dimension, setDimension] = useState<'plan' | '3d'>('plan');
   const [cameraViewId, setCameraViewId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const [comparison, setComparison] = useState<{ before: Layout; after: Layout; score: Score } | null>(null);
+  const [comparison, setComparison] = useState<{ before: Layout; after: Layout; score: Score; diagnostics?: OptimizationDiagnostics } | null>(null);
   const [showBefore, setShowBefore] = useState(false);
   const [brush, setBrush] = useState<Weight | null>(null);
   const [riskFilter, setRiskFilter] = useState<PriorityBand | null>(null);
@@ -176,7 +178,17 @@ export default function App() {
   };
 
   // useCallback([]) để React.memo của CameraNode/ObstacleNode không render lại thừa
-  const updateCamera = useCallback((c: Camera) => setLayout((l) => ({ ...l, cameras: l.cameras.map((x) => (x.id === c.id ? c : x)) })), []);
+  const updateCamera = useCallback((c: Camera) => setLayout(l => {
+    const previous = l.cameras.find(camera => camera.id === c.id);
+    const moved = !previous || previous.x !== c.x || previous.y !== c.y || cameraMount(previous) !== cameraMount(c);
+    const placed = moved ? placeEditedCamera(c, l) : normalizeCameraPlacement(c, l);
+    return placed && (cameraMount(placed) !== 'ceiling' || canPlaceCeilingCamera(placed, l)) ? { ...l, cameras: l.cameras.map(x => x.id === c.id ? placed : x) } : l;
+  }), []);
+  const moveCamera3D = useCallback((id: string, x: number, y: number) => setLayout(l => {
+    const camera = l.cameras.find(c => c.id === id);
+    const placed = camera && placeEditedCamera({ ...camera, x, y }, l);
+    return placed ? { ...l, cameras: l.cameras.map(c => c.id === id ? placed : c) } : l;
+  }), []);
   const updateObstacle = useCallback((o: Obstacle) => setLayout((l) => ({ ...l, walkways: undefined, obstacles: l.obstacles.map((x) => (x.id === o.id ? o : x)) })), []);
   const moveObstacle3D = useCallback((id: string, centerX: number, centerY: number) => setLayout(current => moveObstacle(current, id, centerX, centerY)), []);
   const updatePerson = useCallback((person: Person) => {
@@ -215,23 +227,39 @@ export default function App() {
       const l2 = { ...l, obstacles: l.obstacles.map((x) => (x.id === id ? { ...x, ...rest } : x)) };
       return w !== undefined || h !== undefined ? resizeObstacle(l2, id, w ?? o.w, h ?? o.h) : l2;
     });
-  const editCamera = (id: string, pt: Partial<Pick<Camera, 'fov' | 'res' | 'height' | 'pan' | 'range' | 'model' | 'tilt' | 'vfov'>>) =>
-    setLayout((l) => ({
-      ...l,
-      cameras: l.cameras.map((c) => (c.id === id
-        ? {
-          ...c,
-          ...pt,
-          ...(pt.pan !== undefined ? { pan: snapAngle(pt.pan) } : {}),
-          ...(pt.fov !== undefined ? { fov: Math.max(30, Math.min(140, pt.fov)) } : {}),
-          ...(pt.res !== undefined ? { res: Math.max(640, Math.min(7680, pt.res)) } : {}),
-          ...(pt.range !== undefined ? { range: Math.max(1, Math.min(30, pt.range)) } : {}),
-          ...(pt.height !== undefined ? { height: Math.max(1.8, Math.min(4, pt.height)) } : {}),
-          ...(pt.tilt !== undefined ? { tilt: Math.max(0, Math.min(85, pt.tilt)) } : {}),
-          ...(pt.vfov !== undefined ? { vfov: Math.max(10, Math.min(120, pt.vfov)) } : {})
-        }
-        : c))
-    }));
+  const editCamera = (id: string, pt: Partial<Camera>) => {
+    const l = layoutRef.current, camera = l.cameras.find(c => c.id === id);
+    if (!camera) return;
+    let updated = {
+      ...camera, ...pt, id: camera.id,
+      ...(pt.pan !== undefined ? { pan: snapAngle(pt.pan) } : {}),
+      ...(pt.fov !== undefined ? { fov: Math.max(30, Math.min(140, pt.fov)) } : {}),
+      ...(pt.res !== undefined ? { res: Math.max(640, Math.min(7680, pt.res)) } : {}),
+      ...(pt.range !== undefined ? { range: Math.max(1, Math.min(30, pt.range)) } : {}),
+      ...(pt.tilt !== undefined ? { tilt: Math.max(0, Math.min(90, pt.tilt)) } : {}),
+      ...(pt.vfov !== undefined ? { vfov: Math.max(10, Math.min(120, pt.vfov)) } : {})
+    };
+    if (pt.mount && pt.mount !== cameraMount(camera)) {
+      updated.tilt = pt.mount === 'ceiling' ? 45 : 20;
+      if (pt.mount === 'ceiling' && !canPlaceCeilingCamera(normalizeCameraPlacement(updated, l), l)) {
+        const point = ceilingInsertionPoint(l);
+        if (!point) return flash('Không có vị trí trần hợp lệ cho camera.', 'error');
+        [updated.x, updated.y] = point;
+      }
+    }
+    const moved = cameraMount(updated) !== cameraMount(camera) || updated.x !== camera.x || updated.y !== camera.y;
+    const placed = moved ? placeEditedCamera(updated, l) : normalizeCameraPlacement(updated, l);
+    if (!placed || (cameraMount(placed) === 'ceiling' && !canPlaceCeilingCamera(placed, l))) return flash('Vị trí camera vướng tường hoặc vật thể cao. Hãy đổi vị trí hoặc bộ gá.', 'error');
+    updateCamera(placed);
+  };
+  const setCeilingHeight = (ceilingHeight: number) => {
+    const current = layoutRef.current;
+    if (current.obstacles.some(o => o.elev > ceilingHeight)) return flash('Trần thấp hơn một vật thể hiện có. Hãy giảm chiều cao vật thể trước.', 'error');
+    const next = { ...current, ceilingHeight };
+    next.cameras = next.cameras.map(camera => normalizeCameraPlacement(camera, next));
+    if (next.cameras.some(camera => cameraMount(camera) === 'ceiling' && !canPlaceCeilingCamera(camera, next))) return flash('Chiều cao mới làm camera vướng vật thể. Hãy đổi vị trí camera trước.', 'error');
+    setLayout(next);
+  };
   const setRoom = (w: number, h: number) => {
     const next = resizeRoom(layout, w, h);
     if (next === layout) return flash('Không thể đổi kích thước. Vật cản sẽ chồng lấn, vượt tường hoặc lưới quá dày.', 'error');
@@ -262,8 +290,22 @@ export default function App() {
     const pan = (Math.atan2(l.heightM / 2 - y, l.widthM / 2 - x) * 180) / Math.PI;
     let index = 1;
     while (l.cameras.some((camera) => camera.id === `CAM-${String(index).padStart(2, '0')}`)) index++;
-    return { ...l, cameras: [...l.cameras, { ...makeCamera(`CAM-${String(index).padStart(2, '0')}`, x, y, pan), target: 'Giám sát bổ sung' }] };
+    return { ...l, cameras: [...l.cameras, normalizeCameraPlacement({ ...makeCamera(`CAM-${String(index).padStart(2, '0')}`, x, y, pan), target: 'Giám sát bổ sung' }, l)] };
   });
+  const addCameraAt = (x: number, y: number, mount: 'wall' | 'ceiling') => {
+    const l = layoutRef.current;
+    if (l.cameras.length >= MAX_CAMS) return flash('Mặt bằng đã đạt giới hạn 20 camera.', 'error');
+    let index = 1;
+    while (l.cameras.some(c => c.id === `CAM-${String(index).padStart(2, '0')}`)) index++;
+    const camera = placeEditedCamera({ ...makeCamera(`CAM-${String(index).padStart(2, '0')}`, x, y, 90), mount, tilt: mount === 'ceiling' ? 45 : 20, target: mount === 'ceiling' ? 'Giám sát từ trần' : 'Giám sát bổ sung' }, l);
+    if (!camera || l.cameras.some(c => cameraMount(c) === mount && Math.hypot(c.x - camera.x, c.y - camera.y) < .2)) return flash('Vị trí lắp camera vướng vật thể hoặc trùng camera hiện có.', 'error');
+    setLayout({ ...l, cameras: [...l.cameras, camera] }); setSel({ kind: 'cam', id: camera.id });
+  };
+  const addCeilingCamera = () => {
+    const point = ceilingInsertionPoint(layoutRef.current);
+    if (point) addCameraAt(...point, 'ceiling');
+    else flash('Không còn vị trí trần hợp lệ.', 'error');
+  };
   const addPerson = (x: number, y: number) => {
     if (people.length >= MAX_PEOPLE) return flash(`Mặt bằng đã có ${MAX_PEOPLE} người.`, 'error');
     if (!canPlacePerson(x, y, layout.widthM, layout.heightM, layout.obstacles, layout.floorPolygon)) return flash('Không thể đặt người sát tường hoặc chồng lên vật cản');
@@ -313,14 +355,14 @@ export default function App() {
     const t0 = performance.now();
     const cameraProfiles = cameraProfilesFor(count);
     try {
-      const { cameras, source } = await requestOptimize(layout, zones, count, cameraProfiles, controller.signal);
+      const { cameras, source, diagnostics } = await requestOptimize(layout, zones, count, cameraProfiles, controller.signal);
       if (controller.signal.aborted) return flash('Đã hủy tối ưu.');
       if (layoutRef.current !== inputLayout) return flash('Mặt bằng đã thay đổi. Hãy tối ưu lại với cấu hình mới.', 'error');
       const t1 = performance.now();
       setSel(null);
       const after = { ...inputLayout, cameras };
       setLayout(after);
-      setComparison({ before: inputLayout, after, score }); setShowBefore(false); setStep(3); setView('dori'); setSolveMs(t1 - t0);
+      setComparison({ before: inputLayout, after, score, diagnostics }); setShowBefore(false); setStep(3); setView('dori'); setSolveMs(t1 - t0);
       flash(`Đã tối ưu ${cameras.length}/${count} camera · ${source === 'api' ? 'Backend' : 'dự phòng trên trình duyệt'}`);
       requestAnimationFrame(() => requestAnimationFrame(() => setRenderMs(performance.now() - t1)));
     } catch (error) {
@@ -338,7 +380,7 @@ export default function App() {
     const inputLayout = layout;
     if (messageTimer.current !== null) { clearTimeout(messageTimer.current); messageTimer.current = null; }
     setOptimizing(true);
-    setMsg('Đang giảm số camera bằng Greedy theo KPI Đỏ ≥95% và Vàng ≥80%…');
+    setMsg('Đang tìm số camera theo KPI Đỏ ≥95% và Vàng ≥80%…');
     const t0 = performance.now();
     const cameraProfiles = cameraProfilesFor(layout.cameras.length);
     try {
@@ -381,7 +423,7 @@ export default function App() {
       setOptimizing(false);
     }
   };
-  const stress = () => setLayout((l) => ({ ...l, cameras: Array.from({ length: MAX_CAMS }, (_, i) => { const a = wallAnchors(l.widthM, l.heightM, l.gridM, l.floorPolygon); const [x, y] = a[Math.floor((i * a.length) / MAX_CAMS)]; return makeCamera(`CAM-${String(i + 1).padStart(2, '0')}`, x, y, (Math.atan2(l.heightM / 2 - y, l.widthM / 2 - x) * 180) / Math.PI); }) }));
+  const stress = () => setLayout((l) => ({ ...l, cameras: Array.from({ length: MAX_CAMS }, (_, i) => { const a = wallAnchors(l.widthM, l.heightM, l.gridM, l.floorPolygon); const [x, y] = a[Math.floor((i * a.length) / MAX_CAMS)]; return normalizeCameraPlacement(makeCamera(`CAM-${String(i + 1).padStart(2, '0')}`, x, y, (Math.atan2(l.heightM / 2 - y, l.widthM / 2 - x) * 180) / Math.PI), l); }) }));
 
   const savePng = async () => {
     if (!stageRef.current) return;
@@ -406,7 +448,7 @@ export default function App() {
       displayedLayout.cameras.forEach((camera, index) => {
         const y = 58 + index * 56;
         schedule.add(new Konva.Text({ x: worldWidth + 18, y, width: 188, text: `${cameraNumber(index)} · ${camera.id} · ${camera.pan}°`, fontSize: 11, fontStyle: 'bold', fill: '#3f4d34', wrap: 'none', ellipsis: true }));
-        schedule.add(new Konva.Text({ x: worldWidth + 18, y: y + 18, text: `FOV ${camera.fov}° · H ${camera.height} m`, fontSize: 10, fill: '#737c65' }));
+        schedule.add(new Konva.Text({ x: worldWidth + 18, y: y + 18, text: `${cameraMount(camera) === 'ceiling' ? 'Trần' : 'Tường'} · FOV ${camera.fov}° · H ${camera.height} m`, fontSize: 10, fill: '#737c65' }));
         if (camera.target) schedule.add(new Konva.Text({ x: worldWidth + 18, y: y + 33, width: 188, text: camera.target, fontSize: 9, fill: '#848778', wrap: 'none', ellipsis: true }));
       });
       imageStage.add(schedule);
@@ -589,7 +631,7 @@ export default function App() {
             {dimension === '3d' && <SceneBoundary onEditPlan={openPlanEditor}><Suspense fallback={<div className="three-loading" role="status"><span className="spinner" /> Đang dựng không gian 3D…</div>}>
               <Store3D layout={displayedLayout} cells={displayedCells} view={view} selected={sel} people={people}
                 showGrid={grid} showAnchors={anchors} riskFilter={riskFilter} focusCell={focusCell} cameraView={cameraView}
-                readOnly={showBefore} onMoveObstacle={moveObstacle3D} onMovePerson={updatePerson} onAddObstacle={addObs} onAddPerson={addPersonInFreeSpace}
+                readOnly={showBefore} onMoveObstacle={moveObstacle3D} onMovePerson={updatePerson} onAddObstacle={addObs} onAddPerson={addPersonInFreeSpace} onAddCamera={addCameraAt} onMoveCamera={moveCamera3D}
                 onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected}
                 onSelect={select} onCameraView={openCameraView} onOverview={() => setCameraViewId(null)} onEditPlan={openPlanEditor} />
             </Suspense></SceneBoundary>}
@@ -610,19 +652,26 @@ export default function App() {
           {step === 1 && dimension === 'plan' && <section className="panel priority-editor"><h3>Cọ vùng ưu tiên</h3><div className="brush-options">{([5, 3, 1] as Weight[]).map((weight) => <button key={weight} disabled={layout.riskStrokes.length >= 50000} className={brush === weight ? 'on' : ''} aria-pressed={brush === weight} onClick={() => { setBrush(brush === weight ? null : weight); setTool('select'); setView('risk'); }}><i className={`risk-dot risk-${weight}`} />{weight === 5 ? 'Cao' : weight === 3 ? 'Vừa' : 'Thấp'}<small>W {weight}</small></button>)}</div>
             <p className="muted">Kéo cọ trên sàn. Chọn kệ hoặc quầy để chỉnh vùng ưu tiên xung quanh vật thể.</p>
             <button className="text-button" disabled={!layout.riskStrokes.length && !Object.keys(layout.risk).length} onClick={() => { if (window.confirm('Xóa toàn bộ vùng ưu tiên đã tô?')) patch({ risk: {}, riskStrokes: [] }); setBrush(null); }}><Eraser size={14} /> Xóa vùng đã tô</button></section>}
+          {(step === 0 || step >= 2) && <PlanningSettings layout={displayedLayout} disabled={optimizing || showBefore || Boolean(cameraView)} showOptimization={step >= 2} onCeilingHeight={setCeilingHeight} onOptimization={optimization => patch({ optimization })} />}
           {step >= 2 && <CameraCountOptimizer count={cameraBudget} onCountChange={setCameraBudget} onOptimize={count => autoOptimize(count)} disabled={optimizing || showBefore} />}
-          {step === 2 && dimension === 'plan' && <section className="panel camera-setup"><label className="field">Số camera tối đa cho phương án<select aria-label="Ngân sách camera" value={cameraBudget} onChange={(event) => setCameraBudget(Number(event.target.value))} disabled={optimizing}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1} camera</option>)}</select></label><p className="muted">Camera bắt dính tường. Kéo tay cầm để xoay hướng nhìn theo bước 15°.</p><button className="text-button" onClick={addCamera} disabled={layout.cameras.length >= MAX_CAMS}><CameraIcon size={15} /> Thêm camera thủ công</button></section>}
+          {step === 2 && dimension === 'plan' && <section className="panel camera-setup"><label className="field">Số camera tối đa cho phương án<select aria-label="Ngân sách camera" value={cameraBudget} onChange={(event) => setCameraBudget(Number(event.target.value))} disabled={optimizing}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1} camera</option>)}</select></label><p className="muted">Camera tường bắt dính tường; camera trần di chuyển trong mặt bằng. Kéo tay cầm để xoay hướng nhìn.</p><button className="text-button" onClick={addCamera} disabled={layout.cameras.length >= MAX_CAMS}><CameraIcon size={15} /> Thêm camera trên tường</button><button className="text-button" onClick={addCeilingCamera} disabled={layout.cameras.length >= MAX_CAMS}><CameraIcon size={15} /> Thêm camera trên trần</button></section>}
           {step === 3 && <>
+            {comparison?.diagnostics && <section className="panel optimization-result" aria-label="Kết quả thuật toán">
+              <h3>{comparison.diagnostics.algorithm === 'hybrid' ? 'Greedy + Local Search' : 'Greedy'}</h3>
+              <div className="algorithm-scores"><span>Greedy<strong>{comparison.diagnostics.greedyScore.toFixed(1)}</strong></span><span>Sau tối ưu<strong>{comparison.diagnostics.finalScore.toFixed(1)}</strong></span></div>
+              <p className="muted small">Điểm DORI có trọng số · cùng tập {comparison.diagnostics.candidateCount} ứng viên · {comparison.diagnostics.iterations} lần thay camera cải thiện.</p>
+            </section>}
+
             <Scorecard d={{ manual, live: score, unweighted, solveMs, renderMs, heatMs: drawMsRef.current, before: comparison?.score }} preview={showBefore ? comparison?.score : undefined} view="dori" riskMetrics={riskMetrics} onFocusHighUncovered={() => { if (riskMetrics.firstUncovered) { setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null); setFocusCell({ ...riskMetrics.firstUncovered }); } }} />
             <section className="panel result-actions"><h3>Vùng ưu tiên của phương án hiện tại</h3><p>{riskMetrics.uncoveredHigh ? `${riskMetrics.uncoveredHigh} ô ưu tiên cao chưa có camera quan sát.` : riskMetrics.highTotal ? 'Toàn bộ ô ưu tiên cao đã có camera quan sát. Kiểm tra thêm mức PPM để đạt KPI.' : 'Chưa có vùng ưu tiên cao trong mặt bằng.'}</p><button disabled={!riskMetrics.firstUncovered} onClick={() => { setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null); setFocusCell(riskMetrics.firstUncovered ? { ...riskMetrics.firstUncovered } : null); }}><Crosshair size={15} /> Kiểm tra vùng chưa phủ</button><button onClick={() => setBom(true)}><Download size={15} /> Vật tư & chi phí</button></section>
           </>}
           {dimension === '3d' && <SceneInspector layout={displayedLayout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor} onCameraView={openCameraView}
-            readOnly={showBefore || Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} />}
+            readOnly={showBefore || Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} onCameraPatch={editCamera} />}
           {step !== 3 && dimension === 'plan' && <Inspector mode={step === 0 ? 'room' : step === 1 ? 'risk' : 'camera'} onSelect={select} layout={layout} sel={sel} measure={measure} onTargetHeight={(targetHeight) => patch({ targetHeight })} onGrid={setGridSize} onObs={editObstacle} onCam={editCamera} onRoom={setRoom} onScale={(v) => patch({ pixelsPerMeter: v })} onCalibrate={calibrate} />}
           {sel && !showBefore && dimension === 'plan' && <div className="selection-actions"><button onClick={() => rotate(1)} disabled={sel.kind === 'person'}><RotateCw size={14} /> Xoay 15°</button><button onClick={deleteSelected}><Trash2 size={14} /> Xóa</button>{step === 3 && <button onClick={() => { setStep(sel.kind === 'cam' ? 2 : 0); }}>Thuộc tính</button>}</div>}
           {step === 0 && dimension === 'plan' && <button className="wall-shelf-add" onClick={() => addObs('shelf', 'wall-shelf')}>Thêm kệ một mặt sát tường</button>}
           {step === 0 && dimension === 'plan' && <details className="panel reference-panel" open={Boolean(bg)}><summary>Ảnh mặt bằng tham chiếu</summary><div className="reference-actions"><label className="btn"><FileUp size={15} /> Nạp ảnh mặt bằng<input type="file" accept="image/*" hidden onChange={(e) => onFile(e, 'bg')} /></label>{bg && <><label className="field">Bề ngang ảnh · {bg.widthM.toFixed(1)} m<input type="range" min={2} max={40} step={0.5} value={bg.widthM} onChange={(e) => patch({ background: { ...bg, widthM: +e.target.value } })} /></label><label className="field">Độ mờ · {Math.round(bg.opacity * 100)}%<input type="range" min={0.1} max={1} step={0.1} value={bg.opacity} onChange={(e) => patch({ background: { ...bg, opacity: +e.target.value } })} /></label><div className="row"><button onClick={() => patch({ background: { ...bg, visible: !bg.visible } })}>{bg.visible ? 'Ẩn ảnh' : 'Hiện ảnh'}</button><button onClick={() => patch({ background: undefined })}>Gỡ ảnh</button></div></>}</div></details>}
-          {step >= 2 && dimension === 'plan' && <details className="panel advanced-panel"><summary>Tùy chọn tối ưu</summary><div className="project-actions"><label className="field">Ngân sách camera<select aria-label="Số camera tối ưu" value={cameraBudget} disabled={optimizing} onChange={(e) => setCameraBudget(+e.target.value)}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></label><button onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing}>Tối ưu {layout.cameras.length} camera hiện có</button><button onClick={minimizeCameras} disabled={optimizing}>Giảm số camera theo KPI (Greedy)</button><button onClick={runUnweighted} disabled={optimizing}>So sánh Greedy không trọng số</button><button onClick={() => setLayout((current) => ({ ...current, cameras: manualFourCorners(current) }))}>Đặt 4 camera ở góc tường</button><button onClick={benchmark} disabled={optimizing}>Đo hiệu năng · 20 camera</button></div></details>}
+          {step >= 2 && dimension === 'plan' && <details className="panel advanced-panel"><summary>Tùy chọn tối ưu</summary><div className="project-actions"><label className="field">Ngân sách camera<select aria-label="Số camera tối ưu" value={cameraBudget} disabled={optimizing} onChange={(e) => setCameraBudget(+e.target.value)}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></label><button onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing}>Tối ưu {layout.cameras.length} camera hiện có</button><button onClick={minimizeCameras} disabled={optimizing}>Giảm số camera theo KPI</button><button onClick={runUnweighted} disabled={optimizing}>So sánh Greedy không trọng số</button><button onClick={() => setLayout((current) => ({ ...current, cameras: manualFourCorners(current) }))}>Đặt 4 camera ở góc tường</button><button onClick={benchmark} disabled={optimizing}>Đo hiệu năng · 20 camera</button></div></details>}
           <div className="step-navigation">{step > 0 && <button onClick={() => goStep(step - 1)} aria-label="Bước trước"><ArrowLeft size={16} /></button>}{step < 3 ? <button className="primary" onClick={() => goStep(step + 1)}>Tiếp tục · {STEPS[step + 1].title}<ArrowRight size={16} /></button> : <button onClick={() => goStep(2)}><SlidersHorizontal size={15} /> Điều chỉnh phương án</button>}</div>
         </aside>
       </main>

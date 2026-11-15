@@ -120,6 +120,7 @@ def test_backend_grid_computes_continuous_obstacle_weights_and_last_brush_stroke
 
 def test_optimize_uses_camera_profiles_and_defaults_missing_profiles() -> None:
     payload = optimize_payload()
+    payload["layout"]["ceilingHeight"] = 3.5
     payload["cameraBudgetK"] = 3
     payload["cameraProfiles"] = [
         {"fov": 70, "res": 3840, "range": 8, "height": 3, "model": "Custom camera"},
@@ -151,6 +152,7 @@ def test_optimize_returns_requested_camera_budget_after_reaching_target() -> Non
 def test_optimize_returns_cameras_even_when_all_points_are_below_detection_threshold() -> None:
     payload = optimize_payload()
     payload["cameraBudgetK"] = 3
+    payload["layout"]["optimization"] = {"mounts": "wall", "algorithm": "greedy"}
     payload["layout"].update(widthM=40, heightM=40, gridM=1)
     payload["grid"].update(rows=40, cols=40, cellSizeM=1)
     payload["cameraProfiles"] = [{"fov": 140, "res": 640, "range": 30}] * 3
@@ -317,8 +319,8 @@ def test_dense_grid_anchor_reduction_terminates(monkeypatch):
     monkeypatch.setattr(main, "_wall_anchors", bounded_anchors)
     # Isolate anchor reduction so this regression never needs a huge PPM matrix.
     def empty_solution(self, candidates, cells, budget, **kwargs):
-        assert len(candidates) == 4 * 24
-        return [], {"weighted_coverage_pct": 0, "area_coverage_pct": 0, "target_coverage_reached": False}
+        assert len(candidates) * len(cells) <= 1_500_000
+        return [], {"weighted_coverage_pct": 0, "area_coverage_pct": 0, "target_coverage_reached": False, "diagnostics": {}}
     monkeypatch.setattr(OptiCamGreedy, "run_greedy", empty_solution)
     assert client.post("/api/v1/optimize", json=payload).status_code == 200
 
@@ -340,7 +342,11 @@ def test_bom_spreadsheet_strings_are_literal():
     assert "'=SUM(1,2)" in csv_response.text
     response = client.post("/api/v1/bom/export?format=xlsx", json=layout)
     workbook = load_workbook(io.BytesIO(response.content))
-    assert workbook.active["H2"].data_type == "s"
+    sheet = workbook.active
+    model_column = next(cell.column for cell in sheet[1] if cell.value == "Model")
+    model_cell = sheet.cell(row=2, column=model_column)
+    assert model_cell.data_type == "s"
+    assert model_cell.value == "'=SUM(1,2)"
 
 
 def test_concurrent_saves_leave_complete_json(tmp_path, monkeypatch):

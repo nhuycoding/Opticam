@@ -66,7 +66,7 @@ describe('Geometry and resource bounds', () => {
   it('returns distinct candidates even after the DORI score saturates', () => {
     const layout = room();
     const cameras = greedyPlace(layout, buildZones(layout), 20);
-    expect(new Set(cameras.map(({ x, y, pan }) => `${x}/${y}/${pan}`)).size).toBe(cameras.length);
+    expect(new Set(cameras.map(({ x, y, pan, tilt, mount }) => `${x}/${y}/${pan}/${tilt}/${mount}`)).size).toBe(cameras.length);
     expect(cameras.at(-1)?.id).toBe('CAM-20');
   });
   it('bounds dense candidate allocation and terminates at the four corner anchors', () => {

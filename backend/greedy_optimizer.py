@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from array import array
+import time
 from typing import Any, Sequence
 
 if __package__:
@@ -167,19 +169,24 @@ def camera_ppm(
     floor_polygon=None,
 ) -> float:
     dx, dy = point[0] - camera["x"], point[1] - camera["y"]
-    distance = math.hypot(dx, dy)
-    if distance < 0.2 or distance > camera["range"]:
+    dz = target_height - camera["height"]
+    slant_distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if slant_distance < 0.03 or slant_distance > camera["range"]:
         return 0.0
-    angle = math.degrees(math.atan2(dy, dx)) % 360
-    angle_diff = abs((angle - camera["pan"] + 180) % 360 - 180)
-    if angle_diff > camera["fov"] / 2:
+    pan = math.radians(camera["pan"])
+    tilt = math.radians(camera.get("tilt", 45 if camera.get("mount") == "ceiling" else 20))
+    forward = (dx * math.cos(pan) + dy * math.sin(pan)) * math.cos(tilt) - dz * math.sin(tilt)
+    right = -dx * math.sin(pan) + dy * math.cos(pan)
+    up = (dx * math.cos(pan) + dy * math.sin(pan)) * math.sin(tilt) + dz * math.cos(tilt)
+    tan_h = math.tan(math.radians(camera["fov"] / 2))
+    vfov = camera.get("vfov") or math.degrees(2 * math.atan(tan_h / (16 / 9)))
+    if forward <= 0 or abs(right) > forward * tan_h + 1e-9 or abs(up) > forward * math.tan(math.radians(vfov / 2)) + 1e-9:
         return 0.0
     origin = (camera["x"], camera["y"])
     if floor_polygon and not segment_in_floor(origin, point, floor_polygon):
         return 0.0
     if any(segment_hits_obstacle(origin, point, obstacle, camera["height"], target_height) for obstacle in obstacles):
         return 0.0
-    slant_distance = math.hypot(distance, abs(camera["height"] - target_height))
     return camera["res"] / (2 * slant_distance * math.tan(math.radians(camera["fov"] / 2)))
 
 
@@ -272,65 +279,88 @@ class OptiCamGreedy:
         return covered
 
     def run_greedy(
-        self,
-        camera_candidates: Sequence[dict[str, Any]],
-        grid_points: Sequence[GridPoint],
-        camera_budget: int,
-        target_coverage: float = 0.95,
-        camera_candidate_groups: Sequence[Sequence[dict[str, Any]]] | None = None,
-    ) -> tuple[list[dict[str, Any]], dict[str, float | bool]]:
-        total_points = len(grid_points)
-        candidate_groups = camera_candidate_groups or [camera_candidates]
-        if not total_points or not any(candidate_groups) or camera_budget <= 0:
-            total_weight = sum(weight for _, _, weight in grid_points)
-            return [], {
-                "area_coverage_pct": 100.0 if not total_points else 0.0,
-                "target_coverage_reached": not total_points,
-                "weighted_coverage_pct": 100.0 if not total_weight else 0.0,
-            }
-
-        current_candidates: list[tuple[dict[str, Any], list[float], list[float]]] = []
-        current_group_id = None
-        current_scores = [0.0] * total_points
-        current_ppm = [0.0] * total_points
-        selected: list[dict[str, Any]] = []
-        covered_count = 0
-        for profile_index in range(camera_budget):
-            group = candidate_groups[min(profile_index, len(candidate_groups) - 1)]
-            if id(group) != current_group_id:
-                current_candidates = []
+        self, camera_candidates, grid_points, camera_budget, target_coverage=0.95,
+        camera_candidate_groups=None, algorithm="greedy",
+    ):
+        """Greedy and bounded 1-swap local search on the exact same sampled pool."""
+        started = time.perf_counter()
+        groups = camera_candidate_groups or [camera_candidates]
+        count = len(grid_points)
+        weights = [w for _, _, w in grid_points]
+        cache = {}
+        candidate_groups = []
+        for group in groups:
+            if id(group) not in cache:
+                candidates = []
                 for camera in group:
-                    if camera in selected:
-                        continue
-                    ppm_values = [camera_ppm(camera, (x, y), self.obstacles, self.target_height, self.floor_polygon)
-                                  for x, y, _ in grid_points]
-                    if any(ppm_values):
-                        scores = [dori_factor(ppm) * weight for ppm, (_, _, weight) in zip(ppm_values, grid_points)]
-                        current_candidates.append((camera, scores, ppm_values))
-                current_group_id = id(group)
-            best_index, best_gain, best_ppm_gain = -1, -1.0, -1.0
-            for index, (_, scores, ppm_values) in enumerate(current_candidates):
-                gain = sum(max(0.0, score - current) for score, current in zip(scores, current_scores))
-                ppm_gain = sum(
-                    max(0.0, min(ppm, 250) - min(current, 250))
-                    for ppm, current in zip(ppm_values, current_ppm)
-                )
-                if gain > best_gain or (gain == best_gain and ppm_gain > best_ppm_gain):
-                    best_index, best_gain, best_ppm_gain = index, gain, ppm_gain
-            if best_index < 0:
-                continue
-
-            camera, scores, ppm_values = current_candidates.pop(best_index)
-            selected.append(camera)
-            current_scores = [max(old, new) for old, new in zip(current_scores, scores)]
-            current_ppm = [max(old, new) for old, new in zip(current_ppm, ppm_values)]
-            covered_count = sum(score > 0 for score in current_scores)
-
-        area_coverage = covered_count / total_points * 100
-        total_weight = sum(weight for _, _, weight in grid_points)
-        weighted_coverage = sum(current_scores)
-        return selected, {
-            "area_coverage_pct": round(area_coverage, 1),
-            "target_coverage_reached": area_coverage / 100 >= target_coverage,
-            "weighted_coverage_pct": round(weighted_coverage / total_weight * 100, 1) if total_weight else 100.0,
+                    ppm = array('f', (camera_ppm(camera, (x, y), self.obstacles, self.target_height, self.floor_polygon) for x, y, _ in grid_points))
+                    if any(ppm):
+                        candidates.append((camera, ppm))
+                cache[id(group)] = candidates
+            candidate_groups.append(cache[id(group)])
+        def pose(camera):
+            return (camera.get("mount", "wall"), camera["x"], camera["y"], camera["pan"], camera.get("tilt", 20), camera["height"])
+        selected = []
+        def merge(except_index=-1):
+            result = [0.0] * count
+            for i, (candidate, _) in enumerate(selected):
+                if i != except_index:
+                    result = [max(a, b) for a, b in zip(result, candidate[1])]
+            return result
+        def addition(base, candidate):
+            score = tie = 0.0
+            for old, new, w in zip(base, candidate[1], weights):
+                if new > old:
+                    score += w * (dori_factor(new) - dori_factor(old))
+                    tie += w * (min(new, 250) - min(old, 250))
+            return score, tie
+        def better(score, tie, best_score, best_tie):
+            return score > best_score + 1e-9 or (abs(score - best_score) <= 1e-9 and tie > best_tie + 1e-9)
+        for slot in range(camera_budget):
+            group = candidate_groups[min(slot, len(candidate_groups) - 1)]
+            base = merge()
+            used = {pose(candidate[0]) for candidate, _ in selected}
+            best, best_score, best_tie = None, -1.0, -1.0
+            for candidate in group:
+                if pose(candidate[0]) in used:
+                    continue
+                score, tie = addition(base, candidate)
+                if better(score, tie, best_score, best_tie):
+                    best, best_score, best_tie = candidate, score, tie
+            if best is not None:
+                selected.append((best, slot))
+        def objective(ppm):
+            return sum(w * dori_factor(p) for w, p in zip(weights, ppm))
+        greedy_score = objective(merge())
+        iterations = 0
+        if algorithm == "hybrid":
+            for _ in range(3):
+                improved = False
+                for index, (old, slot) in enumerate(selected):
+                    base = merge(index)
+                    used = {pose(c[0]) for i, (c, _) in enumerate(selected) if i != index}
+                    old_gain, old_tie = addition(base, old)
+                    best, best_gain, best_tie = old, old_gain, old_tie
+                    for candidate in candidate_groups[min(slot, len(candidate_groups) - 1)]:
+                        if pose(candidate[0]) in used:
+                            continue
+                        gain, tie = addition(base, candidate)
+                        if better(gain, tie, best_gain, best_tie):
+                            best, best_gain, best_tie = candidate, gain, tie
+                    if best_gain > old_gain + 1e-9:
+                        selected[index] = (best, slot)
+                        improved, iterations = True, iterations + 1
+                if not improved:
+                    break
+        ppm = merge()
+        final_score = objective(ppm)
+        coverage = sum(p >= 25 for p in ppm) / count * 100 if count else 100
+        total_weight = sum(weights)
+        return [candidate[0] for candidate, _ in selected], {
+            "area_coverage_pct": round(coverage, 1),
+            "target_coverage_reached": coverage / 100 >= target_coverage,
+            "weighted_coverage_pct": round(final_score / total_weight * 100, 1) if total_weight else 100,
+            "diagnostics": {"algorithm": algorithm, "greedyScore": greedy_score, "finalScore": final_score,
+                            "iterations": iterations, "candidateCount": sum(len(c) for c in cache.values()),
+                            "ms": (time.perf_counter() - started) * 1000},
         }

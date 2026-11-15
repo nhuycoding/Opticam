@@ -3,8 +3,8 @@
 ## Mở ứng dụng
 
 Khởi động backend và frontend theo hướng dẫn tại [README.md](../README.md), sau đó mở
-<http://localhost:3000>. Nếu backend chưa chạy, Auto-Optimize tự chuyển sang Greedy
-trên trình duyệt.
+<http://localhost:3000>. Nếu backend chưa chạy, bộ tối ưu tự chuyển sang thuật toán đang chọn
+trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian chờ 15 giây.
 
 ## Khu vực giao diện
 
@@ -19,28 +19,34 @@ trên trình duyệt.
 
 ## Các thao tác chính
 
-1. Chọn một trong ba layout mẫu ở thanh đầu trang; nhập layout JSON trong mục **Xuất và dự án**.
+1. Chọn một trong tám layout mẫu ở thanh đầu trang; nhập layout JSON trong mục **Xuất và dự án**.
 2. Thêm kệ, POS, cửa hoặc camera bằng thanh công cụ bên trái.
    Chọn **Người đánh giá**, rồi bấm vào mặt bằng để đặt hình người; chọn/kéo hình người để
    mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
-3. Kéo camera trên tường để đổi vị trí; chọn camera rồi kéo tay cầm màu cam để đổi hướng theo nấc 15°.
+3. Kéo camera tường dọc tường hoặc camera trần bên trong mặt bằng để đổi vị trí; chọn camera rồi kéo tay cầm màu cam để đổi hướng theo nấc 15°.
    Chọn camera rồi chỉnh chất lượng, model, pan, FOV, tầm xa và chiều cao trong Inspector.
    Ô số cho phép xóa giá trị cũ để nhập lại; nhấn `Enter` hoặc rời ô để áp dụng, `Esc` để
    hủy nội dung đang nhập. Giá trị ngoài phạm vi được báo ngay dưới ô.
 4. Chọn vật cản để đổi tên/kích thước/chiều cao; xoay bằng nút xoay hoặc phím `R`.
-   Cửa được khóa vào cạnh tường; vật cản không được chồng lấn.
+   Cửa được khóa vào cạnh tường. Có thể xoay vật thể qua vật thể khác để sắp xếp lại;
+   di chuyển chặn chồng lấn mới và cho phép tách những vật thể đang chồng nhau.
 5. Chọn **DORI**, **Rủi ro**, hoặc **Tắt lớp phủ** phía trên canvas để đổi lớp phủ.
    Chọn cọ `W 5`, `W 3`, `W 1` ở thanh công cụ bên trái, rồi kéo trên sơ đồ để ghi đè trọng số. Nét cọ được
    lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới. Heatmap rủi ro dùng
    thang đơn sắc theo độ ưu tiên; lưới nhỏ hơn 0.5 m ẩn số, ở 0.5 m hiện mọi W, lưới lớn hơn chỉ hiện W ≥ 2.
    Chú giải bên dưới sơ đồ lọc Thấp/Vừa/Cao.
-6. Chọn ngân sách **Số camera** (1–20), rồi bấm **Tối ưu vị trí** để nhận vị trí đề xuất. Mở menu mũi tên cạnh nút để chọn
-   **Tối ưu … camera hiện có** hoặc **Giảm camera theo KPI (Greedy)**. Chế độ giảm camera lần lượt đánh giá các tiền tố của
-   phương án Greedy, dừng ở số camera ít nhất đạt cả hai KPI. Cấu hình FOV, độ phân giải,
-   tầm xa, chiều cao và model được giữ theo thứ tự camera đã nhập; vị trí và hướng được tối ưu
-   lại. Nút **Hủy** dừng tác vụ đang tính. Nếu chỉnh mặt bằng trong lúc tối ưu, ứng dụng
-   yêu cầu tính lại theo cấu hình mới. Nếu không đạt KPI với số camera hiện có, ứng dụng giữ toàn bộ phương án tốt nhất và
-   thông báo tỷ lệ thực tế trên Scorecard/toast.
+6. Trong **Trần nhà & vị trí lắp**, chọn **Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**,
+   rồi chọn **Greedy + Local Search** hoặc **Greedy (đối chứng)**. Nhập số camera 1–20
+   vào **Số camera muốn bố trí** và bấm **Tối ưu số camera đã nhập**. Các lệnh tối ưu
+   số camera hiện có và giảm số camera theo KPI vẫn có trong menu tối ưu.
+   Bộ tối ưu giữ các thông số quang học của từng profile, đồng thời tìm lại vị trí, kiểu
+   lắp, pan và tilt theo phạm vi cho phép. Camera tường giữ chiều cao trong giới hạn trần;
+   camera trần dùng chiều cao trần trừ khoảng hạ. Bảng kết quả cho biết điểm Greedy,
+   điểm sau Local Search, số ứng viên và số lần thay camera giúp tăng điểm.
+   Lệnh giảm camera chọn tiền tố ngắn nhất đạt Đỏ 95% và Vàng 80% trong phương án tìm được;
+   không chứng minh số camera tối thiểu toàn cục. Nếu chưa đạt KPI, ứng dụng giữ phương án
+   đủ ngân sách tìm được và báo tỷ lệ thực tế. **Hủy** dừng tác vụ; chỉnh mặt bằng trong lúc
+   tối ưu làm kết quả cũ không còn được áp dụng.
 7. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ. Nút **Vừa khung**,
    **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas; giữ `Alt` khi cuộn
    để xoay camera/vật thể đang chọn.
@@ -56,8 +62,12 @@ dưới sơ đồ; kéo nền trống để pan khi phóng lớn.
   (3840 px ngang), hoặc độ phân giải ngang tùy chỉnh. PPM dùng trực tiếp số pixel ngang.
 - **Góc xoay / pan:** hướng trục quang học trên mặt bằng; 0° hướng +X, tăng theo chiều kim đồng hồ.
 - **Góc quay / FOV:** độ rộng góc nhìn, đơn vị độ.
-- **Tầm xa:** giới hạn khoảng cách sàn còn được tính trong mô hình.
-- **Chiều cao:** cao độ camera so với sàn; dùng để tính khoảng cách đến mặt phẳng mặt người.
+- **Tầm xa:** giới hạn khoảng cách 3D từ ống kính tới điểm đánh giá.
+- **Kiểu lắp:** gắn tường hoặc gắn trần; ảnh hưởng cách kéo camera và tính cao độ.
+- **Chiều cao:** cao độ ống kính so với sàn. Camera tường từ 1,8 m tới thấp hơn trần 0,3 m.
+  Camera trần được tính từ chiều cao trần trừ **Khoảng hạ từ trần**, không nhập cao độ độc lập.
+- **Góc chúc xuống:** 0–90°; mặc định 20° cho camera tường, 45° cho camera trần. Pan,
+  góc chúc và FOV ngang/dọc cùng quyết định vùng nhìn khi tính DORI và tối ưu.
 - **Điểm đánh giá trên người:** chọn mặt, ngực hoặc thắt lưng trong Inspector để tính heatmap
   và tối ưu camera. Cửa sổ của hình người luôn hiển thị riêng DORI theo bốn vùng cơ thể.
 - **Vùng trọng yếu:** mỗi POS/cửa mặc định có `(Wmax=5, r0=1 m, R=2.5 m)`; mỗi kệ có
@@ -91,8 +101,29 @@ của sơ đồ, không làm thay đổi kích thước phòng tính bằng mét
 | `C` | Thêm camera |
 | `R` | Xoay đối tượng đang chọn 15° |
 | `Delete` / `Backspace` | Xóa đối tượng đang chọn |
-| `1` / `2` / `3` | Chọn layout mẫu |
-| Cuộn chuột | Xoay đối tượng đang chọn 15° |
+| `1`–`8` | Chọn layout mẫu |
+| `Alt` + cuộn chuột | Xoay đối tượng đang chọn 15° |
+
+## Bố trí camera trần trong 3D
+
+1. Đặt **Chiều cao trần (m)** trong bảng **Trần nhà & vị trí lắp**; mặc định 3,2 m,
+   phạm vi 2,4–6 m. Nếu có vật thể cao hơn trần mới hoặc camera bị vướng, ứng dụng yêu cầu
+   chỉnh vật thể/vị trí trước. Thay chiều cao trần cập nhật các camera theo kiểu lắp của chúng.
+2. Chuyển **3D**, chọn **Camera trần**, rồi nhấp vào lưới để lắp. Vị trí cần nằm trong
+   đường bao, có khoảng trống với tường và vật thể cao. Không thể đặt trùng camera đã có.
+3. Chọn camera để sửa kiểu lắp, pan, góc chúc và khoảng hạ từ trần trong bảng thông tin.
+   Khoảng hạ 0,15–1 m, đồng thời giữ ống kính cao ít nhất 1,8 m. Đổi camera tường sang
+   camera trần sẽ chọn vị trí hợp lệ trong phòng nếu điểm tường cũ không phù hợp.
+4. Chọn **Di chuyển vật thể**, kéo camera trần đến vị trí mới rồi thả để áp dụng. Bật/tắt
+   **Lưới trần** khi cần tham chiếu; `Esc` kết thúc đặt hoặc hủy thao tác kéo đang diễn ra.
+5. Chọn **Xem từ camera** hoặc nhấp đúp camera để xem POV. Tổng thể ẩn trần, POV hiện trần.
+   **Vùng quan sát** chỉ hiện các bề mặt camera nhìn thấy, còn phần khuất là màu đen;
+   chế độ này tạm dừng công cụ chỉnh sửa trên mô hình.
+
+Ảnh POV và Vùng quan sát mô phỏng pixel theo PPM, tự điều chỉnh theo độ phân giải,
+FOV, khoảng cách và mức phóng đại trên màn hình. Không có thanh chọn độ mờ.
+Lớp DORI/KPI lấy mẫu tại độ cao mục tiêu. Người trong mô hình che khuất ở phần hình ảnh 3D;
+hiện chưa ảnh hưởng heatmap/KPI hoặc phương án tối ưu, và chưa mô phỏng hướng mặt.
 
 ## Lưu ý về dữ liệu
 

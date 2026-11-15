@@ -55,4 +55,18 @@ describe('3D floor dragging', () => {
     expect(onInteraction).not.toHaveBeenCalled();
     expect(onMove).not.toHaveBeenCalled();
   });
+  it('drags a ceiling model on its elevated plane so an angled view has no floor parallax', () => {
+    const onMove = vi.fn();
+    const target = { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn(), hasPointerCapture: () => true };
+    act(() => { renderer = create(<DraggableObject3D center={[2, 3]} planeHeight={3} selection={{ kind: 'cam', id: 'C' }} enabled onSelect={vi.fn()} onMove={onMove} onInteraction={vi.fn()}><mesh /></DraggableObject3D>); });
+    const handlers = renderer.root.findByType('group' as any).props;
+    const angled = (destination: Vector3) => ({ button: 0, pointerId: 7, target, stopPropagation: vi.fn(), ray: new Ray(new Vector3(0, 10, 0), destination.clone().sub(new Vector3(0, 10, 0)).normalize()) });
+    act(() => handlers.onPointerDown(angled(new Vector3(2, 3, 3))));
+    act(() => handlers.onPointerMove(angled(new Vector3(4, 3, 5))));
+    act(() => handlers.onPointerUp());
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove.mock.calls[0][0]).toBeCloseTo(4);
+    expect(onMove.mock.calls[0][1]).toBeCloseTo(5);
+  });
+
 });

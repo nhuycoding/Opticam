@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type ShelfRiskCategory, type Fixture, type TargetHeight } from '../types';
 import type { Selection, Segment } from './canvas/shared';
 import { AREA_MAX, AREA_MIN } from '../core/editor';
-import { CAMERA_QUALITY_PRESETS, cameraQualityForResolution, cameraProjection, type CameraQualityId } from '../core/camera';
+import { CAMERA_QUALITY_PRESETS, cameraQualityForResolution, cameraProjection, cameraMount, ceilingHeightFor, type CameraQualityId } from '../core/camera';
 import { RISK_DEFAULTS, SHELF_RISK_PROFILES } from '../core/optics';
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
   onTargetHeight: (height: TargetHeight) => void;
   onGrid: (gridM: number) => void;
   onObs: (id: string, patch: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR' | 'fixture'>>) => void;
-  onCam: (id: string, patch: Partial<Pick<Camera, 'fov' | 'res' | 'height' | 'pan' | 'range' | 'model' | 'tilt' | 'vfov'>>) => void;
+  onCam: (id: string, patch: Partial<Camera>) => void;
   onRoom: (w: number, h: number) => void; onScale: (ppm: number) => void; onCalibrate: (realM: number) => void;
 }
 function NumberInput({ value, min, max, step, onCommit, style }: {
@@ -174,6 +174,7 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
         <label className="field">Model / tên camera
           <input value={cam.model ?? ''} placeholder="Ví dụ: OptiCam IP 4MP" onChange={(e) => onCam(cam.id, { model: e.target.value })} />
         </label>
+        <label className="field">Kiểu lắp đặt<select aria-label="Kiểu lắp đặt camera" value={cameraMount(cam)} onChange={event => onCam(cam.id, { mount: event.target.value as Camera['mount'] })}><option value="wall">Gắn tường</option><option value="ceiling">Gắn trần</option></select></label>
         <div className="row">
           <label className="field">Chất lượng hình ảnh
             <select
@@ -197,15 +198,18 @@ export function Inspector({ mode = 'room', layout: L, sel, measure, onSelect, on
         </div>
         <div className="row">
           <Num label="Tầm xa (m)" value={cam.range} min={1} max={30} step={0.5} onChange={(v) => onCam(cam.id, { range: v })} />
-          <Num label="Cao (m)" value={cam.height} min={1.8} max={4} step={0.1} onChange={(v) => onCam(cam.id, { height: v })} />
+          {cameraMount(cam) === 'ceiling' ? <>
+            <Num label="Bộ gá dưới trần (m)" value={cam.ceilingDrop ?? .15} min={.15} max={Math.min(1, ceilingHeightFor(L) - 1.8)} step={.05} onChange={ceilingDrop => onCam(cam.id, { ceilingDrop })} />
+            <p className="muted small">Ống kính cao {cam.height.toFixed(2)} m · trần {ceilingHeightFor(L)} m</p>
+          </> : <Num label="Cao (m)" value={cam.height} min={1.8} max={ceilingHeightFor(L) - .3} step={0.1} onChange={(v) => onCam(cam.id, { height: v })} />}
         </div>
         <details className="inspector-settings">
-          <summary>Góc nhìn camera trong 3D</summary>
+          <summary>Hướng nhìn & trường nhìn 3D</summary>
           <div className="inspector-settings-content">
-            <Num label="Góc chúc xuống (°)" value={cameraProjection(cam).tilt} min={0} max={85} step={1} onChange={tilt => onCam(cam.id, { tilt })} />
+            <Num label="Góc chúc xuống (°)" value={cameraProjection(cam).tilt} min={0} max={90} step={1} onChange={tilt => onCam(cam.id, { tilt })} />
             <Num label="Trường nhìn dọc (°)" value={Math.round(cameraProjection(cam).vfov * 10) / 10} min={10} max={120} step={1} onChange={vfov => onCam(cam.id, { vfov })} />
             <button onClick={() => onCam(cam.id, { vfov: undefined })}>Tự tính FOV dọc theo 16:9</button>
-            <p className="muted small">Các thông số này điều khiển góc xem phối cảnh 3D. Phân tích DORI dùng FOV ngang và độ cao mục tiêu trên mặt bằng.</p>
+            <p className="muted small">Góc chúc, FOV ngang và dọc được dùng trong cả phân tích DORI, tối ưu và góc xem 3D. PPM được đánh giá tại độ cao mục tiêu đã chọn.</p>
           </div>
         </details>
       </>}

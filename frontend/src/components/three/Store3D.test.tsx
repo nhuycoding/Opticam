@@ -10,7 +10,7 @@ vi.mock('@react-three/fiber', () => ({
 }));
 vi.mock('./StoreScene', () => ({ StoreScene: () => null }));
 let renderer: ReactTestRenderer;
-beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); });
+beforeEach(() => { vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() }); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); });
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals(); });
 
 const CAMERA = { id: 'CAM-01', x: 0, y: 0, pan: 45, height: 2.4, fov: 85, res: 2560, range: 12 };
@@ -46,4 +46,17 @@ describe('3D observation view controls', () => {
     act(() => renderer.update(<Store3D {...p} />));
     expect(renderer.root.findByType(StoreScene).props.observationView).toBe(true);
   });
+  it('activates ceiling placement with a grid, and cancels placement for read-only or observation modes', () => {
+    const p = { ...props(), onAddCamera: vi.fn() };
+    act(() => { renderer = create(<Store3D {...p} />); });
+    act(() => buttonWith(' Camera trần').props.onClick());
+    expect(renderer.root.findByType(StoreScene).props.editMode).toBe('ceiling');
+    expect(renderer.root.findByType(StoreScene).props.showCeilingGrid).toBe(true);
+    act(() => buttonWith(' Vùng quan sát').props.onClick());
+    expect(renderer.root.findByType(StoreScene).props.editMode).toBe('orbit');
+    act(() => buttonWith(' Vùng quan sát').props.onClick());
+    act(() => renderer.update(<Store3D {...p} readOnly />));
+    expect(buttonWith(' Camera trần').props.disabled).toBe(true);
+  });
+
 });

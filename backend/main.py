@@ -20,10 +20,10 @@ from pydantic import BaseModel, Field, root_validator, validator, conint
 
 if __package__:
     from .footprint import validate_polygon, boundary_anchors, point_in_floor
-    from .greedy_optimizer import OptiCamGreedy, camera_ppm
+    from .greedy_optimizer import OptiCamGreedy, camera_ppm, _distance_to_obstacle
 else:
     from footprint import validate_polygon, boundary_anchors, point_in_floor
-    from greedy_optimizer import OptiCamGreedy, camera_ppm
+    from greedy_optimizer import OptiCamGreedy, camera_ppm, _distance_to_obstacle
 
 app = FastAPI(title="OptiCam Backend API", version="1.0")
 app.add_middleware(
@@ -67,8 +67,10 @@ class CameraProfile(FiniteModel):
     fov: float = Field(default=85, ge=30, le=140)
     res: float = Field(default=2560, ge=640, le=7680)
     range: float = Field(default=10, ge=1, le=30)
-    height: float = Field(default=2.4, ge=1.8, le=4)
-    tilt: float | None = Field(default=None, ge=0, le=85)
+    height: float = Field(default=2.4, ge=1.8, le=6)
+    ceilingDrop: float = Field(default=0.15, ge=0.15, le=1)
+    mount: Literal["wall", "ceiling"] = "wall"
+    tilt: float | None = Field(default=None, ge=0, le=90)
     vfov: float | None = Field(default=None, ge=10, le=120)
     model: str | None = "Dome IP 4MP (2560px, ống kính 2.8mm)"
 
@@ -129,6 +131,11 @@ class RiskStroke(FiniteModel):
     weight: float = Field(ge=1, le=5)
 
 
+class OptimizationSettings(FiniteModel):
+    algorithm: Literal["greedy", "hybrid"] = "hybrid"
+    mounts: Literal["wall", "mixed", "ceiling"] = "mixed"
+
+
 class LayoutData(FiniteModel):
     version: str = "1.0"
     name: str = "Layout"
@@ -137,6 +144,8 @@ class LayoutData(FiniteModel):
     gridM: float = Field(default=0.5, ge=0.1, le=2)
     floorPolygon: list[tuple[float, float]] | None = Field(default=None, min_items=3, max_items=32)
     targetHeight: float = Field(default=1.6, ge=0.5, le=2)
+    ceilingHeight: float = Field(default=3.2, ge=2.4, le=6)
+    optimization: OptimizationSettings = Field(default_factory=OptimizationSettings)
     obstacles: list[Obstacle] = Field(default_factory=list, max_items=500)
     risk: dict[str, float] = Field(default_factory=dict)
     riskStrokes: list[RiskStroke] = Field(default_factory=list, max_items=50000)
@@ -168,6 +177,18 @@ class LayoutData(FiniteModel):
         validate_polygon(polygon, width, height)
         for index, camera in enumerate(values.get("cameras", [])):
             camera["id"] = camera["id"] or f"CAM-{index + 1:02}"
+            ceiling = values.get("ceilingHeight", 3.2)
+            if camera.get("mount") == "ceiling":
+                camera["ceilingDrop"] = min(camera.get("ceilingDrop", 0.15), ceiling - 1.8)
+                camera["height"] = ceiling - camera["ceilingDrop"]
+            else:
+                camera["height"] = min(camera["height"], ceiling - 0.3)
+            if camera.get("mount") == "ceiling":
+                polygon_outline = polygon or [(0, 0), (width, 0), (width, height), (0, height)]
+                if not all(point_in_floor((camera["x"] + dx, camera["y"] + dy), polygon_outline) for dx, dy in [(0,0),(.12,0),(-.12,0),(0,.12),(0,-.12)]):
+                    raise ValueError("ceiling camera needs clearance inside the room")
+                if any(o.type != "entrance" and o.elev >= camera["height"] - .08 and _distance_to_obstacle((camera["x"], camera["y"]), o) < .12 for o in values.get("obstacles", [])):
+                    raise ValueError("ceiling camera intersects a tall fixture")
             if not 0 <= camera["x"] <= width or not 0 <= camera["y"] <= height or (polygon and not point_in_floor((camera["x"], camera["y"]), polygon)):
                 raise ValueError("camera coordinates must be inside the room")
         ids = [camera["id"] for camera in values.get("cameras", []) if camera["id"]]
@@ -184,7 +205,7 @@ class GridData(FiniteModel):
 
 class OptimizeRequest(FiniteModel):
     cameraBudgetK: conint(strict=True, ge=1, le=20) = 3
-    cameraProfiles: list[CameraProfile] = Field(default_factory=list)
+    cameraProfiles: list[CameraProfile] = Field(default_factory=list, max_items=20)
     layout: LayoutData
     grid: GridData
     riskMatrix: list[list[float]]
@@ -222,18 +243,51 @@ class ProjectExportRequest(FiniteModel):
 def _wall_anchors(width: float, height: float, step: float, floor_polygon=None) -> list[tuple[float, float]]:
     if floor_polygon:
         return boundary_anchors(floor_polygon, step)
-    points: set[tuple[float, float]] = set()
-    x_steps = max(1, math.ceil(width / step))
-    y_steps = max(1, math.ceil(height / step))
-    for i in range(x_steps + 1):
-        x = width * i / x_steps
-        points.add((round(x, 6), 0.0))
-        points.add((round(x, 6), round(height, 6)))
-    for i in range(y_steps + 1):
-        y = height * i / y_steps
-        points.add((0.0, round(y, 6)))
-        points.add((round(width, 6), round(y, 6)))
-    return sorted(points)
+    points = {}
+    def add(x, y):
+        x, y = round(x, 2), round(y, 2)
+        points[(x, y)] = (x, y)
+    for i in range(math.floor(width / step) + 1):
+        add(i * step, 0)
+        add(i * step, height)
+    for j in range(math.floor(height / step) + 1):
+        add(0, j * step)
+        add(width, j * step)
+    add(width, 0)
+    add(width, height)
+    add(0, height)
+    return list(points.values())
+
+
+def _camera_configurations(layout, profile, spacing):
+    configurations = []
+    mode = layout.optimization.mounts
+    wall_tilt = profile.get("tilt", 20)
+    wall_tilts = list(dict.fromkeys([wall_tilt, max(0, wall_tilt - 15), min(90, wall_tilt + 15)]))
+    ceiling_tilts = list(dict.fromkeys([35, 55, 75, 90] + ([profile["tilt"]] if "tilt" in profile else [])))
+    def add(x, y, mount, tilts):
+        drop = min(profile.get("ceilingDrop", 0.15), layout.ceilingHeight - 1.8)
+        height = layout.ceilingHeight - drop if mount == "ceiling" else min(profile["height"], layout.ceilingHeight - 0.3)
+        if any(o.type != "entrance" and o.elev >= height - 0.08 and _distance_to_obstacle((x, y), o) < 0.12 for o in layout.obstacles):
+            return
+        if mount == "ceiling":
+            polygon = layout.floorPolygon or [(0, 0), (layout.widthM, 0), (layout.widthM, layout.heightM), (0, layout.heightM)]
+            if not all(point_in_floor((x + dx, y + dy), polygon) for dx, dy in [(0,0),(.12,0),(-.12,0),(0,.12),(0,-.12)]):
+                return
+        for tilt in tilts:
+            for pan in range(0, 360, 30):
+                configurations.append({**profile, "x": x, "y": y, "pan": float(pan), "tilt": tilt, "mount": mount, "height": height, **({"ceilingDrop": drop} if mount == "ceiling" else {})})
+    if mode != "ceiling":
+        for x, y in _wall_anchors(layout.widthM, layout.heightM, spacing, layout.floorPolygon):
+            add(x, y, "wall", wall_tilts)
+    if mode != "wall":
+        nx, ny = max(1, math.ceil(layout.widthM / max(1, spacing))), max(1, math.ceil(layout.heightM / max(1, spacing)))
+        for ix in range(nx):
+            for iy in range(ny):
+                x, y = layout.widthM * (ix + 0.5) / nx, layout.heightM * (iy + 0.5) / ny
+                if not layout.floorPolygon or point_in_floor((x, y), layout.floorPolygon):
+                    add(x, y, "ceiling", ceiling_tilts)
+    return configurations
 
 
 def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
@@ -252,30 +306,29 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
     cells = optimizer.generate_grid(grid, request.riskMatrix, request.blockedMatrix)
 
     anchor_step = max(grid, 0.5)
-    anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step, layout.floorPolygon)
-    while cells and anchor_step < max(layout.widthM, layout.heightM) and len(anchors) * 24 * len(cells) > MAX_CANDIDATE_CELL_EVALUATIONS:
-        anchor_step *= 2
-        anchors = _wall_anchors(layout.widthM, layout.heightM, anchor_step, layout.floorPolygon)
-
-    candidate_groups: list[list[dict[str, Any]]] = []
-    candidate_group_cache: dict[str, list[dict[str, Any]]] = {}
-    for spec in profiles:
-        profile_key = json.dumps(spec, sort_keys=True)
-        if profile_key not in candidate_group_cache:
-            candidates: list[dict[str, Any]] = []
-            for x, y in anchors:
-                for pan in range(0, 360, 15):
-                    candidates.append({**spec, "x": x, "y": y, "pan": float(pan)})
-            candidate_group_cache[profile_key] = candidates
-        candidates = candidate_group_cache[profile_key]
-        candidate_groups.append(candidates)
-
+    profile_cache = {}
+    unique = len({json.dumps({k: v for k, v in p.items() if k != "mount"}, sort_keys=True) for p in profiles}) or 1
+    cap = max(1, min(math.floor(12_000 / unique), math.floor(1_500_000 / unique / max(1, len(cells)))))
+    candidate_groups = []
+    for profile in profiles:
+        spec = {k: v for k, v in profile.items() if k != "mount"}
+        key = json.dumps(spec, sort_keys=True)
+        if key not in profile_cache:
+            step = max(grid, 0.5)
+            candidates = _camera_configurations(layout, spec, step) if cells else []
+            while len(candidates) > cap and step < max(layout.widthM, layout.heightM) * 2:
+                step *= 2
+                candidates = _camera_configurations(layout, spec, step)
+            if len(candidates) > cap:
+                candidates = [candidates[math.floor(i * len(candidates) / cap)] for i in range(cap)]
+            anchor_step = max(anchor_step, step)
+            profile_cache[key] = candidates
+        candidate_groups.append(profile_cache[key])
     selected, coverage = optimizer.run_greedy(
-        candidate_groups[0] if candidate_groups else [],
-        cells,
-        request.cameraBudgetK,
-        camera_candidate_groups=candidate_groups,
+        candidate_groups[0] if candidate_groups else [], cells, request.cameraBudgetK,
+        camera_candidate_groups=candidate_groups, algorithm=layout.optimization.algorithm,
     )
+    diagnostics = {**coverage["diagnostics"], "ms": (time.perf_counter() - started) * 1000}
     cameras = [
         {
             "id": f"CAM-{index + 1:02}",
@@ -285,6 +338,7 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
     ]
     return {
         "cameras": cameras,
+        "diagnostics": diagnostics,
         "metrics": {
             "weighted_coverage_pct": coverage["weighted_coverage_pct"],
             "area_coverage_pct": coverage["area_coverage_pct"],
@@ -367,6 +421,8 @@ def generate_bom_data(layout: LayoutData) -> dict[str, Any]:
                 "height": float(camera.get("height", 2.4)),
                 "pan": float(camera.get("pan", camera.get("pan_angle", 0))),
                 "fov": float(camera.get("fov", 85)),
+                "mount": camera.get("mount", "wall"),
+                "tilt": camera.get("tilt", 45 if camera.get("mount") == "ceiling" else 20),
                 "target": str(camera.get("target", "Giám sát bổ sung")),
                 "model": str(camera.get("model", "Dome IP 4MP")),
                 "cableM": cable_m,
@@ -392,14 +448,14 @@ def export_bom(
     if format == "json":
         return bom
 
-    headers = ["Mã camera", "X (m)", "Y (m)", "Cao độ (m)", "Góc xoay (độ)",
+    headers = ["Mã camera", "X (m)", "Y (m)", "Cao độ (m)", "Kiểu lắp", "Góc chúc (độ)", "Góc xoay (độ)",
                "FOV (độ)", "Mục tiêu", "Model", "Cáp dự kiến (m)"]
     def spreadsheet_value(value):
         if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r", "\n")):
             return "'" + value
         return value
 
-    rows = [[spreadsheet_value(row[key]) for key in ("id", "x", "y", "height", "pan", "fov", "target", "model", "cableM")]
+    rows = [[spreadsheet_value(row[key]) for key in ("id", "x", "y", "height", "mount", "tilt", "pan", "fov", "target", "model", "cableM")]
             for row in bom["rows"]]
     if format == "csv":
         stream = io.StringIO()
@@ -407,7 +463,7 @@ def export_bom(
         writer = csv.writer(stream)
         writer.writerow(headers)
         writer.writerows(rows)
-        writer.writerow(["TỔNG", "", "", "", "", "", "", f'{bom["totalCameras"]} camera', bom["totalCableM"]])
+        writer.writerow(["TỔNG", "", "", "", "", "", "", "", "", f'{bom["totalCameras"]} camera', bom["totalCableM"]])
         stream.seek(0)
         return StreamingResponse(
             iter([stream.getvalue()]),
@@ -421,7 +477,7 @@ def export_bom(
     sheet.append(headers)
     for row in rows:
         sheet.append(row)
-    sheet.append(["TỔNG", "", "", "", "", "", "", f'{bom["totalCameras"]} camera', bom["totalCableM"]])
+    sheet.append(["TỔNG", "", "", "", "", "", "", "", "", f'{bom["totalCameras"]} camera', bom["totalCableM"]])
     output = io.BytesIO()
     workbook.save(output)
     output.seek(0)
@@ -453,6 +509,9 @@ def _heatmap(layout: LayoutData) -> dict[str, Any]:
                     "res": float(source.get("res", 2560)),
                     "height": float(source.get("height", 2.4)),
                     "range": float(source.get("range", 10)),
+                    "mount": source.get("mount", "wall"),
+                    "tilt": source.get("tilt", 45 if source.get("mount") == "ceiling" else 20),
+                    **({"vfov": source["vfov"]} if source.get("vfov") is not None else {}),
                 }
                 ppm = max(ppm, camera_ppm(camera, (x, y), obstacles, layout.targetHeight, layout.floorPolygon))
             tier = next(

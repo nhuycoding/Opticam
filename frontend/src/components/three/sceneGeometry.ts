@@ -2,7 +2,7 @@ import { Shape, Vector3 } from 'three';
 import type { Camera, Layout, Obstacle } from '../../types';
 import { floorOutline, pointInFloor, projectToSegment } from '../../core/footprint';
 import { obsPoly, type Pt } from '../../core/geometry';
-import { cameraProjection } from '../../core/camera';
+import { cameraMount, cameraProjection, ceilingHeightFor } from '../../core/camera';
 
 export function floorShape(layout: Layout) {
   // The editor's (x, y) maps to Three's (x, z), with +Y pointing upward.
@@ -69,11 +69,30 @@ export function wallSegments(layout: Layout): WallSegment[] {
 export const CAMERA_BODY_CLEARANCE = 0.34;
 export const CAMERA_LENS_OFFSET = 0.216;
 
+/** Explicit axes also preserve pan when the camera points straight down. */
+export function cameraBasis(camera: Camera) {
+  const pan = camera.pan * Math.PI / 180, pitch = cameraProjection(camera).tilt * Math.PI / 180;
+  return {
+    direction: new Vector3(Math.cos(pan) * Math.cos(pitch), -Math.sin(pitch), Math.sin(pan) * Math.cos(pitch)),
+    right: new Vector3(-Math.sin(pan), 0, Math.cos(pan)),
+    up: new Vector3(Math.cos(pan) * Math.sin(pitch), Math.cos(pitch), Math.sin(pan) * Math.sin(pitch))
+  };
+}
+
 /** The body stays clear of every wall while its lens can swivel independently. */
 export function cameraAssemblyPose(camera: Camera, layout: Layout) {
-  const { tilt } = cameraProjection(camera);
-  const pan = camera.pan * Math.PI / 180, pitch = tilt * Math.PI / 180;
-  const direction = new Vector3(Math.cos(pan) * Math.cos(pitch), -Math.sin(pitch), Math.sin(pan) * Math.cos(pitch));
+  const { direction } = cameraBasis(camera);
+  if (cameraMount(camera) === 'ceiling') {
+    // The saved ceiling position is the optical centre, not a point on a wall.
+    // A compact housing stays beneath even the shortest supported pendant.
+    const position = new Vector3(camera.x, camera.height, camera.y);
+    const bodyPosition = position.clone().addScaledVector(direction, -CAMERA_LENS_OFFSET * 0.38);
+    return {
+      bodyPosition, position, direction, bodyScale: 0.38,
+      mountDirection: new Vector3(0, 1, 0),
+      mountPosition: new Vector3(bodyPosition.x, ceilingHeightFor(layout) - 0.015, bodyPosition.z)
+    };
+  }
   const outline = floorOutline(layout);
   const area = outline.reduce((sum, a, i) => {
     const b = outline[(i + 1) % outline.length];
@@ -135,7 +154,7 @@ export function cameraAssemblyPose(camera: Camera, layout: Layout) {
   const mountPosition = wallMounted
     ? new Vector3(mountProjection.point[0], bodyPosition.y + 0.06, mountProjection.point[1]).addScaledVector(mountDirection, 0.075)
     : bodyPosition.clone().add(new Vector3(0, 0.26, 0));
-  return { bodyPosition, position, direction, mountDirection, mountPosition };
+  return { bodyPosition, position, direction, mountDirection, mountPosition, bodyScale: 1 };
 }
 
 export function cameraPose(camera: Camera, layout: Layout) {

@@ -3,7 +3,6 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Plane, Vector3 } from 'three';
 import type { Selection } from '../canvas/shared';
 
-const FLOOR = new Plane(new Vector3(0, 1, 0), 0);
 type CaptureTarget = {
   setPointerCapture: (id: number) => void;
   releasePointerCapture: (id: number) => void;
@@ -11,12 +10,13 @@ type CaptureTarget = {
 };
 
 /** Preview locally while dragging, then submit one validated editor change on drop. */
-export function DraggableObject3D({ children, center, selection, enabled, onSelect, onMove, onInteraction }: {
-  children: ReactNode; center: [number, number]; selection: Selection; enabled: boolean;
+export function DraggableObject3D({ children, center, selection, enabled, onSelect, onMove, onInteraction, planeHeight = 0 }: {
+  planeHeight?: number; children: ReactNode; center: [number, number]; selection: Selection; enabled: boolean;
   onSelect: (selection: Selection) => void;
   onMove: (x: number, y: number) => void;
   onInteraction: (active: boolean) => void;
 }) {
+  const plane = new Plane(new Vector3(0, 1, 0), -planeHeight);
   const drag = useRef<{
     offsetX: number; offsetY: number; centerX: number; centerY: number;
     nextX: number; nextY: number; moved: boolean; pointer: number; target: CaptureTarget;
@@ -45,14 +45,14 @@ export function DraggableObject3D({ children, center, selection, enabled, onSele
       window.removeEventListener('keydown', key);
       cancel();
     };
-  }, [enabled, onInteraction]);
+  }, [enabled, onInteraction, planeHeight]);
   useEffect(() => {
     const current = drag.current;
     if (current && (center[0] !== current.centerX || center[1] !== current.centerY)) finish(true);
   }, [center[0], center[1]]);
 
   const start = (event: ThreeEvent<PointerEvent>) => {
-    if (!enabled || event.button !== 0 || !event.ray.intersectPlane(FLOOR, point.current)) return;
+    if (!enabled || event.button !== 0 || !event.ray.intersectPlane(plane, point.current)) return;
     event.stopPropagation();
     const target = event.target as unknown as CaptureTarget;
     drag.current = {
@@ -66,7 +66,7 @@ export function DraggableObject3D({ children, center, selection, enabled, onSele
   };
   const move = (event: ThreeEvent<PointerEvent>) => {
     const current = drag.current;
-    if (!current || !enabled || !event.ray.intersectPlane(FLOOR, point.current)) return;
+    if (!current || !enabled || !event.ray.intersectPlane(plane, point.current)) return;
     event.stopPropagation();
     current.nextX = point.current.x + current.offsetX;
     current.nextY = point.current.z + current.offsetY;

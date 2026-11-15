@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Camera as CameraIcon, Eye, Move, Plus, RotateCcw, Scan, ScanEye, PanelsTopLeft, UserRound } from 'lucide-react';
+import { Camera as CameraIcon, Eye, Move, Plus, RotateCcw, Scan, ScanEye, PanelsTopLeft, UserRound, Grid2X2 } from 'lucide-react';
 import type { Fixture, ObsType } from '../../types';
 import { cameraProjection } from '../../core/camera';
 import { StoreScene, type StoreSceneProps } from './StoreScene';
 import { SceneFailure } from './SceneBoundary';
 import './three-editor.css';
 
-type Props = Omit<StoreSceneProps, 'reset' | 'cutaway' | 'editMode' | 'observationView' | 'imageEffectSupported'> & { onOverview: () => void; onEditPlan: () => void };
+type Props = Omit<StoreSceneProps, 'reset' | 'cutaway' | 'editMode' | 'observationView' | 'imageEffectSupported' | 'showCeilingGrid'> & { onOverview: () => void; onEditPlan: () => void };
 
 const FURNITURE: { label: string; type: ObsType; fixture?: Fixture }[] = [
   { label: 'Kệ hai mặt', type: 'shelf', fixture: 'gondola' },
@@ -32,11 +32,16 @@ function ContextMonitor({ onLost }: { onLost: () => void }) {
 export default function Store3D(props: Props) {
   const [reset, setReset] = useState(0), [cutaway, setCutaway] = useState(true);
   const [contextLost, setContextLost] = useState(false);
-  const [editMode, setEditMode] = useState<'orbit' | 'move'>('orbit');
+  const [editMode, setEditMode] = useState<'orbit' | 'move' | 'ceiling'>('orbit');
+  const [showCeilingGrid, setShowCeilingGrid] = useState(false);
   const [observationView, setObservationView] = useState(false);
   const [imageEffectSupported, setImageEffectSupported] = useState(true);
   const [furniture, setFurniture] = useState(0);
   useEffect(() => { if (props.readOnly || props.cameraView || observationView) setEditMode('orbit'); }, [props.readOnly, props.cameraView, observationView]);
+  useEffect(() => {
+    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') setEditMode('orbit'); };
+    window.addEventListener('keydown', cancel); return () => window.removeEventListener('keydown', cancel);
+  }, []);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 640, height: 480 });
   useEffect(() => {
@@ -65,6 +70,8 @@ export default function Store3D(props: Props) {
         <button disabled={Boolean(props.cameraView) || !imageEffectSupported} className={combinedView ? 'on' : ''} aria-pressed={combinedView}
           title="Chỉ hiện các bề mặt 3D được ít nhất một camera quan sát, tính cả vật cản che khuất"
           onClick={() => setObservationView(value => !value)}><ScanEye size={14} /> Vùng quan sát</button>
+        <button disabled={Boolean(props.cameraView) || combinedView} className={showCeilingGrid ? 'on' : ''} aria-pressed={showCeilingGrid}
+          onClick={() => { setShowCeilingGrid(value => !value); if (showCeilingGrid && editMode === 'ceiling') setEditMode('orbit'); }} title="Hiện lưới vị trí lắp camera trên trần"><Grid2X2 size={14} /> Lưới trần</button>
         <button disabled={Boolean(props.cameraView)} aria-pressed={cutaway} title="Tự ẩn tường phía trước theo góc nhìn" onClick={() => setCutaway(value => !value)}><Eye size={14} /> Tường tự ẩn</button>
         <button disabled={Boolean(props.cameraView)} title="Đặt lại góc nhìn tổng thể" aria-label="Đặt lại góc nhìn 3D" onClick={() => setReset(value => value + 1)}><RotateCcw size={14} /></button>
       </div>
@@ -78,6 +85,9 @@ export default function Store3D(props: Props) {
         <button aria-pressed={editMode === 'move'} className={editMode === 'move' ? 'on' : ''} disabled={!canEdit} onClick={() => setEditMode('move')}><Move size={14} /> Di chuyển vật thể</button>
       </div>
       <div className="three-add-furniture">
+        <button aria-pressed={editMode === 'ceiling'} className={editMode === 'ceiling' ? 'on' : ''}
+          disabled={!canEdit || !props.onAddCamera || props.layout.cameras.length >= 20}
+          onClick={() => { setEditMode(mode => mode === 'ceiling' ? 'orbit' : 'ceiling'); setShowCeilingGrid(true); }}><CameraIcon size={14} /> Camera trần</button>
         <select aria-label="Nội thất cần thêm trong 3D" disabled={!canEdit || !props.onAddObstacle} value={furniture} onChange={event => setFurniture(Number(event.target.value))}>
           {FURNITURE.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}
         </select>
@@ -85,7 +95,7 @@ export default function Store3D(props: Props) {
         <button disabled={!canEdit || !props.onAddPerson} onClick={() => { props.onAddPerson?.(); setEditMode('move'); }}><UserRound size={14} /> Thêm người</button>
       </div>
     </div>}
-    <div className="three-stage" ref={viewportRef} role="region" style={{ cursor: canEdit && editMode === 'move' ? 'move' : props.cameraView ? 'default' : 'grab' }} aria-label={props.cameraView ? `Góc nhìn 3D từ ${props.cameraView.id}` : 'Mô hình 3D cửa hàng'}>
+    <div className="three-stage" ref={viewportRef} role="region" style={{ cursor: canEdit && editMode === 'ceiling' ? 'crosshair' : canEdit && editMode === 'move' ? 'move' : props.cameraView ? 'default' : 'grab' }} aria-label={props.cameraView ? `Góc nhìn 3D từ ${props.cameraView.id}` : 'Mô hình 3D cửa hàng'}>
       <div className="three-render-frame" style={{ width: frameWidth, height: frameHeight }}>
         {contextLost ? <SceneFailure onEditPlan={props.onEditPlan} /> :
           <Canvas frameloop="demand" dpr={[1, 1.75]} shadows={props.layout.obstacles.length <= 100}
@@ -94,13 +104,13 @@ export default function Store3D(props: Props) {
             gl={{ antialias: true, powerPreference: 'high-performance' }}
             fallback={<span>Mô hình không gian cửa hàng 3D</span>}>
             <ContextMonitor onLost={() => setContextLost(true)} />
-            <StoreScene {...props} reset={reset} cutaway={cutaway} editMode={canEdit ? editMode : 'orbit'} observationView={combinedView} imageEffectSupported={imageEffectSupported} />
+            <StoreScene {...props} showCeilingGrid={showCeilingGrid} reset={reset} cutaway={cutaway} editMode={canEdit ? editMode : 'orbit'} observationView={combinedView} imageEffectSupported={imageEffectSupported} />
           </Canvas>
         }
       </div>
       {!props.cameraView && <div className="three-orientation" aria-hidden="true"><Scan size={13} /><span>{combinedView ? 'Mô phỏng PPM · DORI (IEC 62676-4:2014)' : '1 m = 1 đơn vị'}</span></div>}
     </div>
     {props.cameraView ? <div className="three-view-status" aria-live="polite"><span><strong>{props.cameraView.id}</strong> · Mô phỏng góc nhìn</span><span>Cao {props.cameraView.height} m · Chúc {projection!.tilt}° · FOV {props.cameraView.fov}° × {projection!.vfov.toFixed(1)}°</span></div>
-      : <div className="three-view-status"><span>{canEdit && editMode === 'move' ? 'Kéo nội thất hoặc người để di chuyển trên sàn · Chuột phải để dịch góc nhìn' : 'Xoay bằng chuột trái · Di chuyển bằng chuột phải · Cuộn để thu phóng'}</span><span>{combinedView ? 'Chỉ hiện bề mặt camera nhìn thấy' : !imageEffectSupported ? 'Thiết bị chưa hỗ trợ hiệu ứng vùng quan sát' : 'Nhấp đúp camera để quan sát'}</span></div>}
+      : <div className="three-view-status"><span>{canEdit && editMode === 'ceiling' ? 'Nhấp vào lưới trần để lắp camera · Esc để kết thúc' : canEdit && editMode === 'move' ? 'Kéo nội thất, người hoặc camera trần để di chuyển · Esc để hủy kéo' : 'Xoay bằng chuột trái · Di chuyển bằng chuột phải · Cuộn để thu phóng'}</span><span>{combinedView ? 'Chỉ hiện bề mặt camera nhìn thấy' : !imageEffectSupported ? 'Thiết bị chưa hỗ trợ hiệu ứng vùng quan sát' : 'Nhấp đúp camera để quan sát'}</span></div>}
   </div>;
 }

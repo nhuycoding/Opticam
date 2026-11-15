@@ -173,7 +173,7 @@ export function CameraImageEffect({ layout, people, cameraView }: { layout: Layo
   useEffect(() => {
     if (pipeline.current) pipeline.current.dirty = true;
     invalidate();
-  }, [layout.cameras, layout.obstacles, layout.widthM, layout.heightM, layout.floorPolygon, people, cameraView, count, invalidate]);
+  }, [layout.cameras, layout.obstacles, layout.widthM, layout.heightM, layout.floorPolygon, layout.ceilingHeight, people, cameraView, count, invalidate]);
   useFrame(({ scene, camera }) => {
     if (!pipeline.current) { gl.render(scene, camera); return; }
     renderCameraImage(gl, scene, camera as PerspectiveCamera, pipeline.current, layout, cameraView);

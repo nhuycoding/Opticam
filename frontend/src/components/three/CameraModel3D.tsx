@@ -26,7 +26,7 @@ export const CameraModel3D = memo(function CameraModel3D({ camera, layout, selec
   onSelect: (selection: Selection) => void; onCameraView: (id: string) => void;
 }) {
   const pose = cameraAssemblyPose(camera, layout);
-  const armEnd = pose.bodyPosition.clone().add(new Vector3(0, 0.06, 0));
+  const armEnd = pose.bodyPosition.clone().add(new Vector3(0, 0.06 * pose.bodyScale, 0));
   const armVector = armEnd.clone().sub(pose.mountPosition);
   const armRotation = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), armVector.clone().normalize());
   const plateRotation = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), pose.mountDirection);
@@ -42,7 +42,7 @@ export const CameraModel3D = memo(function CameraModel3D({ camera, layout, selec
       <cylinderGeometry args={[0.022, 0.026, armVector.length(), 8]} /><meshStandardMaterial color="#829287" roughness={0.55} metalness={0.2} />
     </mesh>}
     <group position={pose.bodyPosition}>
-      <group rotation={[0, -camera.pan * Math.PI / 180, 0]}>
+      <group scale={pose.bodyScale} rotation={[0, -camera.pan * Math.PI / 180, 0]}>
         <group rotation={[0, 0, -cameraProjection(camera).tilt * Math.PI / 180]}>
           <Block size={[0.3, 0.16, 0.18]} color={selected ? '#d5b98f' : '#eeeee3'} roughness={0.48} />
           <Block size={[0.29, 0.014, 0.194]} at={[0.015, 0.087, 0]} color="#faf9ef" roughness={0.45} />

@@ -1,7 +1,7 @@
 import { Matrix4, PerspectiveCamera, Vector4 } from 'three';
 import type { Camera, Layout } from '../../types';
 import { cameraProjection } from '../../core/camera';
-import { cameraPose } from './sceneGeometry';
+import { cameraBasis, cameraPose } from './sceneGeometry';
 import { pixelsPerMeterAtDistance } from '../../core/optics';
 
 export const MAX_OBSERVATION_CAMERAS = 20;
@@ -17,6 +17,7 @@ export function cameraImageSettings(camera: Camera) {
 export function observationCamera(camera: Camera, layout: Layout) {
   const projection = cameraProjection(camera), pose = cameraPose(camera, layout);
   const lens = new PerspectiveCamera(projection.vfov, projection.aspect, 0.03, Math.max(0.04, camera.range));
+  lens.up.copy(cameraBasis(camera).up);
   lens.position.copy(pose.position);
   lens.lookAt(pose.position.clone().add(pose.direction));
   lens.updateMatrixWorld(true);

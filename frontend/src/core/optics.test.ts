@@ -4,7 +4,7 @@ import { snapAngle, snapToWall } from './geometry';
 import { assessPersonAt, buildZones, doriOf, evaluate, pixelsPerMeterAtDistance, ppmAt, riskBand, riskWeightAt } from './optics';
 import { bruteForce, buildCandidates, greedyPlace, minimumCamerasForTargets } from './optimizer';
 
-const cam = { id: 'c', x: 0, y: 3, pan: 0, fov: 90, res: 1920, range: 20, height: 1.6 };
+const cam = { id: 'c', x: 0, y: 3, pan: 0, tilt: 0, fov: 90, res: 1920, range: 20, height: 1.6 };
 
 describe('PPM / DORI', () => {
   it('shares the same nominal density with the 3D preview', () => {
@@ -92,7 +92,7 @@ describe('Hình học', () => {
 });
 describe('Solver', () => {
   it('uses each configured profile and defaults missing camera profiles', () => {
-    const l = withManualCams(PRESETS[0]), z = buildZones(l);
+    const l = { ...withManualCams(PRESETS[0]), ceilingHeight: 3.5, optimization: { algorithm: 'greedy' as const, mounts: 'wall' as const } }, z = buildZones(l);
     const cameraProfiles = [
       { fov: 70, res: 3840, range: 8, height: 3, model: 'Custom camera' },
       { fov: 60, res: 1920, range: 14, height: 2, model: 'Long-range camera' }
@@ -104,7 +104,7 @@ describe('Solver', () => {
     expect(optimized[2]).toMatchObject({ fov: 85, res: 2560, range: 10, height: 2.4 });
   });
   it('finds the shortest camera prefix meeting KPI and preserves configured camera profiles', () => {
-    const l = withManualCams(PRESETS[0]), z = buildZones(l);
+    const l = { ...withManualCams(PRESETS[0]), ceilingHeight: 3.5, optimization: { algorithm: 'greedy' as const, mounts: 'wall' as const } }, z = buildZones(l);
     const profiles = [
       { ...l.cameras[0], fov: 70, res: 3840, range: 8, height: 3, model: 'Custom 8MP' },
       { ...l.cameras[1], fov: 60, res: 1920, range: 14, height: 2, model: 'Custom long range' }
@@ -115,7 +115,7 @@ describe('Solver', () => {
     expect(result.cameras[0]).toMatchObject({ fov: 70, res: 3840, range: 8, height: 3, model: 'Custom 8MP' });
   });
   it('keeps all available optimized cameras and reports when KPI is unattainable', () => {
-    const l = withManualCams(PRESETS[0]), z = buildZones(l);
+    const l = { ...withManualCams(PRESETS[0]), ceilingHeight: 3.5, optimization: { algorithm: 'greedy' as const, mounts: 'wall' as const } }, z = buildZones(l);
     const profiles = l.cameras.slice(0, 2);
     const result = minimumCamerasForTargets(l, z, profiles, 101, 101);
     expect(result.metTargets).toBe(false);

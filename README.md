@@ -86,11 +86,14 @@ scripts/       Công cụ tạo lại layout mẫu
 
 ## Trạng thái và giới hạn
 
-- Frontend có Canvas tương tác, heatmap DORI/rủi ro, Greedy cục bộ, hiệu chỉnh camera,
-  BOM CSV và import/export bundle JSON.
-- Backend có Greedy API, lưu/nạp layout, xuất BOM JSON/CSV/XLSX và project bundle.
+- Frontend có Canvas 2.5D, mô hình 3D/POV, camera gắn tường hoặc trần, heatmap DORI/rủi ro,
+  Greedy và Greedy + Local Search chạy trên Web Worker, BOM CSV và dự án JSON.
+- Backend có API tối ưu Greedy/Hybrid, lưu/nạp layout, xuất BOM JSON/CSV/XLSX và project bundle.
   Các endpoint lưu/nạp và xuất báo cáo backend hiện chưa có nút gọi trực tiếp trên UI.
-- Mô hình PPM/DORI là xấp xỉ 2D; chưa tính méo ống kính, tilt, ánh sáng, người/vật cản động.
+- Phân tích lấy mẫu trên mặt phẳng tại độ cao mục tiêu, dùng góc nhìn và đường ngắm 3D
+  có xét pan, tilt, FOV ngang/dọc, tầm xa và chiều cao vật cản. Chưa tính méo ống kính,
+  ánh sáng, nén video, hướng mặt hoặc chuyển động. Người tĩnh che khuất trong hình 3D;
+  chưa tham gia phép tính heatmap/KPI và hàm mục tiêu tối ưu.
 - Kết quả nghiên cứu và các giả định định lượng được ghi trong [docs/RESEARCH.md](docs/RESEARCH.md);
   không xem tỷ lệ phủ mô phỏng là bảo đảm nhận diện thực tế.
 
@@ -107,7 +110,7 @@ Kéo chuột trái ở chế độ **Xoay góc nhìn**, chuột phải để di 
 góc nhìn 3D** đưa mô hình về khung tổng thể.
 
 Chọn **Xem từ camera**, nhấp đúp camera trên mô hình hoặc chọn camera trong bảng
-thông tin để xem phối cảnh. Mặc định camera chúc xuống 20°, FOV dọc suy ra từ FOV
+thông tin để xem phối cảnh. Mặc định camera tường chúc xuống 20°, camera trần 45°; FOV dọc suy ra từ FOV
 ngang theo tỷ lệ 16:9. Sửa hai giá trị này trong **Góc nhìn camera trong 3D** ở bảng
 thuộc tính camera của 2.5D. Khung xem giữ đúng FOV và tỷ lệ khi đổi kích thước màn hình.
 JSON và phương án tối ưu giữ lại các thông số này. **Tổng thể** quay về góc nhìn xoay tự do.
@@ -136,9 +139,34 @@ có và giảm số camera theo KPI.
 Mẫu **VN 05 · Cửa hàng giờ cao điểm** có bảy người ở quầy, lối kệ và khu hàng lạnh.
 Nút **Thêm người** trong 3D đặt người vào vị trí trống. Người được lưu trong dự án JSON.
 
-Góc nhìn 3D là mô phỏng hình học với nội thất giản lược. Heatmap và KPI DORI dùng
-mô hình phân tích mặt bằng tại độ cao mục tiêu đã chọn. Góc chúc và FOV dọc phục vụ
-xem phối cảnh. Xuất PNG tiếp tục tạo bản vẽ mặt bằng 2.5D.
+Góc nhìn 3D là mô phỏng hình học với nội thất giản lược. Heatmap và KPI DORI lấy mẫu
+tại độ cao mục tiêu đã chọn; góc chúc và FOV dọc cũng được xét trong phân tích và tối ưu.
+Xuất PNG tạo bản vẽ mặt bằng 2.5D.
+
+## Camera trần và thuật toán bố trí
+
+Trong **Trần nhà & vị trí lắp**, đặt chiều cao trần từ 2,4–6 m (mặc định 3,2 m).
+Camera trần có khoảng hạ từ trần đến ống kính 0,15–1 m, giữ ống kính cao ít nhất 1,8 m.
+Camera tường giữ khoảng trống phía trên 0,3 m. Chọn kiểu lắp trong thuộc tính camera;
+đổi chiều cao trần tự cập nhật cao độ camera trần theo khoảng hạ đã lưu.
+
+Ở 3D, bật **Lưới trần** để xem mặt phẳng lắp đặt; chọn **Camera trần** rồi nhấp lưới để
+thêm camera. Chọn **Di chuyển vật thể** để kéo camera trần; `Esc` kết thúc chế độ đặt.
+Tổng thể ẩn trần để dễ quan sát nội thất, còn POV hiện trần thật. Trần vẫn được tính vào
+bản đồ độ sâu khi kiểm tra che khuất trong Vùng quan sát.
+
+Bộ tối ưu cho phép **Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**, và hai thuật toán:
+**Greedy (đối chứng)** và **Greedy + Local Search** (mặc định). Cả hai dùng cùng tập ứng viên
+vị trí/pan/tilt. Hybrid tạo phương án Greedy rồi thử thay từng camera trong tối đa ba lượt;
+chỉ nhận thay đổi tăng điểm DORI có trọng số. Giao diện hiển thị điểm Greedy, điểm sau
+cải thiện, số ứng viên và số lần thay camera thành công. Tập ứng viên được lấy mẫu hữu hạn
+và giới hạn bộ nhớ; đây là heuristic, chưa chứng minh nghiệm tối ưu toàn cục.
+
+Bộ đo tại [results/ceiling-optimization.csv](results/ceiling-optimization.csv) dùng tám mẫu,
+cố định ba camera và chế độ tường + trần: Hybrid tăng điểm trên năm mẫu, bằng Greedy trên
+ba mẫu, mức tăng lớn nhất khoảng 2,03%. Đây là kết quả của cấu hình và tập mẫu đã chạy,
+không phải cam kết mức tăng cho mọi cửa hàng. Công thức và giới hạn được ghi tại
+[docs/FORMULAS.md](docs/FORMULAS.md).
 
 ## Bốn mặt bằng cửa hàng Việt Nam
 

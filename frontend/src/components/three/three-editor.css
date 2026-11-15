@@ -17,3 +17,7 @@
   .three-edit-toolbar button { padding: 5px 6px; font-size: 8px; }
   .three-edit-toolbar select { width: 110px; }
 }
+
+.scene-camera-fields { border: 0; padding: 0; margin: 10px 0; min-width: 0; }
+.scene-camera-fields .field { margin-top: 8px; }
+.three-add-furniture button.on { background: #e0e8de; border-color: #a5b4a0; color: #385748; }

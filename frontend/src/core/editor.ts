@@ -1,3 +1,5 @@
+import { cameraMount } from './camera';
+import { placeEditedCamera } from './cameraEditing';
 import { footprintFits, floorOutline, placeWallFixture } from './footprint';
 import type { Camera, Fixture, Layout, Obstacle, ObsType } from '../types';
 import { clamp, obstacleFitsRoom, obsPoly, placeObstacle, round2, satCollide, snap, snapAngle, snapToWall } from './geometry';
@@ -139,6 +141,17 @@ export function resizeRoom(l: Layout, W: number, H: number): Layout {
   const floorPolygon = l.floorPolygon?.map(([x, y]) => [x * w / l.widthM, y * h / l.heightM] as [number, number]);
   const obstacles = l.obstacles.map((o) => placeObstacle(o, (o.x + o.w / 2) * (floorPolygon ? w / l.widthM : 1), (o.y + o.h / 2) * (floorPolygon ? h / l.heightM : 1), w, h, l.gridM));
   if (obstacles.some((o, i) => !obstacleFitsRoom(o, w, h) || !footprintFits(o, floorPolygon) || obstacles.slice(i + 1).some((other) => satCollide(obsPoly(o), obsPoly(other))))) return l;
-  const cameras: Camera[] = l.cameras.map((c) => { const [x, y] = snapToWall(c.x, c.y, w, h, l.gridM, floorPolygon); return { ...c, x, y }; });
+  const resizedLayout = { ...l, widthM: w, heightM: h, floorPolygon, obstacles };
+  const cameras: Camera[] = [];
+  for (const camera of l.cameras) {
+    if (cameraMount(camera) === 'ceiling') {
+      const placed = placeEditedCamera({ ...camera, x: camera.x * w / l.widthM, y: camera.y * h / l.heightM }, resizedLayout);
+      if (!placed) return l;
+      cameras.push(placed);
+    } else {
+      const [x, y] = snapToWall(camera.x, camera.y, w, h, l.gridM, floorPolygon);
+      cameras.push({ ...camera, x, y });
+    }
+  }
   return { ...l, widthM: w, heightM: h, floorPolygon, walkways: undefined, obstacles, cameras, risk: {}, riskStrokes: [] };
 }

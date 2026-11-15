@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOUSE, PerspectiveCamera, Ray, Vector3 } from 'three';
-import { StoreScene, type StoreSceneProps } from './StoreScene';
+import { CeilingGrid, StoreScene, type StoreSceneProps } from './StoreScene';
 import { DraggableObject3D } from './DraggableObject3D';
 import { CameraImageEffect } from './CameraImageEffect';
 import { CameraModel3D } from './CameraModel3D';
@@ -27,7 +27,7 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   mocks.controls.length = 0;
   mocks.state = { camera: new PerspectiveCamera(), gl: { domElement: {} }, invalidate: vi.fn(), size: { width: 800, height: 500 } };
-  const context = Object.fromEntries(['scale', 'beginPath', 'lineTo', 'moveTo', 'closePath', 'clip', 'fillRect', 'stroke'].map(name => [name, vi.fn()]));
+  const context = Object.fromEntries(['clearRect', 'scale', 'beginPath', 'lineTo', 'moveTo', 'closePath', 'clip', 'fillRect', 'stroke'].map(name => [name, vi.fn()]));
   vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => context }) });
   vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
@@ -96,4 +96,31 @@ describe('scene editing and navigation guards', () => {
     expect(renderer.root.findByType(CameraImageEffect).props.cameraView).toBeNull();
     expect(renderer.root.findByType('color' as any).props.args).toEqual(['#000000']);
   });
+  it('places cameras on the ceiling grid without floor editing and hides the grid during observation', () => {
+    const p = { ...props(), onAddCamera: vi.fn(), onMoveCamera: vi.fn(), showCeilingGrid: true, editMode: 'ceiling' as const };
+    act(() => { renderer = create(<StoreScene {...p} />); });
+    expect(mocks.controls[0].mouseButtons.LEFT).toBeNull();
+    const grid = renderer.root.findByType(CeilingGrid).findByType('mesh' as any);
+    const stopPropagation = vi.fn();
+    act(() => grid.props.onClick({ point: new Vector3(4, 3.2, 2), delta: 0, stopPropagation }));
+    expect(p.onAddCamera).toHaveBeenCalledExactlyOnceWith(4, 2, 'ceiling');
+    expect(stopPropagation).toHaveBeenCalled();
+    const physicalCeiling = renderer.root.findAllByType('group' as any).find(node => node.props.userData?.physicalCeiling);
+    expect(physicalCeiling?.props.visible).toBe(false);
+    expect(physicalCeiling?.props.userData.observationWall).toBe(true);
+    act(() => renderer.update(<StoreScene {...p} observationView />));
+    expect(renderer.root.findAllByType(CeilingGrid)).toHaveLength(0);
+  });
+
+  it('only makes ceiling cameras draggable and uses their optical height as the drag plane', () => {
+    const p = props();
+    const camera = { id: 'CEILING', x: 4, y: 3, pan: 45, fov: 85, res: 2560, height: 3.05, range: 15, mount: 'ceiling' as const };
+    p.layout.cameras = [camera, { ...camera, id: 'WALL', mount: 'wall' }];
+    act(() => { renderer = create(<StoreScene {...p} onMoveCamera={vi.fn()} />); });
+    const cameras = renderer.root.findAllByType(DraggableObject3D).filter(node => node.props.selection?.kind === 'cam');
+    expect(cameras[0].props.enabled).toBe(true);
+    expect(cameras[0].props.planeHeight).toBe(3.05);
+    expect(cameras[1].props.enabled).toBe(false);
+  });
+
 });

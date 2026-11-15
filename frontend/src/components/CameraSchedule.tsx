@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Camera } from '../types';
-import { cameraNumber } from '../core/camera';
+import { cameraNumber, cameraMount } from '../core/camera';
 import type { Selection } from './canvas/shared';
 
 export function CameraSchedule({ cameras, selected, onSelect }: {
@@ -20,7 +20,7 @@ export function CameraSchedule({ cameras, selected, onSelect }: {
           <span className="camera-number">{cameraNumber(index)}</span>
           <span className="camera-schedule-info">
             <span className="camera-schedule-title"><strong title={camera.id}>{camera.id}</strong><span>{camera.pan}°</span></span>
-            <span className="camera-schedule-spec">FOV {camera.fov}° · H {camera.height} m</span>
+            <span className="camera-schedule-spec">{cameraMount(camera) === 'ceiling' ? 'Trần' : 'Tường'} · FOV {camera.fov}° · H {Number(camera.height.toFixed(2))} m</span>
             {camera.target && <span className="camera-schedule-target" title={camera.target}>{camera.target}</span>}
           </span>
         </button>;

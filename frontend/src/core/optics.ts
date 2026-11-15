@@ -1,6 +1,7 @@
 import { pointInFloor, segmentInFloor } from './footprint';
 import { PERSON_REGIONS, type Camera, type Cell, type Dori, type Layout, type Obstacle, type PersonRegion, type Score, type ShelfRiskCategory, type Weight, type Zone } from '../types';
-import { deg, distToObs, norm360, rad, segmentRectInterval, type Pt } from './geometry';
+import { distToObs, rad, segmentRectInterval, type Pt } from './geometry';
+import { cameraProjection } from './camera';
 
 /** Ngưỡng DORI theo IEC 62676-4 (PPM) */
 export const DORI_MIN = { identification: 250, recognition: 125, observation: 62.5, detection: 25 } as const;
@@ -51,11 +52,18 @@ export function pixelsPerMeterAtDistance(resolution: number, horizontalFov: numb
 /** PPM uses the selected person height and blocks sightlines intersecting an obstacle volume. */
 export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], targetHeight = FACE_Z, floorPolygon?: Pt[]): number {
   if (floorPolygon && !segmentInFloor([cam.x, cam.y], [x, y], floorPolygon)) return 0;
-  const dx = x - cam.x, dy = y - cam.y, d = Math.hypot(dx, dy);
-  if (d < 0.2 || d > cam.range) return 0;
-  let diff = Math.abs(norm360(deg(Math.atan2(dy, dx))) - cam.pan);
-  if (diff > 180) diff = 360 - diff;
-  if (diff > cam.fov / 2) return 0;
+  const dx = x - cam.x, dy = y - cam.y, dz = targetHeight - cam.height;
+  const r = Math.hypot(dx, dy, dz);
+  if (r < 0.03 || r > cam.range) return 0;
+  const { tilt, vfov } = cameraProjection(cam), pan = rad(cam.pan), pitch = rad(tilt);
+  const along = dx * Math.cos(pan) + dy * Math.sin(pan);
+  const depth = along * Math.cos(pitch) - dz * Math.sin(pitch);
+  const right = -dx * Math.sin(pan) + dy * Math.cos(pan);
+  const up = along * Math.sin(pitch) + dz * Math.cos(pitch);
+  // Project in the camera's own frame, rather than testing a flat fan. This
+  // remains well-defined for a lens pointing vertically down from the ceiling.
+  if (depth <= 0 || Math.abs(right) > depth * Math.tan(rad(cam.fov / 2)) + 1e-9 ||
+      Math.abs(up) > depth * Math.tan(rad(vfov / 2)) + 1e-9) return 0;
   const start: Pt = [cam.x, cam.y], end: Pt = [x, y];
   if (obstacles.some((o) => {
     if (o.elev <= 0) return false;
@@ -64,7 +72,6 @@ export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], 
     const heightAt = (t: number) => cam.height + (targetHeight - cam.height) * t;
     return Math.min(heightAt(interval[0]), heightAt(interval[1])) <= o.elev + 1e-9;
   })) return 0;
-  const r = Math.hypot(d, Math.abs(cam.height - targetHeight));
   return pixelsPerMeterAtDistance(cam.res, cam.fov, r);
 }
 

@@ -8,7 +8,7 @@ Coordinates use the top-left origin, with +X right and +Y down; pan 0° points a
 ## Status and integration
 
 The React UI calls `POST /api/v1/optimize` through Vite's `/api` proxy. If the request times
-out after 1.5 s or fails, the UI runs its client-side Greedy optimizer. Layout Save/Load,
+out after 15 s or fails, the UI runs the selected Greedy/Hybrid optimizer in a Web Worker. Layout Save/Load,
 BOM JSON/CSV/XLSX, and backend bundle Import/Export routes are implemented but are not
 connected to buttons in the current UI. The UI's own layout and bundle JSON actions run
 locally in the browser.
@@ -23,12 +23,15 @@ locally in the browser.
   "heightM": 6,
   "gridM": 0.5,
   "targetHeight": 1.6,
+  "ceilingHeight": 3.2,
+  "optimization": { "algorithm": "hybrid", "mounts": "mixed" },
   "obstacles": [
     { "id": "shelf-1", "type": "shelf", "x": 3, "y": 2, "w": 2, "h": 0.6, "elev": 1.8, "angle": 0, "riskCategory": "standard", "riskWmax": 3, "riskR0": 1, "riskR": 2 }
   ],
   "riskStrokes": [{ "x": 4.25, "y": 2.75, "radius": 0.25, "weight": 4.5 }],
   "cameras": [
-    { "id": "CAM-01", "x": 0, "y": 3, "pan": 0, "fov": 85, "res": 2560, "range": 10, "height": 2.4 }
+    { "id": "CAM-01", "x": 0, "y": 3, "pan": 0, "fov": 85, "res": 2560, "range": 10, "height": 2.4, "mount": "wall", "tilt": 20 },
+    { "id": "CAM-02", "x": 5, "y": 3, "pan": 90, "fov": 85, "res": 2560, "range": 10, "height": 3.05, "mount": "ceiling", "ceilingDrop": 0.15, "tilt": 55 }
   ]
 }
 ```
@@ -36,7 +39,15 @@ locally in the browser.
 `widthM` and `heightM` must be 3–40 m; `gridM` 0.1–2 m; a layout is limited to 12,000
 cells by the dimension-based validation. Obstacles support `shelf`, `pos`, or `entrance`;
 `w` and `h` must be positive. Extra layout/obstacle properties are accepted. Camera values
-are generic dictionaries, so camera-level constraints are not validated by Pydantic.
+are validated through `CameraData`: unique IDs and coordinates inside the room;
+`fov` 30–140°, `res` 640–7680 horizontal pixels, `range` 1–30 m, `height` 1.8–6 m,
+`tilt` 0–90°, optional `vfov` 10–120°, and `mount` in `wall|ceiling`. Missing mount means
+wall. `ceilingHeight` defaults to 3.2 m and accepts 2.4–6 m. `ceilingDrop` defaults to
+0.15 m and accepts 0.15–1 m. Ceiling camera height is normalized to ceiling height minus
+drop, retaining at least 1.8 m above the floor. Wall height is capped at ceiling height
+minus 0.3 m. Ceiling cameras require clearance inside the footprint and from tall fixtures.
+`optimization.algorithm` is `greedy|hybrid` (default hybrid); `optimization.mounts` is
+`wall|mixed|ceiling` (default mixed). Layout/project save, load and export retain these fields.
 `targetHeight` is the person point used by coverage calculations in meters: face `1.6`,
 chest `1.2`, or waist `0.9`; omitted values default to face height.
 Obstacle risk profiles accept `riskWmax` (1–5), `riskR0` (meters), and `riskR` (meters,
@@ -67,11 +78,13 @@ the matrices using `buildZones()`; blocked cells are excluded from coverage calc
 {
   "cameraBudgetK": 3,
   "cameraProfiles": [
-    { "fov": 85, "res": 2560, "range": 10, "height": 2.4, "model": "OptiCam IP 4MP" },
-    { "fov": 85, "res": 2560, "range": 10, "height": 2.4, "model": "OptiCam IP 4MP" }
+    { "fov": 85, "res": 2560, "range": 10, "height": 2.4, "tilt": 20, "model": "OptiCam IP 4MP" },
+    { "fov": 85, "res": 2560, "range": 10, "height": 3.05, "ceilingDrop": 0.15, "model": "OptiCam IP 4MP" }
   ],
   "layout": {
     "version": "1.0", "name": "Demo", "widthM": 10, "heightM": 6, "gridM": 0.5,
+    "ceilingHeight": 3.2,
+    "optimization": { "algorithm": "hybrid", "mounts": "mixed" },
     "obstacles": [],
     "risk": {},
     "riskStrokes": [],
@@ -87,21 +100,30 @@ The matrix snippets above are illustrative only; actual matrix dimensions must b
 `rows × cols`. `cameraBudgetK` is 1–20. `cellSizeM` must match `layout.gridM`, and grid
 dimensions use positive half-up rounding, `floor(value / cellSizeM + 0.5)`, for rows and
 columns. Risk values are continuous numbers in `[1, 5]`; blocked values are 0 or 1. The grid may contain at most
-12,000 cells. The optimizer coarsens wall anchor spacing toward roughly 1,000,000
-candidate-cell evaluations per profile, stopping at four corner anchors. Near the cell limit,
-those four anchors require up to 1,152,000 evaluations.
+12,000 cells. Candidate generation is bounded by 1,500,000 candidate–cell values and
+12,000 configurations across distinct profile pools. Matching profiles reuse the same
+pool. The optimizer increases position spacing and, if needed, samples configurations
+uniformly to fit the budget.
 
-`cameraProfiles` is optional and ordered by optimized camera number. Each profile's FOV,
-horizontal resolution, range, height, and model are applied to its corresponding optimized
-camera. Missing profiles use `FOV=85°`, `res=2560` horizontal pixels, `height=2.4 m`, and
-`range=10 m`. The frontend sends profiles for the selected camera budget, using the existing
-cameras' settings in order; cameras without an existing profile use those defaults.
-Anchors are on room walls, at `max(gridM, 0.5 m)` spacing initially, with pan angles in
-15° increments. Greedy maximizes weighted DORI gain across up to the requested budget
-of camera profiles. Each candidate within a profile is selected at most once. Profiles
-with no reachable free cells are skipped. Coverage metrics report the achieved result.
-The client uses its own candidate sampling and tie-breaking rules. Exact formulas are in
-[FORMULAS.md](FORMULAS.md).
+`cameraProfiles` is optional and ordered by optimized camera number. FOV, horizontal
+resolution, range, model, vertical FOV and pendant drop come from each profile. Missing
+profiles use `FOV=85°`, `res=2560`, wall `height=2.4 m`, `range=10 m`, and `ceilingDrop=0.15 m`.
+Mount scope is selected by `layout.optimization.mounts`, rather than locking each slot to
+a profile's previous mount. Ceiling height is derived from the layout; wall height is
+capped below the ceiling. Position, mount, pan and tilt are optimized over the finite pool.
+
+Wall positions start at `max(gridM, 0.5 m)` spacing along the actual footprint. Ceiling
+positions use an interior grid with target spacing at least 1 m and clearance checks.
+Default pan spacing is 30°. Wall tilts include the profile tilt (default 20°) and ±15°;
+ceiling tilts include 35°, 55°, 75°, 90° and an explicit profile tilt, if present.
+
+Both algorithms first run the same weighted-DORI Greedy selection. `hybrid` additionally
+performs up to three sweeps of one-camera replacements using that same candidate pool,
+accepting only strict DORI score improvements. Duplicate poses are excluded; profiles
+without usable candidates are skipped. These are bounded heuristics, with no global
+optimality certificate. Nominal PPM, 3D frustum checks and height-aware occlusion are used
+in both backend and client; rounding or anchor enumeration can produce different near-ties.
+Exact formulas and sampling details are in [FORMULAS.md](FORMULAS.md).
 
 Response shape:
 ```json
@@ -109,6 +131,14 @@ Response shape:
   "cameras": [
     { "id": "CAM-01", "x": 0, "y": 3, "pan": 45, "fov": 85, "res": 2560, "range": 10, "height": 2.4 }
   ],
+  "diagnostics": {
+    "algorithm": "hybrid",
+    "greedyScore": 100.0,
+    "finalScore": 105.0,
+    "iterations": 1,
+    "candidateCount": 1200,
+    "ms": 120.0
+  },
   "metrics": {
     "weighted_coverage_pct": 70.0,
     "area_coverage_pct": 80.0,
@@ -124,7 +154,13 @@ Response shape:
 Metrics are example values, not a fixed result. `area_coverage_pct` is the percentage of
 unblocked cells at ≥25 PPM. `weighted_coverage_pct` is the achieved weighted DORI score as a
 percentage of the maximum possible score. `target_coverage_reached` indicates whether the
-95% area target was met.
+95% area target was met, not whether the UI's red/yellow KPI thresholds were met.
+`diagnostics.greedyScore` and `finalScore` are raw weighted DORI objectives on the same
+candidate pool, not percentages. `iterations` counts accepted replacements, not search
+sweeps; `candidateCount` sums distinct cached pools, and `ms` is solver runtime.
+The UI displays the two scores, pool size and accepted replacements for comparison.
+People in the 3D scene are currently excluded from grid analysis/optimization; static
+people do affect the geometric observation shader.
 
 ## `POST /api/v1/layouts/save`
 

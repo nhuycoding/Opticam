@@ -234,7 +234,7 @@ export function OptiCamCanvas(p: CanvasProps) {
               stroke={priorityColor(p.brush)} strokeWidth={2} fill={riskColor(p.brush)} listening={false} />
           )}
           {L.cameras.map((c, index) => (
-            <CameraNode floorPolygon={L.floorPolygon} key={c.id} labelScale={labelScale} number={cameraNumber(index)} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
+            <CameraNode floorPolygon={L.floorPolygon} targetHeight={L.targetHeight} ceilingHeight={L.ceilingHeight} obstacles={L.obstacles} key={c.id} labelScale={labelScale} number={cameraNumber(index)} cam={c} ppm={ppm} roomW={L.widthM} roomH={L.heightM} grid={L.gridM}
               selected={p.selected?.kind === 'cam' && p.selected.id === c.id} onSelect={p.onSelect} onCamera={p.onCamera} />
           ))}
           {m && <>

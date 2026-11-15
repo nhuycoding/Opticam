@@ -1,8 +1,8 @@
 # Mô hình và công thức
 
 Tài liệu này mô tả đúng các phép tính đang dùng trong frontend (`frontend/src/core/optics.ts`)
-và backend (`backend/greedy_optimizer.py`). Đây là mô hình phẳng để hỗ trợ bố trí sơ bộ,
-không phải chứng nhận hiệu năng camera thực.
+và backend (`backend/greedy_optimizer.py`). Mô hình lấy mẫu mục tiêu trên một mặt phẳng độ cao, xét góc nhìn và che khuất 3D
+để hỗ trợ bố trí sơ bộ; không phải chứng nhận hiệu năng camera thực.
 
 ## 1. Lưới, tọa độ và vùng rủi ro
 
@@ -44,40 +44,72 @@ không phải chứng nhận hiệu năng camera thực.
 - Trọng số là số thực trong `[1, 5]`. Ba màu chỉ là nhóm hiển thị: Đỏ `W ≥ 4`, Vàng
   `2 ≤ W < 4`, Xanh `W < 2`. Tối ưu hóa dùng W liên tục, không làm tròn theo màu.
 
-## 2. Góc pan và FOV
+## 2. Kiểu lắp, góc pan/tilt và FOV 3D
 
-Góc hướng từ camera tới ô:
+- `mount = wall | ceiling`; file cũ thiếu `mount` được hiểu là camera tường.
+- `ceilingHeight` mặc định 3,2 m, phạm vi 2,4–6 m. Camera tường có cao độ ống kính
+  từ 1,8 m tới `ceilingHeight - 0.3 m`. Camera trần dùng
+  `height = ceilingHeight - ceilingDrop`, với `ceilingDrop` trong 0,15–1 m, đồng thời
+  giữ ống kính cao ít nhất 1,8 m.
+- Pan 0° hướng +X trên mặt bằng, tăng theo hướng +Y. Tilt là góc chúc xuống từ phương
+  ngang, phạm vi 0–90°; mặc định tường 20°, trần 45°. Góc pan khi kéo tay cầm được snap
+  15°; tập ứng viên tối ưu mặc định dùng bước pan 30°.
+- `fov` và `vfov` là góc mở toàn phần ngang và dọc. Nếu thiếu `vfov`, suy ra từ cảm biến
+  tỷ lệ 16:9: `vfov = 2 atan(tan(fov/2) / (16/9))`.
 
-```text
-θ = atan2(y_cell - y_cam, x_cell - x_cam) × 180 / π
-Δθ = min(|θ - pan| mod 360, 360 - (|θ - pan| mod 360))
-```
-
-Ô nằm trong vùng nhìn ngang khi `Δθ ≤ FOV / 2`, cách camera không vượt `range`, và
-`distance ≥ 0.2 m`. Pan được snap theo nấc 15° trong thao tác kéo tay cầm; `FOV` là góc mở
-toàn phần, không phải góc lệch mỗi bên.
-
-## 3. PPM
-
-Với camera có độ phân giải ngang `Res`, góc mở ngang `FOV`, khoảng cách nằm ngang `d`, độ
-cao camera `H_cam` và điểm đánh giá đã chọn `Z_target` (mặt 1.6 m, ngực 1.2 m hoặc thắt
-lưng 0.9 m):
+Với sai khác tọa độ tới mục tiêu `(dx, dy, dz)`, trong đó
+`dz = Z_target - H_camera`, đổi pan `p`, tilt `t` và FOV sang radian:
 
 ```text
-d       = √((x_cell - x_cam)² + (y_cell - y_cam)²)
-Δz      = |H_cam - Z_target|
-r       = √(d² + Δz²)
-PPM     = Res / (2 r tan(FOV / 2))
+along = dx cos(p) + dy sin(p)
+depth = along cos(t) - dz sin(t)
+right = -dx sin(p) + dy cos(p)
+up    = along sin(t) + dz cos(t)
+r     = √(dx² + dy² + dz²)
 ```
 
-`FOV` được đổi sang radian khi đưa vào `tan`. PPM bằng 0 nếu ô ngoài tầm, ngoài góc nhìn, gần hơn 0.2 m, hoặc tia nhìn cắt thể tích vật
-cản. Tia nhìn nội suy độ cao từ camera đến điểm đánh giá; kệ/POS chắn khi đường tia đi qua
-độ cao không lớn hơn `elev`. Cửa không chắn tia. Vì vậy thay đổi chiều cao camera hoặc điểm
-đánh giá có thể làm đổi vùng khuất.
+Mục tiêu thuộc vùng nhìn khi đồng thời thỏa mãn:
 
-Ví dụ xấp xỉ tại điểm mặt: `Res = 2560`, `FOV = 85°`, camera cao `2.4 m`, ô cách camera
-ngang `5 m`: `r = √(5² + 0.8²) ≈ 5.06 m`, do đó
-`PPM ≈ 2560 / (2 × 5.06 × tan(42.5°)) ≈ 296`.
+```text
+0.03 m ≤ r ≤ range
+depth > 0
+|right| ≤ depth tan(fov/2)
+|up|    ≤ depth tan(vfov/2)
+```
+
+Đây là phép chiếu trong hệ trục camera, áp dụng được cả khi camera trần chúc thẳng
+xuống 90°. `range` là khoảng cách 3D xuyên tâm, không phải khoảng cách trên sàn.
+Frontend, backend và camera phối cảnh 3D sử dụng cùng quy ước pan/tilt/FOV.
+
+## 3. PPM và che khuất
+
+Với độ phân giải ngang `Res`, FOV ngang và khoảng cách 3D `r` ở trên:
+
+```text
+PPM = Res / (2 r tan(FOV / 2))
+```
+
+PPM bằng 0 nếu không thỏa vùng nhìn, tia đi qua phần ngoài đường bao đa giác cửa hàng,
+hoặc tia cắt vật cản. Tia nhìn nội suy độ cao từ camera tới điểm đánh giá; kệ/POS chắn
+khi tia đi qua phần có độ cao không lớn hơn `elev`. Cửa không chắn tia. Chọn mặt 1,6 m,
+ngực 1,2 m hoặc thắt lưng 0,9 m làm độ cao lấy mẫu heatmap/KPI và hàm mục tiêu.
+Hình người có bảng đánh giá riêng tại mặt, ngực, bụng và chân.
+
+Ví dụ tại điểm mặt: `Res = 2560`, `FOV = 85°`, camera cao `2.4 m`, điểm cách ngang `5 m`:
+`r = √(5² + 0.8²) ≈ 5.06 m`, suy ra `PPM ≈ 296` nếu điểm nằm trong FOV và không bị khuất.
+
+PPM này là mật độ ngang danh nghĩa, chưa hiệu chỉnh theo hướng mặt/bề mặt, ánh sáng,
+nén video hoặc méo ống kính. Nhìn rõ mặt sàn hoặc đỉnh đầu không chứng minh nhận diện
+được khuôn mặt. Phân tích lưới dùng vật cản dạng thể tích hộp xoay; người chưa được đưa
+vào tính che khuất của heatmap/KPI và tối ưu. Trong Vùng quan sát 3D, shader dùng hình học
+thực của mô hình, gồm người tĩnh và hàng trên kệ, nên ranh giới có thể khác phép lấy mẫu lưới.
+
+Trong POV và Vùng quan sát, kích thước pixel camera `1/PPM` mét được quy đổi sang kích
+thước hiển thị. Vùng nhiều camera nhìn thấy chọn PPM cao nhất. Bộ đệm độ sâu kiểm tra
+bề mặt khuất, gồm cả tường tự ẩn và trần; phần chưa quan sát được là màu đen.
+Camera tường trên mô hình có gá đưa ống kính vào phòng để tránh lún tường, nên tọa độ
+ống kính hiển thị có thể lệch nhẹ điểm neo phân tích; camera trần dùng đúng tâm quang học
+đã lưu tại `(x, y, height)`.
 
 ## 4. Phân lớp DORI và điểm
 
@@ -87,8 +119,8 @@ PPM được ánh xạ thành một mức:
 |---:|---|---:|
 | `≥ 250` | Identification | 1.00 |
 | `125–<250` | Recognition | 0.75 |
-| `62–<125` | Observation | 0.40 |
-| `25–<62` | Detection | 0.20 |
+| `62,5–<125` | Observation | 0.40 |
+| `25–<62,5` | Detection | 0.20 |
 | `< 25` | Blind | 0.00 |
 
 Khi có nhiều camera, ô dùng PPM tốt nhất:
@@ -114,47 +146,81 @@ Yellow % = 100 × số ô 2≤W<4 có PPM≥125 / tổng số ô 2≤W<4
 Scorecard cũng hiển thị PPM thấp nhất trong các ô vùng Đỏ. Nếu một nhóm không có ô nào,
 phần trăm nhóm đó được xem là 100%.
 
-## 5. Greedy
+## 5. Greedy và Greedy + Local Search
 
-Ứng viên backend được đặt dọc tường, bước neo bắt đầu bằng `max(gridM, 0.5 m)`; mỗi neo
-có các góc pan `0°, 15°, ..., 345°`. Cấu hình camera mặc định của optimizer backend là
-`FOV=85°`, `Res=2560`, `height=2.4 m`, `range=10 m`.
+Thiết lập `optimization` gồm `algorithm: greedy | hybrid` và
+`mounts: wall | mixed | ceiling`, mặc định `hybrid` và `mixed`. Cả hai thuật toán dùng
+chính xác cùng tập ứng viên của một lần giải, cùng profile camera và cùng hàm mục tiêu.
 
-Ở mỗi lượt, với mỗi camera ứng viên `c`, tính phần điểm tăng:
+### Tập ứng viên hữu hạn
+
+- Điểm tường đi dọc đường bao thật, bước neo ban đầu `max(gridM, 0.5 m)`.
+- Điểm trần lấy trên lưới nội thất có bước mục tiêu ít nhất 1 m; điểm ngoài polygon,
+  sát biên hoặc vướng vật thể cao được loại bỏ. Cao độ trần lấy từ chiều cao trần trừ
+  khoảng hạ của profile. Camera tường giữ khoảng trống 0,3 m dưới trần.
+- Pan mặc định `0°, 30°, ..., 330°`. Tilt tường thử góc profile (mặc định 20°) và hai góc
+  lệch ±15°, giới hạn 0–90°. Tilt trần thử `35°, 55°, 75°, 90°` và góc profile nếu có.
+- Giữ FOV, độ phân giải, tầm xa, model, FOV dọc và khoảng hạ theo từng profile. Kiểu lắp,
+  vị trí, pan và tilt được chọn theo tập ứng viên; kiểu lắp profile không khóa phạm vi
+  tìm kiếm, phạm vi do `optimization.mounts` quyết định.
+- Các profile quang học giống nhau dùng chung bộ PPM đã tính. Tổng ngân sách mặc định
+  là 1.500.000 giá trị ứng viên–ô và tối đa 12.000 cấu hình ứng viên trên các profile khác
+  nhau. Khi vượt giới hạn, tăng bước vị trí gấp đôi; nếu vẫn quá lớn, lấy mẫu đều trong
+  danh sách cấu hình. Sau đó loại ứng viên không nhìn thấy ô trống nào.
+
+Giới hạn này giữ bộ tính hữu hạn; lấy mẫu thưa có thể bỏ qua vị trí tốt giữa các điểm.
+Frontend/backend có thể khác nhẹ về làm tròn PPM và cách lấy neo, nên không cam kết cùng
+một vị trí khi điểm các phương án gần bằng nhau.
+
+### Bước Greedy
+
+Với PPM tốt nhất hiện có `PPM_best` trên từng ô, phần điểm tăng của ứng viên `c`:
 
 ```text
-Gain(c) = Σ_cell W_cell × max(0, F(PPM_c) - F(PPM_best_so_far))
+Gain(c) = Σ_cell W_cell × [F(max(PPM_c, PPM_best)) - F(PPM_best)]
 ```
 
-Chọn ứng viên có Gain lớn nhất, cập nhật PPM tốt nhất trên từng ô rồi lặp. Backend xét
-tối đa `cameraBudgetK` profile và chọn camera khi profile có ứng viên quan sát được ô trống.
-Mỗi ứng viên trong cùng profile được chọn tối đa một lần. Không đạt mục tiêu thì response vẫn trả phương án tốt nhất tìm được cùng
-`target_coverage_reached = false`.
+Mỗi bước chọn ứng viên tăng điểm nhiều nhất cho profile đang xét. Khi điểm bằng nhau,
+ưu tiên tổng tăng PPM có trọng số, chặn PPM tại 250 để phá hòa. Không chọn trùng cấu hình
+kiểu lắp/vị trí/pan/tilt/cao độ. Profile không có ứng viên hợp lệ được bỏ qua; kết quả có
+thể ít camera hơn ngân sách khi không còn cấu hình khả dụng.
 
-Để giới hạn công việc, backend giới hạn kích thước lưới 12.000 ô và tối đa khoảng
-1.000.000 phép đánh giá ô ứng viên cho mỗi profile; khi cần, bước neo được tăng theo hệ số 2
-đến khi còn bốn góc phòng. Lưới sát giới hạn có thể cần khoảng 1.152.000 phép đánh giá ở bốn góc. Greedy client
-có cùng mục tiêu DORI có trọng số, nhưng dùng tập neo/góc và quy tắc phá hòa riêng. Vì vậy
-kết quả backend và client fallback có thể khác vị trí camera.
+### Bước Local Search của Hybrid
 
-Greedy là heuristic; ngưỡng 95% là tỷ lệ ô đạt mức Detection, không phải bảo đảm 95% vùng
-đỏ đạt Identification hoặc 95% toàn mặt bằng được nhận diện.
+Bắt đầu từ chính phương án Greedy. Lần lượt bỏ tạm một camera, giữ các camera khác và
+thử thay bằng ứng viên thuộc profile của camera đó. Chỉ nhận thay đổi làm **tăng nghiêm
+ngặt điểm DORI có trọng số**, với sai số so sánh `1e-9`. Thực hiện tối đa ba lượt qua các
+camera, dừng sớm nếu một lượt không có thay đổi cải thiện. Số lần thay thành công được
+trả ở `iterations`; đây không phải số lượt duyệt.
 
-### Tìm số camera tối thiểu theo KPI vùng rủi ro
+Vì chỉ chấp nhận cải thiện, điểm Hybrid không thấp hơn điểm Greedy khởi tạo trên cùng
+tập ứng viên. Tuy nhiên cả hai là heuristic trên không gian lấy mẫu; giới hạn ba lượt
+không bảo đảm đã tới tối ưu cục bộ, và không chứng minh tối ưu toàn cục.
 
-Lệnh **Tìm số cam tối thiểu (Đỏ 95% · Vàng 80%)** chạy chuỗi Greedy có trọng số đến số
-lượng camera hiện có, với profile camera theo đúng thứ tự đã nhập. Sau mỗi bước, Scorecard
-được tính lại và chọn tiền tố ngắn nhất đạt đồng thời:
+`diagnostics` trả `algorithm`, `greedyScore`, `finalScore`, `iterations`, `candidateCount`
+và `ms`. Điểm ở đây là tổng DORI có trọng số chưa làm tròn, không phải phần trăm diện tích.
+KPI/Scorecard có thể không đổi dù điểm tổng tăng.
+
+Bộ đo [ceiling-optimization.csv](../results/ceiling-optimization.csv) trên tám preset,
+cố định `K=3`, mặc định tường + trần: năm mẫu tăng điểm, ba mẫu bằng Greedy; mức tăng
+lớn nhất khoảng 2,03%. Thời gian trong CSV là của lần chạy tại máy phát triển, không
+phải cam kết trên thiết bị khác. VN 02 và VN 05 có cùng bài toán phân tích vì người chưa
+tham gia hàm mục tiêu. Kết quả không suy rộng thành mức cải thiện cho mọi mặt bằng.
+
+### Giảm số camera theo KPI vùng rủi ro
+
+Lệnh giảm camera tối ưu với ngân sách camera hiện có theo thuật toán/phạm vi đã chọn,
+rồi đánh giá các tiền tố và chọn tiền tố ngắn nhất đạt đồng thời:
 
 ```text
 Đỏ:   tỷ lệ ô có PPM ≥ 250 ≥ 95%
 Vàng: tỷ lệ ô có PPM ≥ 125 ≥ 80%
 ```
 
-FOV, độ phân giải, tầm xa, chiều cao và model của từng profile được giữ nguyên; vị trí và
-pan là các biến optimizer được phép thay đổi. Đây là số camera tối thiểu tìm được trong
-chuỗi Greedy (không phải chứng minh tối ưu toàn cục). Nếu toàn bộ camera hiện có vẫn không
-đạt KPI, giữ phương án Greedy đủ số lượng và báo tỷ lệ thực tế.
+Đây là số camera ít nhất trong các tiền tố đã xét, không phải nghiệm tối thiểu toàn cục.
+Nếu phương án đủ ngân sách chưa đạt KPI, giữ phương án đó và báo tỷ lệ thực tế. Cờ
+`target_coverage_reached` của API tối ưu vị trí lại dùng ngưỡng 95% ô trống đạt Detection;
+không đồng nghĩa đạt KPI Đỏ/Vàng của giao diện.
 
 ## 6. BOM — chiều dài cáp ước tính
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { PRESETS } from '../../data/presets';
 import { cameraProjection } from '../../core/camera';
-import { cameraPose } from './sceneGeometry';
+import { cameraBasis, cameraPose } from './sceneGeometry';
 import { cameraImageSettings, observationCamera, visibilityAtlasSize } from './cameraVisibility';
 
 const CAMERA = { id: 'CAM-01', x: 0, y: 0, pan: 45, height: 2.4, fov: 85, res: 2560, range: 12 };
@@ -23,6 +23,19 @@ describe('3D observation camera projection', () => {
     expect(outsideHorizontalFov.x).toBeGreaterThan(1);
     const beyondRange = pose.position.clone().addScaledVector(pose.direction, 9).project(lens);
     expect(beyondRange.z).toBeGreaterThan(1);
+  });
+
+  it('preserves ceiling camera pan even when pointing vertically down', () => {
+    for (const pan of [0, 45, 90, 180, 270]) {
+      const camera = { ...CAMERA, x: 4, y: 3, height: 3.05, mount: 'ceiling' as const, tilt: 90, pan };
+      const lens = observationCamera(camera, PRESETS[0]), basis = cameraBasis(camera);
+      const centre = lens.position.clone().addScaledVector(basis.direction, 2);
+      const right = centre.clone().addScaledVector(basis.right, 0.5).project(lens);
+      const up = centre.clone().addScaledVector(basis.up, 0.5).project(lens);
+      expect(right.x).toBeGreaterThan(0); expect(right.y).toBeCloseTo(0);
+      expect(up.y).toBeGreaterThan(0); expect(up.x).toBeCloseTo(0);
+      expect(lens.getWorldDirection(new Vector3()).distanceTo(basis.direction)).toBeLessThan(1e-9);
+    }
   });
 
   it('uses the analysis PPM formula and preserves resolution, FOV and range semantics', () => {

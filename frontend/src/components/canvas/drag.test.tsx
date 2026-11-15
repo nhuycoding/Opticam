@@ -51,6 +51,27 @@ describe.each([0.35, 1, 2])('Drag coordinates at zoom %s', (zoom) => {
     expect(next.y).toBeCloseTo(expected.y);
   });
 
+  it('moves ceiling cameras across the interior grid without snapping them to a wall', () => {
+    const ceilingProps = { ...props, cam: { ...props.cam, mount: 'ceiling' as const, x: 2, y: 2, height: 3.05 } };
+    const circle = descendants(renderCamera(ceilingProps)).find(element => element.props.draggable)!;
+    const next = circle.props.dragBoundFunc.call(node, transform.point({ x: 4.2 * ppm, y: 3.1 * ppm }));
+    const expected = transform.point({ x: 4 * ppm, y: 3 * ppm });
+    expect(next.x).toBeCloseTo(expected.x);
+    expect(next.y).toBeCloseTo(expected.y);
+  });
+
+  it('retains the last valid ceiling position when dragging into a concave notch or tall fixture', () => {
+    const floorPolygon: [number, number][] = [[0, 0], [8, 0], [8, 2], [3, 2], [3, 6], [0, 6]];
+    const ceilingProps = { ...props, roomW: 8, floorPolygon,
+      cam: { ...props.cam, mount: 'ceiling' as const, x: 1, y: 3, height: 3.05 },
+      obstacles: [{ id: 'tall', type: 'shelf' as const, label: 'Tall', x: 1.5, y: 3, w: 1, h: 1, angle: 0, elev: 3.1 }] };
+    const circle = descendants(renderCamera(ceilingProps)).find(element => element.props.draggable)!;
+    const valid = transform.point({ x: 1 * ppm, y: 4.5 * ppm });
+    expect(circle.props.dragBoundFunc.call(node, valid)).toEqual(valid);
+    expect(circle.props.dragBoundFunc.call(node, transform.point({ x: 6 * ppm, y: 4 * ppm }))).toEqual(valid);
+    expect(circle.props.dragBoundFunc.call(node, transform.point({ x: 2 * ppm, y: 3.5 * ppm }))).toEqual(valid);
+  });
+
   it('keeps person dragging inside the room after zoom and pan', () => {
     const person = renderPerson({ person: { id: 'p', x: 2, y: 2 }, ppm, selected: true, roomW: 10, roomH: 6, obstacles: [], onSelect: vi.fn(), onMove: vi.fn() });
     person.props.onDragStart({ target: { getAbsolutePosition: () => transform.point({ x: 2 * ppm, y: 2 * ppm }) } });

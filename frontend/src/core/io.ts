@@ -1,16 +1,17 @@
-import { footprintFits, pointInFloor, validateFloorPolygon } from './footprint';
+import { floorOutline, footprintFits, pointInFloor, validateFloorPolygon } from './footprint';
 import type { Fixture } from '../types';
 import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type Person, type RiskStroke, type Score, type ShelfRiskCategory } from '../types';
 import { buildBom } from './bom';
-import { clamp, norm360, obstacleFitsRoom } from './geometry';
+import { clamp, distToObs, norm360, obstacleFitsRoom } from './geometry';
 import { SHELF_RISK_PROFILES } from './optics';
 import { canPlacePerson, MAX_PEOPLE } from './person';
+import { ceilingHeightFor, normalizeCameraPlacement } from './camera';
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const TYPES = ['shelf', 'pos', 'entrance'];
 
 /** Chấp nhận nhiều tên khoá (pan | pan_angle | angle) để khớp schema backend. */
-export function normalizeCameras(list: any[], widthM: number, heightM: number): Camera[] {
+export function normalizeCameras(list: any[], widthM: number, heightM: number, layout: Pick<Layout, 'ceilingHeight'> = {}): Camera[] {
   if (!Array.isArray(list)) throw new Error('Danh sách camera không hợp lệ.');
   if (list.length > 20) throw new Error('Mỗi mặt bằng hỗ trợ tối đa 20 camera.');
   const ids = new Set<string>();
@@ -20,16 +21,18 @@ export function normalizeCameras(list: any[], widthM: number, heightM: number): 
     if (!id || ids.has(id)) id = `CAM-${String(i + 1).padStart(2, '0')}`;
     while (ids.has(id)) id += '-copy';
     ids.add(id);
-    return {
+    return normalizeCameraPlacement({
       id, x: clamp(num(c.x, 0), 0, widthM), y: clamp(num(c.y, 0), 0, heightM),
       pan: norm360(num(c.pan ?? c.pan_angle ?? c.angle, 0)),
       fov: clamp(num(c.fov, 85), 30, 140), res: clamp(num(c.res, 2560), 640, 7680),
-      range: clamp(num(c.range, 10), 1, 30), height: clamp(num(c.height, 2.4), 1.8, 4),
-      ...(c.tilt !== undefined ? { tilt: clamp(num(c.tilt, 20), 0, 85) } : {}),
+      range: clamp(num(c.range, 10), 1, 30), height: clamp(num(c.height, 2.4), 1.8, 6),
+      ...(['wall', 'ceiling'].includes(c.mount) ? { mount: c.mount as Camera['mount'] } : {}),
+      ...(c.mount === 'ceiling' ? { ceilingDrop: num(c.ceilingDrop, 0.15) } : {}),
+      ...(c.tilt !== undefined ? { tilt: clamp(num(c.tilt, c.mount === 'ceiling' ? 45 : 20), 0, 90) } : {}),
       ...(c.vfov !== undefined ? { vfov: clamp(num(c.vfov, 55), 10, 120) } : {}),
       target: typeof c.target === 'string' ? c.target : undefined,
       model: typeof c.model === 'string' ? c.model : undefined
-    };
+    }, layout);
   });
 }
 
@@ -38,6 +41,7 @@ export function normalizeLayout(raw: any): Layout {
   const L = raw?.layout ?? raw;
   if (!L || typeof L !== 'object' || !Array.isArray(L.obstacles)) throw new Error('File không đúng định dạng layout OptiCam.');
   const widthM = num(L.widthM ?? L.width, 10), heightM = num(L.heightM ?? L.height, 6);
+  const ceilingHeight = ceilingHeightFor({ ceilingHeight: L.ceilingHeight });
   if (widthM < 3 || heightM < 3 || widthM > 40 || heightM > 40) throw new Error('Kích thước mặt bằng ngoài khoảng 3–40 m.');
   const floorPolygon = validateFloorPolygon(L.floorPolygon, widthM, heightM);
   const gridM = num(L.gridM ?? L.grid_size, 0.5);
@@ -81,7 +85,16 @@ export function normalizeLayout(raw: any): Layout {
     }
     return obstacle;
   });
-  const cameras = normalizeCameras(L.cameras ?? [], widthM, heightM);
+  const cameras = normalizeCameras(L.cameras ?? [], widthM, heightM, { ceilingHeight });
+  const cameraFloor = floorOutline({ widthM, heightM, floorPolygon });
+  if (cameras.some(camera => camera.mount === 'ceiling' && ![[0, 0], [.12, 0], [-.12, 0], [0, .12], [0, -.12]].every(([dx, dy]) =>
+    pointInFloor([camera.x + dx, camera.y + dy], cameraFloor)))) {
+    throw new Error('Camera gắn trần cần cách tường tối thiểu 0,12 m.');
+  }
+  if (cameras.some(camera => camera.mount === 'ceiling' && obstacles.some(obstacle =>
+    obstacle.type !== 'entrance' && obstacle.elev >= camera.height - .08 && distToObs(camera.x, camera.y, obstacle) < 0.12))) {
+    throw new Error('Camera gắn trần giao với vật cản cao. Hãy đổi vị trí hoặc giảm chiều dài gá.');
+  }
   if (L.people !== undefined && (!Array.isArray(L.people) || L.people.length > MAX_PEOPLE)) throw new Error(`Mỗi mặt bằng hỗ trợ tối đa ${MAX_PEOPLE} người.`);
   const personIds = new Set<string>();
   const people: Person[] = (L.people ?? []).map((person: any, index: number) => {
@@ -116,6 +129,11 @@ export function normalizeLayout(raw: any): Layout {
   }
   return {
     floorPolygon,
+    ceilingHeight,
+    optimization: {
+      algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : 'hybrid',
+      mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed'
+    },
     ...(people.length ? { people } : {}),
     description: typeof L.description === 'string' ? L.description : undefined,
     designNotes: Array.isArray(L.designNotes) ? L.designNotes.filter((note: unknown) => typeof note === 'string').slice(0, 12) : undefined,

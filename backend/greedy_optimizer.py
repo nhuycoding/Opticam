@@ -14,6 +14,10 @@ else:
 
 FACE_HEIGHT_M = 1.6
 DORI_FACTORS = ((250, 1.0), (125, 0.75), (62.5, 0.4), (25, 0.2), (0, 0.0))
+RISK_RED_THRESHOLD = 4.0
+RISK_YELLOW_THRESHOLD = 2.0
+ID_PPM = 250.0
+REC_PPM = 125.0
 
 GridPoint = tuple[float, float, float]
 RISK_DEFAULTS = {
@@ -281,12 +285,20 @@ class OptiCamGreedy:
     def run_greedy(
         self, camera_candidates, grid_points, camera_budget, target_coverage=0.95,
         camera_candidate_groups=None, algorithm="greedy",
+        red_target=95.0, yellow_target=80.0, lambda_red=1.5, lambda_yel=0.75,
     ):
-        """Greedy and bounded 1-swap local search on the exact same sampled pool."""
+        """Greedy, hybrid local search, and Two-Stage KPI-aware hybrid search on the shared candidate pool."""
         started = time.perf_counter()
         groups = camera_candidate_groups or [camera_candidates]
         count = len(grid_points)
         weights = [w for _, _, w in grid_points]
+        is_kpi = algorithm == "kpi_hybrid"
+        red_mask = [w >= RISK_RED_THRESHOLD for w in weights]
+        yel_mask = [RISK_YELLOW_THRESHOLD <= w < RISK_RED_THRESHOLD for w in weights]
+        red_n = sum(1 for m in red_mask if m)
+        yel_n = sum(1 for m in yel_mask if m)
+        total_w = sum(weights)
+
         cache = {}
         candidate_groups = []
         for group in groups:
@@ -298,53 +310,87 @@ class OptiCamGreedy:
                         candidates.append((camera, ppm))
                 cache[id(group)] = candidates
             candidate_groups.append(cache[id(group)])
+
         def pose(camera):
             return (camera.get("mount", "wall"), camera["x"], camera["y"], camera["pan"], camera.get("tilt", 20), camera["height"])
+
         selected = []
+
         def merge(except_index=-1):
             result = [0.0] * count
             for i, (candidate, _) in enumerate(selected):
                 if i != except_index:
                     result = [max(a, b) for a, b in zip(result, candidate[1])]
             return result
-        def addition(base, candidate):
-            score = tie = 0.0
-            for old, new, w in zip(base, candidate[1], weights):
+
+        def base_kpi_stats(base):
+            red_ok = sum(1 for rm, p in zip(red_mask, base) if rm and p >= ID_PPM)
+            yel_ok = sum(1 for ym, p in zip(yel_mask, base) if ym and p >= REC_PPM)
+            red_pct = (100.0 * red_ok / red_n) if red_n else 100.0
+            yel_pct = (100.0 * yel_ok / yel_n) if yel_n else 100.0
+            hinge = total_w * 0.01 * (lambda_red * max(0.0, red_target - red_pct) + lambda_yel * max(0.0, yellow_target - yel_pct))
+            return red_ok, yel_ok, red_pct, hinge
+
+        def addition(base, candidate, stage1_red=False, stats=None):
+            delta_w = tie = 0.0
+            add_red = add_yel = 0
+            for old, new, w, rm, ym in zip(base, candidate[1], weights, red_mask, yel_mask):
                 if new > old:
-                    score += w * (dori_factor(new) - dori_factor(old))
-                    tie += w * (min(new, 250) - min(old, 250))
-            return score, tie
+                    delta_w += w * (dori_factor(new) - dori_factor(old))
+                    tie += w * (min(new, ID_PPM) - min(old, ID_PPM))
+                    if is_kpi:
+                        if rm and old < ID_PPM <= new:
+                            add_red += 1
+                        if ym and old < REC_PPM <= new:
+                            add_yel += 1
+            if not is_kpi or stats is None:
+                return delta_w, tie
+            if stage1_red:
+                return add_red * (total_w / max(1, red_n)) + 0.1 * delta_w, tie
+            red_ok, yel_ok, _, base_hinge = stats
+            new_red_pct = (100.0 * (red_ok + add_red) / red_n) if red_n else 100.0
+            new_yel_pct = (100.0 * (yel_ok + add_yel) / yel_n) if yel_n else 100.0
+            new_hinge = total_w * 0.01 * (lambda_red * max(0.0, red_target - new_red_pct) + lambda_yel * max(0.0, yellow_target - new_yel_pct))
+            return delta_w + (base_hinge - new_hinge), tie
+
         def better(score, tie, best_score, best_tie):
             return score > best_score + 1e-9 or (abs(score - best_score) <= 1e-9 and tie > best_tie + 1e-9)
+
+        max_red_slots = max(1, math.ceil(0.67 * camera_budget))
         for slot in range(camera_budget):
             group = candidate_groups[min(slot, len(candidate_groups) - 1)]
             base = merge()
             used = {pose(candidate[0]) for candidate, _ in selected}
+            stats = base_kpi_stats(base) if is_kpi else None
+            stage1_red = bool(is_kpi and red_n > 0 and slot < max_red_slots and stats[2] < red_target)
             best, best_score, best_tie = None, -1.0, -1.0
             for candidate in group:
                 if pose(candidate[0]) in used:
                     continue
-                score, tie = addition(base, candidate)
+                score, tie = addition(base, candidate, stage1_red, stats)
                 if better(score, tie, best_score, best_tie):
                     best, best_score, best_tie = candidate, score, tie
             if best is not None:
                 selected.append((best, slot))
+
         def objective(ppm):
             return sum(w * dori_factor(p) for w, p in zip(weights, ppm))
+
         greedy_score = objective(merge())
         iterations = 0
-        if algorithm == "hybrid":
+        if algorithm in ("hybrid", "kpi_hybrid"):
             for _ in range(3):
                 improved = False
                 for index, (old, slot) in enumerate(selected):
                     base = merge(index)
                     used = {pose(c[0]) for i, (c, _) in enumerate(selected) if i != index}
-                    old_gain, old_tie = addition(base, old)
+                    stats = base_kpi_stats(base) if is_kpi else None
+                    old_gain, old_tie = addition(base, old, False, stats)
                     best, best_gain, best_tie = old, old_gain, old_tie
                     for candidate in candidate_groups[min(slot, len(candidate_groups) - 1)]:
                         if pose(candidate[0]) in used:
                             continue
-                        gain, tie = addition(base, candidate)
+                        gain, tie = addition(base, candidate, False, stats)
                         if better(gain, tie, best_gain, best_tie):
                             best, best_gain, best_tie = candidate, gain, tie
                     if best_gain > old_gain + 1e-9:
@@ -355,11 +401,10 @@ class OptiCamGreedy:
         ppm = merge()
         final_score = objective(ppm)
         coverage = sum(p >= 25 for p in ppm) / count * 100 if count else 100
-        total_weight = sum(weights)
         return [candidate[0] for candidate, _ in selected], {
             "area_coverage_pct": round(coverage, 1),
             "target_coverage_reached": coverage / 100 >= target_coverage,
-            "weighted_coverage_pct": round(final_score / total_weight * 100, 1) if total_weight else 100,
+            "weighted_coverage_pct": round(final_score / total_w * 100, 1) if total_w else 100,
             "diagnostics": {"algorithm": algorithm, "greedyScore": greedy_score, "finalScore": final_score,
                             "iterations": iterations, "candidateCount": sum(len(c) for c in cache.values()),
                             "ms": (time.perf_counter() - started) * 1000},

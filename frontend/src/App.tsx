@@ -687,7 +687,7 @@ export default function App() {
               <PlanSection id="camera" title="Camera và tối ưu" icon={CameraIcon} expanded={group === 'camera'} onToggle={() => toggleGroup('camera')}>
                 <CameraCountOptimizer key={layout.name} count={cameraBudget} mounts={layout.optimization?.mounts ?? 'mixed'}
                   onCountChange={setCameraBudget} onOptimize={autoOptimize} onInvalid={() => { setGroup('camera'); setBrush(null); }} disabled={optimizing}
-                  onMounts={mounts => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'hybrid', mounts } })} />
+                  onMounts={mounts => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'kpi_hybrid', mounts } })} />
                 {group === 'camera' && (dimension === 'plan'
                   ? <Inspector mode="camera" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />
                   : <SceneInspector mode="camera" layout={layout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor}

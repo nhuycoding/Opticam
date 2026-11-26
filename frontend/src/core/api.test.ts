@@ -9,7 +9,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 const layout = withManualCams(PRESETS[0]);
 const zones = buildZones(layout);
-const diagnostics = { algorithm:'hybrid',greedyScore:10,finalScore:12,iterations:1,candidateCount:100,ms:5 };
+const diagnostics = { algorithm:'kpi_hybrid',greedyScore:10,finalScore:12,iterations:1,candidateCount:100,ms:5 };
 const localResult = { cameras: layout.cameras.slice(0, 2), metTargets: false, red: 0, yellow: 0 };
 
 describe('Optimizer API resilience', () => {
@@ -53,9 +53,17 @@ describe('Optimizer API resilience', () => {
   });
   it('falls back when a backend violates the requested mounting surface', async () => {
     const project={...layout,optimization:{algorithm:'hybrid' as const,mounts:'ceiling' as const}};
-    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({cameras:layout.cameras.slice(0,2),diagnostics}))));
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({cameras:layout.cameras.slice(0,2),diagnostics:{...diagnostics,algorithm:'hybrid'}}))));
     vi.mocked(solveLocally).mockResolvedValue(localResult);
     expect((await requestOptimize(project,zones,2)).source).toBe('client');
+  });
+  it('accepts kpi_hybrid diagnostics returned from backend /api/v1/optimize', async () => {
+    const project = { ...layout, optimization: { algorithm: 'kpi_hybrid' as const, mounts: 'mixed' as const } };
+    const kpiDiag = { algorithm: 'kpi_hybrid', greedyScore: 544.37, finalScore: 544.37, iterations: 0, candidateCount: 100, ms: 12 };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ cameras: layout.cameras.slice(0, 3), diagnostics: kpiDiag }))));
+    const result = await requestOptimize(project, zones, 3);
+    expect(result.source).toBe('api');
+    expect(result.diagnostics?.algorithm).toBe('kpi_hybrid');
   });
   it('does not start a request after cancellation', async () => {
     const fetch = vi.fn();

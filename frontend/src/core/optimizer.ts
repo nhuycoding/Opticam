@@ -2,9 +2,12 @@ import { floorOutline, pointInFloor } from './footprint';
 import { ceilingCameraHeight, ceilingHeightFor, normalizeCameraPlacement } from './camera';
 import { canPlaceCeilingCamera } from './cameraEditing';
 import { snapToWall, distToObs } from './geometry';
-import type { Camera, Layout, Weight, Zone } from '../types';
+import type { Camera, Layout, OptimizationAlgorithm, Weight, Zone } from '../types';
 import { snapAngle, wallAnchors } from './geometry';
-import { blockerObstacles, DORI_FACTOR, doriOf, evaluate, ppmAt, riskBand } from './optics';
+import {
+  blockerObstacles, DORI_FACTOR, DORI_MIN, doriOf, evaluate, ppmAt,
+  RISK_RED_THRESHOLD, RISK_YELLOW_THRESHOLD, riskBand
+} from './optics';
 
 export const makeCamera = (id: string, x: number, y: number, pan: number): Camera =>
   ({ id, x, y, pan: snapAngle(pan), fov: 85, res: 2560, range: 10, height: 2.4, model: 'Dome IP 4MP (2560px, ống kính 2.8mm)' });
@@ -33,12 +36,14 @@ export interface CandOpts {
   cameraProfile?: Profile;
   cameraProfiles?: Profile[];
   mounts?: 'wall' | 'mixed' | 'ceiling';
-  algorithm?: 'greedy' | 'hybrid';
+  algorithm?: OptimizationAlgorithm;
   maxCandidateCells?: number;
   maxCandidates?: number;
+  redTarget?: number;
+  yellowTarget?: number;
 }
 export interface OptimizationDiagnostics {
-  algorithm: 'greedy' | 'hybrid';
+  algorithm: OptimizationAlgorithm;
   greedyScore: number;
   finalScore: number;
   iterations: number;
@@ -98,18 +103,47 @@ export function greedyPlace(l: Layout, zones: Zone[], K = 3, weighted = true, op
   return optimizeCameras(l, zones, K, weighted, { ...opts, algorithm: 'greedy' }).cameras;
 }
 
-export function optimizeCameras(l: Layout, zones: Zone[], K = 3, weighted = true, opts: CandOpts = {}): { cameras: Camera[]; diagnostics: OptimizationDiagnostics } {
-  if (!Number.isInteger(K) || K < 0 || K > 20) throw new Error('Ngân sách camera phải là số nguyên từ 0 đến 20.');
-  const started = performance.now(), algorithm = opts.algorithm ?? l.optimization?.algorithm ?? 'hybrid';
-  const free = zones.filter(z => !z.solid), weights = free.map(z => weighted ? z.w : 1);
+/** Build deduplicated per-slot candidate pools once so single-K and Min-K sweeps avoid redundant raycasting. */
+function prepareCandidateGroups(l: Layout, free: Zone[], K: number, opts: CandOpts): { groups: Candidate[][]; candidateCount: number } {
   const profiles = Array.from({ length: K }, (_, i) => profileOnly(opts.cameraProfiles?.[i] ?? opts.cameraProfile));
   const unique = new Set(profiles.map(p => JSON.stringify(p))).size || 1;
   const cache = new Map<string, Candidate[]>();
   const groups = profiles.map(profile => {
     const key = JSON.stringify(profile);
-    if (!cache.has(key)) cache.set(key, buildCandidates(l, free, { ...opts, cameraProfile: profile, maxCandidateCells: Math.max(free.length, Math.floor(1_500_000 / unique)), maxCandidates: Math.max(1, Math.floor(12_000 / unique)) }));
+    if (!cache.has(key)) {
+      cache.set(key, buildCandidates(l, free, {
+        ...opts,
+        cameraProfile: profile,
+        maxCandidateCells: Math.max(free.length, Math.floor(1_500_000 / unique)),
+        maxCandidates: Math.max(1, Math.floor(12_000 / unique))
+      }));
+    }
     return cache.get(key)!;
   });
+  const candidateCount = [...cache.values()].reduce((n, c) => n + c.length, 0);
+  return { groups, candidateCount };
+}
+
+/** Core Greedy + optional 3-pass 1-swap polish shared by fixed-K optimizeCameras and dedicated per-K search. */
+function solvePrepared(
+  free: Zone[],
+  weights: number[],
+  groups: Candidate[][],
+  K: number,
+  algorithm: OptimizationAlgorithm,
+  weighted: boolean,
+  candidateCount: number,
+  redTarget = 95,
+  yellowTarget = 80
+): { cameras: Camera[]; diagnostics: OptimizationDiagnostics } {
+  const started = performance.now();
+  const isKpi = algorithm === 'kpi_hybrid' && weighted;
+  const lambdaRed = 1.5, lambdaYel = 0.75;
+  const redMask = free.map(z => weighted && z.w >= RISK_RED_THRESHOLD);
+  const yelMask = free.map(z => weighted && z.w >= RISK_YELLOW_THRESHOLD && z.w < RISK_RED_THRESHOLD);
+  const redN = redMask.filter(Boolean).length, yelN = yelMask.filter(Boolean).length;
+  const totalW = weights.reduce((s, w) => s + w, 0);
+
   const selected: Array<{ candidate: Candidate; slot: number }> = [];
   const objective = (ppm: Float32Array) => { let score = 0; for (let j = 0; j < ppm.length; j++) score += weights[j] * F(ppm[j]); return score; };
   const merge = (except = -1) => {
@@ -117,39 +151,66 @@ export function optimizeCameras(l: Layout, zones: Zone[], K = 3, weighted = true
     selected.forEach(({ candidate }, i) => { if (i !== except) for (let j = 0; j < result.length; j++) result[j] = Math.max(result[j], candidate.ppm[j]); });
     return result;
   };
-  // Lexicographic scoring: exact DORI objective first, nominal PPM only breaks ties.
-  const addition = (base: Float32Array, candidate: Candidate): [number, number] => {
-    let score = 0, tie = 0;
+  const baseKpiStats = (base: Float32Array) => {
+    let redOk = 0, yelOk = 0;
+    for (let j = 0; j < base.length; j++) {
+      if (redMask[j] && base[j] >= DORI_MIN.identification) redOk++;
+      if (yelMask[j] && base[j] >= DORI_MIN.recognition) yelOk++;
+    }
+    const redPct = redN ? (100 * redOk) / redN : 100;
+    const yelPct = yelN ? (100 * yelOk) / yelN : 100;
+    const hinge = totalW * 0.01 * (lambdaRed * Math.max(0, redTarget - redPct) + lambdaYel * Math.max(0, yellowTarget - yelPct));
+    return { redOk, yelOk, redPct, hinge };
+  };
+  // Lexicographic scoring: DORI (plus Stage-1 Red / hinge for kpi_hybrid) first, nominal PPM only breaks ties.
+  const addition = (base: Float32Array, candidate: Candidate, stage1Red = false, stats?: ReturnType<typeof baseKpiStats>): [number, number] => {
+    let deltaW = 0, tie = 0, addRed = 0, addYel = 0;
     for (let j = 0; j < base.length; j++) {
       const p = candidate.ppm[j];
-      if (p > base[j]) { score += weights[j] * (F(p) - F(base[j])); tie += weights[j] * (Math.min(p, 250) - Math.min(base[j], 250)); }
+      if (p > base[j]) {
+        deltaW += weights[j] * (F(p) - F(base[j]));
+        tie += weights[j] * (Math.min(p, 250) - Math.min(base[j], 250));
+        if (isKpi) {
+          if (redMask[j] && base[j] < DORI_MIN.identification && p >= DORI_MIN.identification) addRed++;
+          if (yelMask[j] && base[j] < DORI_MIN.recognition && p >= DORI_MIN.recognition) addYel++;
+        }
+      }
     }
-    return [score, tie];
+    if (!isKpi || !stats) return [deltaW, tie];
+    if (stage1Red) return [addRed * (totalW / Math.max(1, redN)) + 0.1 * deltaW, tie];
+    const newRedPct = redN ? (100 * (stats.redOk + addRed)) / redN : 100;
+    const newYelPct = yelN ? (100 * (stats.yelOk + addYel)) / yelN : 100;
+    const newHinge = totalW * 0.01 * (lambdaRed * Math.max(0, redTarget - newRedPct) + lambdaYel * Math.max(0, yellowTarget - newYelPct));
+    return [deltaW + (stats.hinge - newHinge), tie];
   };
+
+  const maxRedSlots = Math.max(1, Math.ceil(0.67 * K));
   for (let slot = 0; slot < K; slot++) {
     const base = merge(), used = new Set(selected.map(s => poseKey(s.candidate.cam)));
+    const stats = isKpi ? baseKpiStats(base) : undefined;
+    const stage1Red = Boolean(isKpi && redN > 0 && slot < maxRedSlots && stats!.redPct < redTarget);
     let best: Candidate | undefined, bestScore = -1, bestTie = -1;
     for (const candidate of groups[slot]) {
       if (used.has(poseKey(candidate.cam))) continue;
-      const [score, tie] = addition(base, candidate);
+      const [score, tie] = addition(base, candidate, stage1Red, stats);
       if (score > bestScore + 1e-9 || (Math.abs(score - bestScore) <= 1e-9 && tie > bestTie + 1e-9)) { best = candidate; bestScore = score; bestTie = tie; }
     }
     if (best) selected.push({ candidate: best, slot });
   }
   const greedyScore = objective(merge());
   let iterations = 0;
-  if (algorithm === 'hybrid') for (let pass = 0; pass < 3; pass++) {
+  if (algorithm === 'hybrid' || algorithm === 'kpi_hybrid') for (let pass = 0; pass < 3; pass++) {
     let improved = false;
     for (let index = 0; index < selected.length; index++) {
       const base = merge(index), used = new Set(selected.filter((_, i) => i !== index).map(s => poseKey(s.candidate.cam)));
-      const old = selected[index], oldGain = addition(base, old.candidate)[0];
-      let best = old.candidate, bestGain = oldGain, bestTie = addition(base, old.candidate)[1];
+      const stats = isKpi ? baseKpiStats(base) : undefined;
+      const old = selected[index], [oldGain, oldTie] = addition(base, old.candidate, false, stats);
+      let best = old.candidate, bestGain = oldGain, bestTie = oldTie;
       for (const candidate of groups[old.slot]) {
         if (used.has(poseKey(candidate.cam))) continue;
-        const [gain, tie] = addition(base, candidate);
+        const [gain, tie] = addition(base, candidate, false, stats);
         if (gain > bestGain + 1e-9 || (Math.abs(gain - bestGain) <= 1e-9 && tie > bestTie + 1e-9)) { best = candidate; bestGain = gain; bestTie = tie; }
       }
-      // Accept only strict DORI improvements; ties are deterministic inside the search.
       if (bestGain > oldGain + 1e-9) { selected[index] = { ...old, candidate: best }; improved = true; iterations++; }
     }
     if (!improved) break;
@@ -159,7 +220,16 @@ export function optimizeCameras(l: Layout, zones: Zone[], K = 3, weighted = true
     free.forEach((z, j) => { const s = weights[j] * F(candidate.ppm[j]); if (s > gain) { gain = s; top = z.w; } });
     return { ...candidate.cam, id: `CAM-${String(i + 1).padStart(2, '0')}`, target: TARGET[riskBand(top)] };
   });
-  return { cameras, diagnostics: { algorithm, greedyScore, finalScore: objective(merge()), iterations, candidateCount: [...cache.values()].reduce((n, c) => n + c.length, 0), ms: performance.now() - started } };
+  return { cameras, diagnostics: { algorithm, greedyScore, finalScore: objective(merge()), iterations, candidateCount, ms: performance.now() - started } };
+}
+
+export function optimizeCameras(l: Layout, zones: Zone[], K = 3, weighted = true, opts: CandOpts = {}): { cameras: Camera[]; diagnostics: OptimizationDiagnostics } {
+  if (!Number.isInteger(K) || K < 0 || K > 20) throw new Error('Ngân sách camera phải là số nguyên từ 0 đến 20.');
+  const started = performance.now(), algorithm = opts.algorithm ?? l.optimization?.algorithm ?? 'kpi_hybrid';
+  const free = zones.filter(z => !z.solid), weights = free.map(z => weighted ? z.w : 1);
+  const { groups, candidateCount } = prepareCandidateGroups(l, free, K, opts);
+  const result = solvePrepared(free, weights, groups, K, algorithm, weighted, candidateCount, opts.redTarget ?? 95, opts.yellowTarget ?? 80);
+  return { ...result, diagnostics: { ...result.diagnostics, ms: performance.now() - started } };
 }
 
 export interface MinimumCameraSolution {
@@ -170,16 +240,39 @@ export interface MinimumCameraSolution {
   diagnostics?: OptimizationDiagnostics;
 }
 
-/** Shortest prefix of the optimized solution meeting both KPIs; not a global minimum certificate. */
-export function minimumCamerasForTargets(l: Layout, zones: Zone[], cameraProfiles: Camera[], redTarget = 95, yellowTarget = 80): MinimumCameraSolution {
-  const result = optimizeCameras(l, zones, cameraProfiles.length, true, { cameraProfiles });
-  let bestScore = evaluate({ ...l, cameras: result.cameras }, zones).score;
-  for (let count = 1; count <= result.cameras.length; count++) {
-    const cameras = result.cameras.slice(0, count), score = evaluate({ ...l, cameras }, zones).score;
-    if (score.red >= redTarget && score.yellow >= yellowTarget) return { cameras, metTargets: true, red: score.red, yellow: score.yellow };
-    if (count === result.cameras.length) bestScore = score;
+/** Dedicated per-K KPI search reusing one shared candidate raycast pass across count = 1..M. */
+export function minimumCamerasForTargets(l: Layout, zones: Zone[], cameraProfiles: Camera[], redTarget = 95, yellowTarget = 80, opts: CandOpts = {}): MinimumCameraSolution {
+  const started = performance.now();
+  const free = zones.filter(z => !z.solid), weights = free.map(z => z.w);
+  const maxK = cameraProfiles.length;
+  const minAlg: OptimizationAlgorithm = opts.algorithm ?? (l.optimization?.algorithm === 'greedy' ? 'greedy' : 'kpi_hybrid');
+  const { groups, candidateCount } = prepareCandidateGroups(l, free, maxK, { ...opts, cameraProfiles });
+
+  let fallbackResult = solvePrepared(free, weights, groups, 0, minAlg, true, candidateCount, redTarget, yellowTarget);
+  let fallbackScore = evaluate({ ...l, cameras: fallbackResult.cameras }, zones).score;
+
+  for (let count = 1; count <= maxK; count++) {
+    const stepResult = solvePrepared(free, weights, groups.slice(0, count), count, minAlg, true, candidateCount, redTarget, yellowTarget);
+    const score = evaluate({ ...l, cameras: stepResult.cameras }, zones).score;
+    fallbackResult = stepResult;
+    fallbackScore = score;
+    if (score.red >= redTarget && score.yellow >= yellowTarget) {
+      return {
+        cameras: stepResult.cameras,
+        metTargets: true,
+        red: score.red,
+        yellow: score.yellow,
+        diagnostics: { ...stepResult.diagnostics, ms: performance.now() - started }
+      };
+    }
   }
-  return { cameras: result.cameras, metTargets: false, red: bestScore.red, yellow: bestScore.yellow, diagnostics: result.diagnostics };
+  return {
+    cameras: fallbackResult.cameras,
+    metTargets: false,
+    red: fallbackScore.red,
+    yellow: fallbackScore.yellow,
+    diagnostics: { ...fallbackResult.diagnostics, ms: performance.now() - started }
+  };
 }
 
 /**

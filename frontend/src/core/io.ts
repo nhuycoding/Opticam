@@ -131,7 +131,7 @@ export function normalizeLayout(raw: any): Layout {
     floorPolygon,
     ceilingHeight,
     optimization: {
-      algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : 'hybrid',
+      algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : L.optimization?.algorithm === 'hybrid' ? 'hybrid' : 'kpi_hybrid',
       mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed'
     },
     ...(people.length ? { people } : {}),

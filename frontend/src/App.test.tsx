@@ -86,7 +86,7 @@ describe('Studio workflow', () => {
     expect(renderer.root.findAllByProps({ 'aria-label': 'Thuật toán tối ưu' })).toHaveLength(0);
     act(() => renderer.root.findByProps({ 'aria-label': 'Vị trí cho phép tối ưu' }).props.onChange({ target: { value: 'ceiling' } }));
     await optimize();
-    expect(vi.mocked(requestOptimize).mock.calls.at(-1)![0]).toMatchObject({ ceilingHeight: 3.8, optimization: { algorithm: 'hybrid', mounts: 'ceiling' } });
+    expect(vi.mocked(requestOptimize).mock.calls.at(-1)![0]).toMatchObject({ ceilingHeight: 3.8, optimization: { algorithm: 'kpi_hybrid', mounts: 'ceiling' } });
   });
 
   it('optimizes a typed camera count without deleting the existing cameras first', async () => {

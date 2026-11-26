@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { withManualCams, PRESETS } from '../data/presets';
 import { pointInFloor } from './footprint';
 import { buildZones, evaluate } from './optics';
-import { buildCandidates, greedyPlace, optimizeCameras } from './optimizer';
+import { buildCandidates, greedyPlace, minimumCamerasForTargets, optimizeCameras } from './optimizer';
 
 const base = () => ({ ...withManualCams(PRESETS[0]), widthM: 4, heightM: 3, gridM: 1, obstacles: [], cameras: [] });
 
@@ -54,5 +54,26 @@ describe('Wall and ceiling placement search', () => {
     const zones=buildZones(l);
     expect(buildCandidates(l,zones).length*zones.length).toBeLessThanOrEqual(1_500_000);
     expect(optimizeCameras(l,zones.map(z=>({...z,solid:true})),3).cameras).toEqual([]);
+  });
+  it('promotes Two-Stage kpi_hybrid (T2) and dedicated per-K minimumCamerasForTargets (T3) with cross-stack parity', () => {
+    const circleK = withManualCams(PRESETS[1]), zCK = buildZones(circleK);
+    const ckBase = optimizeCameras(circleK, zCK, 3, true, { algorithm: 'hybrid' });
+    const ckKpi = optimizeCameras(circleK, zCK, 3, true, { algorithm: 'kpi_hybrid' });
+    expect(evaluate({ ...circleK, cameras: ckBase.cameras }, zCK).score.red).toBeLessThan(95);
+    const ckScore = evaluate({ ...circleK, cameras: ckKpi.cameras }, zCK).score;
+    expect(ckScore.red).toBeGreaterThanOrEqual(95);
+    expect(ckScore.yellow).toBeGreaterThanOrEqual(80);
+    expect(ckKpi.diagnostics.finalScore).toBeCloseTo(655.8522728639972, 6);
+    expect(ckKpi.cameras.map(c => [c.mount, Number(c.x.toFixed(4)), c.y, c.pan, c.tilt])).toEqual([
+      ['ceiling', 5.2885, 5.5, 210, 35], ['ceiling', 12.0192, 5.5, 240, 35], ['ceiling', 4.3269, 5.5, 330, 35]
+    ]);
+
+    const mini = withManualCams(PRESETS[2]), zM = buildZones(mini);
+    const profiles = Array.from({ length: 6 }, (_, i) => mini.cameras[i] ?? { ...mini.cameras[0], id: `CAM-0${i + 1}` });
+    const minSol = minimumCamerasForTargets(mini, zM, profiles);
+    expect(minSol.metTargets).toBe(true);
+    expect(minSol.cameras.length).toBeLessThanOrEqual(3);
+    expect(minSol.red).toBeGreaterThanOrEqual(95);
+    expect(minSol.yellow).toBeGreaterThanOrEqual(80);
   });
 });

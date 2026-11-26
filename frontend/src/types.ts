@@ -57,12 +57,14 @@ export interface RiskStroke {
   weight: Weight;
 }
 
+export type OptimizationAlgorithm = 'greedy' | 'hybrid' | 'kpi_hybrid';
+
 export interface Layout {
   version: string; name: string;
   widthM: number; heightM: number; gridM: number; pixelsPerMeter: number;
   targetHeight: TargetHeight;
   ceilingHeight?: number;
-  optimization?: { algorithm: 'greedy' | 'hybrid'; mounts: 'wall' | 'mixed' | 'ceiling' };
+  optimization?: { algorithm: OptimizationAlgorithm; mounts: 'wall' | 'mixed' | 'ceiling' };
   floorPolygon?: [number, number][];
   description?: string;
   designNotes?: string[];

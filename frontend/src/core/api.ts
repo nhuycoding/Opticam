@@ -32,11 +32,12 @@ export function fromApiResponse(json: any, l: Layout): Camera[] {
 }
 
 function readDiagnostics(value: any): OptimizationDiagnostics | undefined {
-  if (!value || !['greedy', 'hybrid'].includes(value.algorithm)) return;
+  if (!value || !['greedy', 'hybrid', 'kpi_hybrid'].includes(value.algorithm)) return;
   const keys = ['greedyScore', 'finalScore', 'iterations', 'candidateCount', 'ms'] as const;
   if (!keys.every(key => typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] >= 0)) return;
   if (!Number.isInteger(value.iterations) || !Number.isInteger(value.candidateCount)) return;
-  if (value.finalScore < value.greedyScore - 1e-6) return;
+  if (value.greedyScore > 0 && value.finalScore <= 0) return;
+  if (value.algorithm !== 'kpi_hybrid' && value.finalScore < value.greedyScore - 1e-6) return;
   if (value.algorithm === 'greedy' && Math.abs(value.finalScore - value.greedyScore) > 1e-6) return;
   return { algorithm: value.algorithm, greedyScore: value.greedyScore, finalScore: value.finalScore,
     iterations: value.iterations, candidateCount: value.candidateCount, ms: value.ms };
@@ -58,7 +59,7 @@ export async function requestOptimize(l: Layout, zones: Zone[], K = 3, cameraPro
       const cameras = fromApiResponse(json, l);
       if (cameras.length > K) throw new Error('Backend trả quá ngân sách camera.');
       const diagnostics = readDiagnostics(json.diagnostics);
-      if (!diagnostics || diagnostics.algorithm !== (l.optimization?.algorithm ?? 'hybrid') || diagnostics.candidateCount < cameras.length) throw new Error('Backend cần cập nhật bộ tối ưu camera trần.');
+      if (!diagnostics || diagnostics.algorithm !== (l.optimization?.algorithm ?? 'kpi_hybrid') || diagnostics.candidateCount < cameras.length) throw new Error('Backend cần cập nhật bộ tối ưu camera trần.');
       const mounts = l.optimization?.mounts ?? 'mixed';
       if (mounts !== 'mixed' && cameras.some(camera => (camera.mount ?? 'wall') !== mounts)) throw new Error('Backend trả sai kiểu lắp camera.');
       return { cameras, source: 'api', diagnostics };

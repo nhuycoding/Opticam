@@ -1,7 +1,16 @@
 import { floorArea } from './core/footprint';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type Konva from 'konva';
-import { ArrowLeft, ChevronDown, ChevronRight, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map, HelpCircle } from 'lucide-react';
+import { TutorialModal } from './components/TutorialModal';
+
+const TUTORIAL_STORAGE_KEY = 'opticam.tutorial.dismissed';
+
+function shouldAutoOpenTutorial(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.localStorage?.getItem === 'function'
+    && window.localStorage.getItem(TUTORIAL_STORAGE_KEY) !== '1';
+}
 import '@fontsource/be-vietnam-pro/vietnamese-400.css';
 import '@fontsource/be-vietnam-pro/vietnamese-500.css';
 import '@fontsource/be-vietnam-pro/vietnamese-600.css';
@@ -75,6 +84,17 @@ export default function App() {
   const [sel, setSel] = useState<Selection>(null);
   const [people, setPeople] = useState<Person[]>(() => structuredClone(PRESETS[0].people ?? []));
   const [grid, setGrid] = useState(true), [anchors, setAnchors] = useState(false), [bom, setBom] = useState(false);
+  const [showTutorial, setShowTutorial] = useState<boolean>(shouldAutoOpenTutorial);
+  const closeTutorial = useCallback((dontShowAgain: boolean) => {
+    if (dontShowAgain) {
+      try {
+        window.localStorage?.setItem(TUTORIAL_STORAGE_KEY, '1');
+      } catch {
+        // Ignore storage errors in private or sandboxed environments.
+      }
+    }
+    setShowTutorial(false);
+  }, []);
   const [pendingLayout, setPendingLayout] = useState<{ layout: Layout; goPlan: boolean } | null>(null);
   const [solveMs, setSolveMs] = useState(0), [renderMs, setRenderMs] = useState(0), [unweighted, setUnweighted] = useState<Score | null>(null);
   const [msg, setMsg] = useState('');
@@ -591,6 +611,7 @@ export default function App() {
           <button onClick={redo} disabled={!redoReady} title="Làm lại (Ctrl+Y)" aria-label="Làm lại"><Redo2 size={17} /></button>
         </div>
         <div className="header-actions">
+          <button type="button" onClick={() => setShowTutorial(true)} title="Hướng dẫn nhanh" aria-label="Hướng dẫn nhanh"><HelpCircle size={17} /></button>
           <details className="export-menu"><summary aria-label="Xuất dự án"><Download size={15} /><span>Xuất dự án</span><ChevronDown size={13} /></summary>
             <div className="menu-popover">
               <button onClick={() => download('opticam_layout.json', exportBundle({ ...layout, people }, score))}>Lưu dự án JSON</button>
@@ -741,6 +762,7 @@ export default function App() {
         <span className="status-shortcuts">{isPlanning && <><kbd>O</kbd> tối ưu </>}<kbd>G</kbd> lưới <kbd>Esc</kbd> bỏ chọn</span>
       </footer>
       {bom && <BomModal layout={layout} onClose={closeBom} />}
+      {showTutorial && <TutorialModal onClose={closeTutorial} />}
       {pendingLayout && (
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="layout-confirm-title" onClick={(event) => { if (event.target === event.currentTarget) setPendingLayout(null); }}>
           <div className="modal-box confirm-modal">

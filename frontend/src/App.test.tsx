@@ -290,4 +290,23 @@ describe('Studio workflow', () => {
     expect(canvas().layout.gridM).toBe(.25);
     expect(canvas().layout.cameras).toBe(previous.cameras);
   });
+
+  it('opens, navigates, and closes the quick-start tutorial modal from header button', async () => {
+    const text = (n: ReactTestInstance | string): string => typeof n === 'string' ? n : n.children.map(text).join('');
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0);
+    const helpBtn = renderer.root.findByProps({ 'aria-label': 'Hướng dẫn nhanh' });
+    await act(async () => { helpBtn.props.onClick(); });
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(1);
+    const panelTitle = () => text(renderer.root.findByProps({ role: 'tabpanel' }).findByType('h3'));
+    expect(panelTitle()).toContain('Dựng cửa hàng & Đánh dấu vùng ưu tiên');
+    await click('Tiếp theo');
+    expect(panelTitle()).toContain('Chạy tối ưu & Chống khuất tầm tay (1.0 m)');
+    await click('Tiếp theo');
+    expect(panelTitle()).toContain('Đọc bản đồ DORI, Gạch chéo & Kiểm tra 3D');
+    await click('Quay lại');
+    expect(panelTitle()).toContain('Chạy tối ưu & Chống khuất tầm tay (1.0 m)');
+    await click('Tiếp theo');
+    await click('Bắt đầu thiết kế');
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0);
+  });
 });

@@ -1,9 +1,10 @@
-import { pointInFloor } from '../../core/footprint';
+import { floorOutline, pointInFloor } from '../../core/footprint';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { Circle, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
 import type { Camera, Cell, Layout, Obstacle, Person, RiskStroke, Weight } from '../../types';
-import { distToObs, round2, wallAnchors } from '../../core/geometry';
+import { buildObstacleFromDraft, buildWallObstacle, type PlacementDraft } from '../../core/editor';
+import { clamp, distToObs, round2, wallAnchors, type Pt } from '../../core/geometry';
 import { assessPersonAt, obstacleRiskWmax, riskWeightAt, RISK_DEFAULTS } from '../../core/optics';
 import { canPlacePerson } from '../../core/person';
 import { BaseGridLayer } from './BaseGridLayer';
@@ -14,7 +15,7 @@ import { PersonNode } from './PersonNode';
 import { PersonInfo } from './PersonInfo';
 import { HANDLE, PAD, priorityColor, riskColor, type PriorityBand, type Segment, type Selection, type Tool, type ViewMode } from './shared';
 import { RiskLegend } from './RiskLegend';
-import { cameraNumber } from '../../core/camera';
+import { cameraNumber, ceilingHeightFor } from '../../core/camera';
 
 export interface CanvasProps {
   readOnly?: boolean;
@@ -25,6 +26,14 @@ export interface CanvasProps {
   onCamera: (c: Camera) => void; onObstacle: (o: Obstacle) => void; onPaint: (strokes: RiskStroke[]) => void;
   people: Person[]; onAddPerson: (x: number, y: number) => void; onPerson: (person: Person) => void; onInvalidPerson: () => void;
   onSelect: (s: Selection) => void; onRotate: (dir: 1 | -1) => void; onMeasure: (s: Segment) => void;
+  placing?: PlacementDraft | null;
+  onPlaceObstacle?: (obstacle: Obstacle) => void;
+  onCancelPlacing?: () => void;
+  onAutoPlace?: () => void;
+  onRotatePlacing?: (dir: 1 | -1) => void;
+  onBuildWall?: (obstacle: Obstacle) => void;
+  onCompletePolygon?: (points: Pt[]) => void;
+  onExitTool?: () => void;
 }
 
 /** Ghép 4 Konva Layer + công cụ cọ rủi ro, đo khoảng cách, tooltip PPM. */
@@ -42,8 +51,82 @@ export function OptiCamCanvas(p: CanvasProps) {
   const worldWidth = L.widthM * ppm + PAD * 2, worldHeight = L.heightM * ppm + PAD * 2;
   const [zoom, setZoom] = useState(1), [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [placeCursor, setPlaceCursor] = useState<[number, number] | null>(null);
+  const [wallStart, setWallStart] = useState<Pt | null>(null);
+  const [wallCursor, setWallCursor] = useState<Pt | null>(null);
+  const [wallHeight, setWallHeight] = useState<number>(() => ceilingHeightFor(L));
+  const [wallOrtho, setWallOrtho] = useState(true);
+  const [wallChain, setWallChain] = useState(true);
+  const [polyPts, setPolyPts] = useState<Pt[]>([]);
+  const [polyCursor, setPolyCursor] = useState<Pt | null>(null);
+  const ceilingH = ceilingHeightFor(L);
+
+  useEffect(() => { if (!p.placing) setPlaceCursor(null); }, [p.placing]);
+  useEffect(() => {
+    setWallHeight((prev) => Math.min(ceilingH, Math.max(0.4, prev)));
+  }, [ceilingH]);
+  useEffect(() => {
+    if (p.tool !== 'wall') { setWallStart(null); setWallCursor(null); }
+    if (p.tool !== 'polygon') { setPolyPts([]); setPolyCursor(null); }
+  }, [p.tool]);
+
+  const snapEndpoints = useMemo(() => {
+    const pts: Pt[] = [...floorOutline(L)];
+    for (const obs of L.obstacles) {
+      if (obs.fixture !== 'partition') continue;
+      const radAngle = (obs.angle * Math.PI) / 180;
+      const cx = obs.x + obs.w / 2;
+      const cy = obs.y + obs.h / 2;
+      const half = obs.w / 2;
+      pts.push([cx - half * Math.cos(radAngle), cy - half * Math.sin(radAngle)]);
+      pts.push([cx + half * Math.cos(radAngle), cy + half * Math.sin(radAngle)]);
+    }
+    return pts;
+  }, [L]);
+
+  const snapWallPoint = useCallback((raw: Pt, anchor: Pt | null): Pt => {
+    let x = round2(clamp(Math.round(raw[0] * 10) / 10, 0, L.widthM));
+    let y = round2(clamp(Math.round(raw[1] * 10) / 10, 0, L.heightM));
+    if (anchor && wallOrtho) {
+      const dx = x - anchor[0];
+      const dy = y - anchor[1];
+      const len = Math.hypot(dx, dy);
+      if (len >= 0.15) {
+        const snappedAngle = (Math.round((Math.atan2(dy, dx) * 180) / Math.PI / 45) * 45 * Math.PI) / 180;
+        x = round2(clamp(anchor[0] + len * Math.cos(snappedAngle), 0, L.widthM));
+        y = round2(clamp(anchor[1] + len * Math.sin(snappedAngle), 0, L.heightM));
+      }
+    }
+    let bestDist = 0.24;
+    for (const pt of snapEndpoints) {
+      const d = Math.hypot(x - pt[0], y - pt[1]);
+      if (d < bestDist) {
+        bestDist = d;
+        x = round2(pt[0]);
+        y = round2(pt[1]);
+      }
+    }
+    return [x, y];
+  }, [L.widthM, L.heightM, snapEndpoints, wallOrtho]);
+
+  const snapPolyPoint = useCallback((raw: Pt): Pt => {
+    const step = Math.max(0.25, Math.min(L.gridM, 0.5));
+    return [
+      round2(clamp(Math.round(raw[0] / step) * step, 0, L.widthM)),
+      round2(clamp(Math.round(raw[1] / step) * step, 0, L.heightM)),
+    ];
+  }, [L.gridM, L.widthM, L.heightM]);
+
   const anchors = useMemo(() => wallAnchors(L.widthM, L.heightM, L.gridM, L.floorPolygon), [L.widthM, L.heightM, L.gridM, L.floorPolygon]);
   const labelScale = 1 / Math.max(.55, zoom);
+  const ghost = useMemo(
+    () => (p.placing && placeCursor ? buildObstacleFromDraft(L, p.placing, placeCursor[0], placeCursor[1]) : null),
+    [p.placing, placeCursor, L]
+  );
+  const wallPreview = useMemo(
+    () => (p.tool === 'wall' && wallStart && wallCursor ? buildWallObstacle(L, wallStart, wallCursor, { elev: wallHeight }) : null),
+    [p.tool, wallStart, wallCursor, L, wallHeight]
+  );
   const numberMasks = useMemo(() => {
     const masks = L.cameras.map(camera => ({ x: camera.x * ppm - 24 * labelScale, y: camera.y * ppm - 24 * labelScale, width: 48 * labelScale, height: 48 * labelScale }));
     const camera = p.selected?.kind === 'cam' ? L.cameras.find(camera => camera.id === p.selected?.id) : undefined;
@@ -53,7 +136,7 @@ export function OptiCamCanvas(p: CanvasProps) {
     }
     return masks;
   }, [L.cameras, ppm, p.selected, labelScale]);
-  const lock = p.readOnly || p.tool === 'measure' || p.brush !== null; // khoá kéo thả khi đang cọ/đo
+  const lock = p.readOnly || p.tool === 'measure' || p.tool === 'wall' || p.tool === 'polygon' || p.brush !== null || Boolean(p.placing); // khoá kéo thả khi đang cọ/đo/đặt đồ/dựng tường
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -132,6 +215,7 @@ export function OptiCamCanvas(p: CanvasProps) {
     lastPaintPoint.current = point;
   };
   const onDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (p.placing && !p.readOnly) return;
     if (e.target === e.target.getStage()) {
       p.onSelect(null);
       if (p.tool === 'select' && p.brush === null) {
@@ -146,6 +230,48 @@ export function OptiCamCanvas(p: CanvasProps) {
     if (p.brush) { painting.current = true; lastPaintPoint.current = null; paintAt(e); }
   };
   const onClick = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (p.placing && !p.readOnly) {
+      const point = meters(e);
+      if (!point) return;
+      const preview = buildObstacleFromDraft(L, p.placing, point[0], point[1]);
+      if (preview.valid) p.onPlaceObstacle?.(preview.obstacle);
+      return;
+    }
+    if (p.tool === 'wall' && !p.readOnly) {
+      const raw = meters(e);
+      if (!raw) return;
+      const snapped = snapWallPoint(raw, wallStart);
+      if (!wallStart) {
+        setWallStart(snapped);
+        setWallCursor(snapped);
+        return;
+      }
+      const preview = buildWallObstacle(L, wallStart, snapped, { elev: wallHeight });
+      if (preview.valid) {
+        p.onBuildWall?.(preview.obstacle);
+        if (wallChain) {
+          setWallStart(snapped);
+          setWallCursor(snapped);
+        } else {
+          setWallStart(null);
+          setWallCursor(null);
+        }
+      }
+      return;
+    }
+    if (p.tool === 'polygon' && !p.readOnly) {
+      const raw = meters(e);
+      if (!raw) return;
+      const pt = snapPolyPoint(raw);
+      if (polyPts.length >= 3 && Math.hypot(pt[0] - polyPts[0][0], pt[1] - polyPts[0][1]) < 0.35) {
+        p.onCompletePolygon?.(polyPts);
+        return;
+      }
+      if (!polyPts.length || Math.hypot(pt[0] - polyPts[polyPts.length - 1][0], pt[1] - polyPts[polyPts.length - 1][1]) >= 0.2) {
+        setPolyPts((cur) => [...cur, pt]);
+      }
+      return;
+    }
     if (p.readOnly || p.tool !== 'person' || e.target.findAncestor('.person-node', true)) return;
     const point = meters(e);
     if (!point || (L.floorPolygon && !pointInFloor(point, L.floorPolygon)) || point[0] < 0 || point[1] < 0 || point[0] > L.widthM || point[1] > L.heightM) return;
@@ -153,6 +279,24 @@ export function OptiCamCanvas(p: CanvasProps) {
     else p.onInvalidPerson();
   };
   const onMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (p.placing && !p.readOnly) {
+      const m = meters(e);
+      if (m) setPlaceCursor(m);
+      setHover(null);
+      return;
+    }
+    if (p.tool === 'wall' && !p.readOnly) {
+      const raw = meters(e);
+      if (raw) setWallCursor(snapWallPoint(raw, wallStart));
+      setHover(null);
+      return;
+    }
+    if (p.tool === 'polygon' && !p.readOnly) {
+      const raw = meters(e);
+      if (raw) setPolyCursor(snapPolyPoint(raw));
+      setHover(null);
+      return;
+    }
     if (panStart.current) {
       const pointer = e.target.getStage()?.getPointerPosition(), start = panStart.current;
       if (pointer) setPan({ x: start.panX + pointer.x - start.x, y: start.panY + pointer.y - start.y });
@@ -202,7 +346,77 @@ export function OptiCamCanvas(p: CanvasProps) {
       <button onClick={fitView}>Vừa khung</button>
       <button onClick={resetView}>100%</button>
     </div>
-    <div ref={viewportRef} className="stage-wrap" aria-label="Sơ đồ bố trí camera và mặt bằng cửa hàng" style={{ cursor: isPanning ? 'grabbing' : p.tool === 'measure' || p.tool === 'person' && !p.readOnly || p.brush !== null ? 'crosshair' : 'grab' }}>
+    <div ref={viewportRef} className="stage-wrap" aria-label="Sơ đồ bố trí camera và mặt bằng cửa hàng" style={{ cursor: isPanning ? 'grabbing' : p.placing || p.tool === 'wall' || p.tool === 'polygon' || p.tool === 'measure' || p.tool === 'person' && !p.readOnly || p.brush !== null ? 'crosshair' : 'grab' }}>
+      {p.placing && !p.readOnly && (
+        <div className="placement-banner" role="status">
+          <span>Đang đặt: <strong>{p.placing.label}</strong> ({p.placing.w}×{p.placing.h} m) · Di chuột &amp; bấm mặt bằng</span>
+          <div className="placement-banner-actions">
+            {p.placing.type !== 'entrance' && p.onRotatePlacing && (
+              <button type="button" onClick={() => p.onRotatePlacing?.(1)} title="Xoay 15° (R)">↻ Xoay</button>
+            )}
+            {p.onAutoPlace && (
+              <button type="button" className="primary" onClick={p.onAutoPlace}>Đặt tự động</button>
+            )}
+            {p.onCancelPlacing && (
+              <button type="button" onClick={p.onCancelPlacing}>Hủy</button>
+            )}
+          </div>
+        </div>
+      )}
+      {p.tool === 'wall' && !p.readOnly && (
+        <div className="placement-banner wall-banner" role="status">
+          <span>
+            <strong>Dựng tường</strong> · {wallStart ? 'Chọn điểm cuối' : 'Chấm điểm đầu'}
+          </span>
+          <div className="placement-banner-actions">
+            {([
+              [ceilingH, `Kịch trần ${ceilingH}m`],
+              [Math.min(1.5, ceilingH), 'Lửng 1.5m'],
+              [Math.min(1.1, ceilingH), 'Quầy 1.1m'],
+            ] as const).map(([hVal, lbl]) => (
+              <button
+                key={lbl}
+                type="button"
+                className={Math.abs(wallHeight - hVal) < 0.05 ? 'primary' : ''}
+                onClick={() => setWallHeight(hVal)}
+              >
+                {lbl}
+              </button>
+            ))}
+            <button type="button" className={wallOrtho ? 'on' : ''} onClick={() => setWallOrtho((v) => !v)} title="Khóa góc 45° / 90°">
+              Thẳng 45°/90°
+            </button>
+            <button type="button" className={wallChain ? 'on' : ''} onClick={() => setWallChain((v) => !v)} title="Tự nối tiếp tường mới từ điểm cuối">
+              Nối tiếp
+            </button>
+            {wallStart && (
+              <button type="button" onClick={() => setWallStart(null)}>Ngắt đoạn</button>
+            )}
+            <button type="button" onClick={() => p.onExitTool?.()}>Xong</button>
+          </div>
+        </div>
+      )}
+      {p.tool === 'polygon' && !p.readOnly && (
+        <div className="placement-banner wall-banner" role="status">
+          <span>
+            <strong>Vẽ tường bao</strong> · Đã chấm {polyPts.length} đỉnh {polyPts.length >= 3 ? '(chấm điểm đầu hoặc bấm Hoàn tất)' : '(cần ≥ 3 đỉnh)'}
+          </span>
+          <div className="placement-banner-actions">
+            {polyPts.length > 0 && (
+              <button type="button" onClick={() => setPolyPts((cur) => cur.slice(0, -1))}>Lùi 1 đỉnh</button>
+            )}
+            <button
+              type="button"
+              className="primary"
+              disabled={polyPts.length < 3}
+              onClick={() => p.onCompletePolygon?.(polyPts)}
+            >
+              Hoàn tất khung
+            </button>
+            <button type="button" onClick={() => p.onExitTool?.()}>Hủy</button>
+          </div>
+        </div>
+      )}
       <Stage ref={p.stageRef} width={viewport.width} height={viewport.height}
         x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}
         onPointerDown={onDown} onPointerMove={onMove} onPointerClick={onClick}
@@ -241,6 +455,123 @@ export function OptiCamCanvas(p: CanvasProps) {
             <Line points={[m.a[0] * ppm, m.a[1] * ppm, m.b[0] * ppm, m.b[1] * ppm]} stroke="#9333ea" strokeWidth={2} dash={[6, 4]} listening={false} />
             <Text x={((m.a[0] + m.b[0]) / 2) * ppm + 6} y={((m.a[1] + m.b[1]) / 2) * ppm - 16} text={`${mLen.toFixed(2)} m`} fontSize={15} fontStyle="bold" fill="#9333ea" listening={false} />
           </>}
+        </Layer>
+        <Layer x={PAD} y={PAD} listening={false}>
+          {ghost && p.placing && (
+            <Group
+              x={(ghost.obstacle.x + ghost.obstacle.w / 2) * ppm}
+              y={(ghost.obstacle.y + ghost.obstacle.h / 2) * ppm}
+              offsetX={(ghost.obstacle.w * ppm) / 2}
+              offsetY={(ghost.obstacle.h * ppm) / 2}
+              rotation={ghost.obstacle.angle}
+            >
+              <Rect
+                width={ghost.obstacle.w * ppm}
+                height={ghost.obstacle.h * ppm}
+                fill={ghost.valid ? 'rgba(53,109,80,0.22)' : 'rgba(199,71,71,0.22)'}
+                stroke={ghost.valid ? '#356d50' : '#c74747'}
+                strokeWidth={2}
+                dash={[6, 4]}
+                cornerRadius={2}
+              />
+              <Text
+                x={0}
+                y={0}
+                width={ghost.obstacle.w * ppm}
+                height={ghost.obstacle.h * ppm}
+                text={`${p.placing.label}\n${ghost.obstacle.w}×${ghost.obstacle.h}m`}
+                align="center"
+                verticalAlign="middle"
+                fontSize={10}
+                fontStyle="bold"
+                fill={ghost.valid ? '#1f4d35' : '#992a20'}
+              />
+            </Group>
+          )}
+          {p.tool === 'wall' && wallCursor && !wallStart && (
+            <Circle x={wallCursor[0] * ppm} y={wallCursor[1] * ppm} radius={5} fill="#765d42" stroke="#fffefb" strokeWidth={1.5} />
+          )}
+          {p.tool === 'wall' && wallStart && wallPreview && (
+            <>
+              <Group
+                x={(wallPreview.obstacle.x + wallPreview.obstacle.w / 2) * ppm}
+                y={(wallPreview.obstacle.y + wallPreview.obstacle.h / 2) * ppm}
+                offsetX={(wallPreview.obstacle.w * ppm) / 2}
+                offsetY={(wallPreview.obstacle.h * ppm) / 2}
+                rotation={wallPreview.obstacle.angle}
+              >
+                <Rect
+                  width={wallPreview.obstacle.w * ppm}
+                  height={wallPreview.obstacle.h * ppm}
+                  fill={wallPreview.valid ? 'rgba(53,109,80,0.28)' : 'rgba(199,71,71,0.28)'}
+                  stroke={wallPreview.valid ? '#356d50' : '#c74747'}
+                  strokeWidth={2}
+                  dash={[5, 3]}
+                />
+              </Group>
+              <Circle x={wallStart[0] * ppm} y={wallStart[1] * ppm} radius={4.5} fill="#356d50" stroke="#fffefb" strokeWidth={1.5} />
+              {wallCursor && (
+                <>
+                  <Circle x={wallCursor[0] * ppm} y={wallCursor[1] * ppm} radius={4.5} fill={wallPreview.valid ? '#356d50' : '#c74747'} stroke="#fffefb" strokeWidth={1.5} />
+                  <Text
+                    x={((wallStart[0] + wallCursor[0]) / 2) * ppm + 8}
+                    y={((wallStart[1] + wallCursor[1]) / 2) * ppm - 18}
+                    text={`${wallPreview.length.toFixed(2)} m · ${wallPreview.angle}°`}
+                    fontSize={11}
+                    fontStyle="bold"
+                    fill={wallPreview.valid ? '#1f4d35' : '#992a20'}
+                  />
+                </>
+              )}
+            </>
+          )}
+          {p.tool === 'polygon' && (
+            <>
+              {polyPts.length >= 2 && (
+                <Line
+                  points={polyPts.flatMap(([px, py]) => [px * ppm, py * ppm])}
+                  stroke="#647156"
+                  strokeWidth={4}
+                  lineJoin="round"
+                />
+              )}
+              {polyPts.length >= 1 && polyCursor && (
+                <>
+                  <Line
+                    points={[
+                      polyPts[polyPts.length - 1][0] * ppm,
+                      polyPts[polyPts.length - 1][1] * ppm,
+                      polyCursor[0] * ppm,
+                      polyCursor[1] * ppm,
+                    ]}
+                    stroke="#765d42"
+                    strokeWidth={2.5}
+                    dash={[6, 4]}
+                  />
+                  <Text
+                    x={((polyPts[polyPts.length - 1][0] + polyCursor[0]) / 2) * ppm + 8}
+                    y={((polyPts[polyPts.length - 1][1] + polyCursor[1]) / 2) * ppm - 16}
+                    text={`${Math.hypot(polyCursor[0] - polyPts[polyPts.length - 1][0], polyCursor[1] - polyPts[polyPts.length - 1][1]).toFixed(2)} m`}
+                    fontSize={11}
+                    fontStyle="bold"
+                    fill="#765d42"
+                  />
+                </>
+              )}
+              {polyPts.map(([px, py], i) => (
+                <Circle
+                  key={`${px}_${py}_${i}`}
+                  x={px * ppm}
+                  y={py * ppm}
+                  radius={i === 0 ? 6 : 4.5}
+                  fill={i === 0 ? '#356d50' : '#765d42'}
+                  stroke="#fffefb"
+                  strokeWidth={1.5}
+                />
+              ))}
+              {polyCursor && <Circle x={polyCursor[0] * ppm} y={polyCursor[1] * ppm} radius={4} fill="#765d42" opacity={0.7} />}
+            </>
+          )}
         </Layer>
         <Layer x={PAD} y={PAD} listening={!lock}>
           {p.people.map((person) => (

@@ -1,0 +1,179 @@
+layout_file,layout_name,section,budget,method,cams,weighted,weighted_pct,red_pct,yellow_pct,red_min_ppm,area_cov_pct,obs_pct,rec_pct,id_pct,overlap_pct,wvcr_pct,kpi_pass,runtime_ms
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),base,K=4,Manual-4Corners,4,517.22,86.9,95.0,81.0,239,87.1,87.1,87.1,82.8,78.5,87.9,True,0.0
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,OptiCam-Hybrid,3,552.81,92.9,67.5,100.0,161,100.0,100.0,100.0,68.8,37.1,100.0,False,177.8
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,OptiCam-Wall,3,533.83,89.7,85.0,94.4,164,90.3,90.3,90.3,70.4,28.5,94.6,False,68.2
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,Erdem-06 MaxCov,3,479.21,80.5,37.5,82.5,178,87.1,87.1,87.1,60.8,40.3,88.6,False,245.2
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,491.0,82.53,85.0,80.7,221.0,85.47,85.47,85.47,65.97,38.9,87.27,False,1705.0
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,Kim-19 SemGA (3-seed),3.0,527.8,88.67,60.83,92.63,168.0,94.8,94.8,94.8,70.23,29.03,95.27,False,136.5
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,Wang-13 Unif,3,411.24,69.1,35.0,79.4,0,76.3,76.3,76.3,59.7,13.4,73.9,False,1120.3
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=3,Wang-13 Crit,3,372.87,62.6,100.0,47.6,258,59.1,59.1,59.1,48.9,33.3,65.1,False,964.9
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,OptiCam-Hybrid,4,585.46,98.4,100.0,100.0,278,100.0,100.0,100.0,88.7,63.4,100.0,True,281.3
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,OptiCam-Wall,4,570.94,95.9,85.0,100.0,178,100.0,100.0,100.0,80.1,48.4,100.0,False,106.6
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,Erdem-06 MaxCov,4,533.87,89.7,37.5,96.0,178,96.2,96.2,96.2,72.6,52.2,97.1,False,1430.9
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,531.57,89.3,74.17,91.0,189.33,92.87,92.87,92.87,75.8,56.47,93.97,False,2097.17
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,Kim-19 SemGA (3-seed),4.0,554.86,93.23,53.33,99.73,176.0,99.83,99.83,99.83,74.73,49.47,99.83,False,138.7
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,Wang-13 Unif,4,480.72,80.8,47.5,93.7,0,87.6,87.6,87.6,71.0,35.5,85.5,False,1120.3
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),fixed,K=4,Wang-13 Crit,4,446.37,75.0,100.0,66.7,258,72.0,72.0,72.0,62.9,37.6,77.2,False,964.9
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,OptiCam-Hybrid (MinKPI),4,585.46,98.4,100.0,100.0,278,100.0,100.0,100.0,88.7,63.4,100.0,True,332.8
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,Erdem-06 SetCov(25),6,572.02,96.1,97.5,98.4,240,98.9,98.9,98.9,84.9,71.5,99.0,True,409.8
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,Erdem-06 SetCov(250),8,592.22,99.5,100.0,100.0,278,100.0,100.0,100.0,97.8,84.4,100.0,True,281.1
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,Erdem-06 HotSpot(P4),6,570.97,95.9,95.0,100.0,0,98.9,98.9,98.9,88.7,67.2,98.3,True,321.8
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,Wang-13 Unif (Min),15,594.19,99.8,100.0,100.0,322,100.0,100.0,100.0,98.9,100.0,100.0,True,1120.3
+store_60m2.json,Layout 1: Chuẩn 60 m2 (10m x 6m),minK,Auto,Wang-13 Crit (Min),37,593.72,99.8,100.0,100.0,322,100.0,100.0,100.0,98.9,100.0,100.0,True,964.9
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),base,K=4,Manual-4Corners,4,585.52,80.8,95.7,73.6,239,81.7,81.7,81.7,73.9,65.2,82.6,False,0.0
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,OptiCam-Hybrid,3,634.08,87.5,28.3,96.9,152,97.0,97.0,97.0,57.0,19.6,97.7,False,370.9
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,OptiCam-Wall,3,596.05,82.2,89.1,85.5,0,82.6,82.6,82.6,66.5,5.7,85.8,False,131.8
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,Erdem-06 MaxCov,3,517.09,71.3,54.3,66.7,194,75.2,75.2,75.2,53.9,10.0,77.5,False,543.4
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,586.18,80.87,63.8,80.1,201.0,85.2,85.2,85.2,65.2,34.63,86.6,False,1975.83
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,Kim-19 SemGA (3-seed),3.0,586.44,80.9,30.43,87.43,0.0,88.7,88.7,88.7,59.27,15.5,88.93,False,151.03
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,Wang-13 Unif,3,453.64,62.6,21.7,74.8,0,70.0,70.0,70.0,53.5,5.7,67.4,False,1268.5
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=3,Wang-13 Crit,3,330.63,45.6,95.7,20.8,240,40.4,40.4,40.4,37.8,32.2,46.4,False,1251.1
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,OptiCam-Hybrid,4,695.25,95.9,97.8,98.7,245,99.1,99.1,99.1,83.5,48.7,99.2,True,521.1
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,OptiCam-Wall,4,655.95,90.5,89.1,91.8,144,94.3,94.3,94.3,73.9,36.1,94.6,False,153.1
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,Erdem-06 MaxCov,4,565.0,78.0,54.3,74.8,202,81.7,81.7,81.7,63.9,22.2,83.2,False,1845.4
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,557.29,76.87,87.67,72.53,232.0,78.73,78.73,78.73,62.0,21.87,81.2,False,2405.5
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,Kim-19 SemGA (3-seed),4.0,664.08,91.63,80.43,93.93,119.33,94.93,94.93,94.93,79.87,28.53,95.23,False,182.8
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,Wang-13 Unif,4,474.64,65.5,21.7,79.2,0,73.0,73.0,73.0,56.5,16.5,70.3,False,1268.5
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),fixed,K=4,Wang-13 Crit,4,332.63,45.9,95.7,20.8,240,41.3,41.3,41.3,38.7,35.2,46.6,False,1251.1
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,OptiCam-Hybrid (MinKPI),4,695.25,95.9,97.8,98.7,245,99.1,99.1,99.1,83.5,48.7,99.2,True,533.2
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,Erdem-06 SetCov(25),8,689.01,95.1,87.0,98.7,202,99.1,99.1,99.1,77.4,68.3,99.2,False,1147.7
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,Erdem-06 SetCov(250),9,717.99,99.1,100.0,99.4,281,99.6,99.6,99.6,96.5,77.0,99.6,True,538.6
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,Erdem-06 HotSpot(P4),8,705.18,97.3,97.8,99.4,243,99.6,99.6,99.6,87.4,78.7,99.6,True,931.8
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,Wang-13 Unif (Min),18,723.32,99.8,100.0,100.0,290,100.0,100.0,100.0,99.1,98.7,100.0,True,1268.5
+circle_k_75m2.json,Layout 2: Circle K 75 m2 (12.5m x 6m),minK,Auto,Wang-13 Crit (Min),43,723.35,99.8,100.0,100.0,322,100.0,100.0,100.0,99.1,100.0,100.0,True,1251.1
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),base,K=4,Manual-4Corners,4,478.06,91.7,94.7,87.4,239,92.4,92.4,92.4,87.6,88.2,92.5,False,0.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,OptiCam-Hybrid,3,508.17,97.4,100.0,100.0,273,100.0,100.0,100.0,80.6,35.3,100.0,True,216.7
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,OptiCam-Wall,3,502.17,96.3,84.2,100.0,142,100.0,100.0,100.0,79.4,40.6,100.0,False,67.1
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,Erdem-06 MaxCov,3,488.3,93.6,47.4,100.0,163,100.0,100.0,100.0,78.2,39.4,100.0,False,3917.8
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,493.39,94.6,85.97,97.1,225.0,96.47,96.47,96.47,83.13,54.87,97.57,False,1462.07
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,Kim-19 SemGA (3-seed),3.0,487.73,93.5,53.5,100.0,155.0,100.0,100.0,100.0,74.87,40.4,100.0,False,129.27
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,Wang-13 Unif,3,453.81,87.0,71.1,85.4,210,91.2,91.2,91.2,73.5,42.4,91.7,False,1122.6
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=3,Wang-13 Crit,3,403.35,77.3,100.0,64.1,263,77.6,77.6,77.6,64.7,54.7,79.0,False,917.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,OptiCam-Hybrid,4,520.22,99.8,100.0,100.0,255,100.0,100.0,100.0,98.8,73.5,100.0,True,217.6
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,OptiCam-Wall,4,515.71,98.9,100.0,100.0,346,100.0,100.0,100.0,91.8,38.8,100.0,True,109.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,Erdem-06 MaxCov,4,498.6,95.6,76.3,98.1,224,97.6,97.6,97.6,87.6,59.4,98.4,False,5991.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,503.28,96.5,88.57,98.4,237.0,99.0,99.0,99.0,85.47,65.9,99.03,False,1853.87
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,Kim-19 SemGA (3-seed),4.0,490.05,93.97,53.53,100.0,172.0,100.0,100.0,100.0,75.9,63.73,100.0,False,107.77
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,Wang-13 Unif,4,490.97,94.1,71.1,97.1,217,98.2,98.2,98.2,82.4,55.9,98.5,False,1122.6
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),fixed,K=4,Wang-13 Crit,4,445.45,85.4,100.0,77.7,263,85.9,85.9,85.9,75.9,62.9,86.8,False,917.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,OptiCam-Hybrid (MinKPI),3,508.17,97.4,100.0,100.0,273,100.0,100.0,100.0,80.6,35.3,100.0,True,222.7
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,Erdem-06 SetCov(25),5,507.59,97.3,78.9,100.0,230,99.4,99.4,99.4,90.0,72.9,99.8,False,868.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,Erdem-06 SetCov(250),6,520.0,99.7,100.0,100.0,258,100.0,100.0,100.0,98.8,86.5,100.0,True,238.7
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,Erdem-06 HotSpot(P4),5,509.68,97.7,100.0,99.0,256,98.8,98.8,98.8,87.6,87.1,99.4,True,1046.0
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,Wang-13 Unif (Min),12,520.25,99.8,100.0,100.0,364,100.0,100.0,100.0,98.2,97.1,100.0,True,1122.6
+ministop_50m2.json,Layout 3: MiniStop 50 m2 (8.5m x 6m),minK,Auto,Wang-13 Crit (Min),28,521.25,100.0,100.0,100.0,322,100.0,100.0,100.0,99.4,100.0,100.0,True,917.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,base,K=4,Manual-4Corners,4,2067.15,84.7,98.0,89.7,0,91.2,91.2,91.2,63.5,86.3,91.6,True,0.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,base,K=4,Preset-Cameras (NativeHW),4,2245.55,92.0,98.0,95.3,102,98.5,98.5,96.3,76.3,79.0,98.4,True,0.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,base,K=4,Preset-Cameras (Std4MP),4,2198.52,90.1,100.0,93.9,296,95.5,95.5,95.5,74.0,66.9,95.3,True,0.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,OptiCam-Hybrid,3,2249.39,92.2,89.0,97.8,140,98.4,98.4,98.4,67.8,41.7,98.3,False,208.5
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,OptiCam-Wall,3,2278.83,93.4,97.0,97.3,236,97.8,97.8,97.8,75.5,32.9,97.9,True,322.5
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,Erdem-06 MaxCov,3,2147.11,88.0,75.0,92.5,0,91.3,91.3,91.3,85.1,56.6,89.7,False,2818.8
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,2083.3,85.33,60.67,88.27,192.0,91.13,91.13,91.13,68.03,39.4,91.33,False,6967.53
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,Kim-19 SemGA (3-seed),3.0,2136.37,87.57,0.0,98.67,145.0,99.03,99.03,99.03,56.03,45.1,98.93,False,451.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,Wang-13 Unif,3,1606.51,65.8,91.0,71.5,0,67.3,67.3,67.3,38.1,3.8,73.1,False,6008.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=3,Wang-13 Crit,3,1069.95,43.8,0.0,55.9,0,49.1,49.1,49.1,48.6,19.2,44.0,False,3565.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,OptiCam-Hybrid,4,2380.43,97.5,89.0,98.6,140,99.0,99.0,99.0,94.4,74.1,98.9,False,185.6
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,OptiCam-Wall,4,2395.16,98.1,100.0,98.8,265,99.1,99.1,99.1,95.6,56.6,99.0,True,350.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,Erdem-06 MaxCov,4,2223.48,91.1,75.0,97.5,0,95.8,95.8,95.8,84.3,81.5,93.9,False,13320.5
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,2182.53,89.4,31.33,96.03,113.67,96.97,96.97,96.97,71.7,60.37,96.87,False,8988.2
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,Kim-19 SemGA (3-seed),4.0,2262.04,92.67,80.33,99.37,190.0,99.57,99.57,99.57,70.03,67.27,99.5,False,500.3
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,Wang-13 Unif,4,1865.43,76.4,91.0,80.8,0,83.6,83.6,83.6,54.4,8.6,83.7,False,6008.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,fixed,K=4,Wang-13 Crit,4,1547.11,63.4,0.0,84.4,0,72.7,72.7,72.7,62.4,47.6,65.9,False,3565.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,OptiCam-Hybrid (MinKPI),5,2410.37,98.8,100.0,99.2,295,99.4,99.4,99.4,96.7,90.0,99.4,True,280.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,Erdem-06 SetCov(25),9,2412.38,98.8,100.0,99.7,307,99.8,99.8,99.8,96.2,93.1,99.8,True,4588.4
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,Erdem-06 SetCov(250),11,2434.76,99.8,100.0,100.0,322,100.0,100.0,100.0,99.1,99.1,100.0,True,11250.1
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,Erdem-06 HotSpot(P4),9,2409.42,98.7,100.0,99.2,295,99.4,99.4,99.4,96.9,89.0,99.4,True,3099.3
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,Wang-13 Unif (Min),30,2440.76,100.0,100.0,100.0,325,100.0,100.0,100.0,100.0,100.0,100.0,True,6008.0
+vn_nha_ong_72m2.json,VN 01 · Nhà ống 72 m²,minK,Auto,Wang-13 Crit (Min),44,2440.76,100.0,100.0,100.0,328,100.0,100.0,100.0,100.0,99.5,100.0,True,3565.0
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,base,K=4,Manual-4Corners,4,2613.44,87.0,66.0,93.5,0,93.4,93.4,93.4,69.1,85.5,93.0,False,0.0
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,base,K=5,Preset-Cameras (NativeHW),5,2817.28,93.7,70.0,97.3,137,99.0,99.0,98.0,81.5,96.4,99.1,False,0.0
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,base,K=5,Preset-Cameras (Std4MP),5,2808.58,93.4,86.5,97.3,0,97.5,97.5,97.5,81.3,93.1,97.4,False,0.0
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,OptiCam-Hybrid,3,2803.98,93.3,91.5,99.3,0,98.9,98.9,98.9,73.5,39.3,98.7,False,617.6
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,OptiCam-Wall,3,2774.17,92.3,90.5,97.7,0,97.7,97.7,97.7,73.9,43.4,97.4,False,364.2
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,Erdem-06 MaxCov,3,2595.98,86.4,59.0,96.4,0,94.1,94.1,94.1,69.3,84.5,92.4,False,11134.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,2692.17,89.57,75.17,97.1,0.0,97.7,97.7,97.7,62.8,43.07,97.77,False,13601.67
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,Kim-19 SemGA (3-seed),3.0,2676.27,89.03,62.33,99.37,93.67,99.53,99.53,99.53,57.2,37.93,99.53,False,622.2
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,Wang-13 Unif,3,2108.43,70.2,40.5,79.2,0,80.3,80.3,80.3,44.6,16.3,79.3,False,8001.8
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=3,Wang-13 Crit,3,2354.97,78.4,33.5,95.8,0,91.8,91.8,91.8,46.8,79.8,89.4,False,4791.8
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,OptiCam-Hybrid,4,2931.51,97.5,99.0,97.1,244,97.8,97.8,97.8,95.8,21.5,98.0,True,716.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,OptiCam-Wall,4,2884.59,96.0,89.5,99.3,0,99.4,99.4,99.4,85.6,88.4,99.3,False,408.6
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,Erdem-06 MaxCov,4,2724.58,90.7,75.5,96.1,0,96.8,96.8,96.8,70.8,86.8,96.9,False,16708.0
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,2756.07,91.7,89.33,96.23,0.0,96.27,96.27,96.27,77.8,78.9,95.93,False,16405.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,Kim-19 SemGA (3-seed),4.0,2745.03,91.33,72.0,99.7,144.67,99.77,99.77,99.77,64.83,64.9,99.77,False,617.37
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,Wang-13 Unif,4,2499.03,83.1,54.0,90.2,0,92.2,92.2,92.2,55.5,38.7,92.6,False,8001.8
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,fixed,K=4,Wang-13 Crit,4,2393.92,79.7,34.5,96.2,0,92.3,92.3,92.3,50.8,84.8,90.0,False,4791.8
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,OptiCam-Hybrid (MinKPI),4,2931.51,97.5,99.0,97.1,244,97.8,97.8,97.8,95.8,21.5,98.0,True,691.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,Erdem-06 SetCov(25),10,2973.41,98.9,98.0,99.6,140,99.7,99.7,99.7,96.6,98.0,99.7,True,2867.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,Erdem-06 SetCov(250),12,2991.29,99.5,99.0,99.6,249,99.7,99.7,99.7,99.0,99.0,99.7,True,1945.1
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,Erdem-06 HotSpot(P4),11,2984.64,99.3,100.0,99.6,286,99.7,99.7,99.7,98.0,98.4,99.7,True,13281.7
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,Wang-13 Unif (Min),43,3004.79,100.0,100.0,100.0,370,100.0,100.0,100.0,99.9,99.9,100.0,True,8001.8
+vn_goc_pho_78m2.json,VN 02 · Góc phố vát góc 78 m²,minK,Auto,Wang-13 Crit (Min),52,2991.49,99.5,100.0,100.0,376,100.0,100.0,100.0,98.0,100.0,100.0,True,4791.8
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,base,K=4,Manual-4Corners,4,2476.71,94.0,96.5,95.1,0,96.7,96.7,96.7,85.1,83.5,96.7,True,0.0
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,base,K=5,Preset-Cameras (NativeHW),5,2497.38,94.8,92.9,98.4,143,99.0,99.0,99.0,82.2,94.8,99.0,False,0.0
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,base,K=5,Preset-Cameras (Std4MP),5,2466.81,93.7,96.5,98.2,144,98.6,98.6,98.6,77.9,91.0,98.8,True,0.0
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,OptiCam-Hybrid,3,2481.86,94.2,91.8,97.7,0,98.4,98.4,98.4,81.3,50.0,98.4,False,644.4
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,OptiCam-Wall,3,2484.2,94.3,81.8,97.5,0,98.3,98.3,98.3,82.8,70.0,98.2,False,530.1
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,Erdem-06 MaxCov,3,2386.61,90.6,83.5,95.1,0,96.4,96.4,96.4,75.2,64.6,96.1,False,7595.5
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,2249.99,85.43,76.67,86.13,0.0,90.13,90.13,90.13,70.33,43.1,90.4,False,16227.13
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,Kim-19 SemGA (3-seed),3.0,2341.66,88.93,59.43,99.07,162.67,99.4,99.4,99.4,59.6,52.43,99.4,False,709.8
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,Wang-13 Unif,3,2175.63,82.6,82.4,85.4,0,86.2,86.2,86.2,62.9,32.3,88.6,False,6993.7
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=3,Wang-13 Crit,3,1496.24,56.8,26.5,67.5,0,64.1,64.1,64.1,55.8,60.1,59.3,False,5000.2
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,OptiCam-Hybrid,4,2575.89,97.8,96.5,98.6,200,98.7,98.7,98.7,94.4,43.1,99.0,True,678.0
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,OptiCam-Wall,4,2551.27,96.9,90.6,98.1,235,98.7,98.7,98.7,91.6,83.9,98.8,False,538.0
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,Erdem-06 MaxCov,4,2466.75,93.7,91.2,98.9,0,99.0,99.0,99.0,78.4,91.3,98.8,False,17180.8
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,2395.65,90.93,91.37,95.27,0.0,96.23,96.23,96.23,73.83,45.17,96.33,False,18904.17
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,Kim-19 SemGA (3-seed),4.0,2386.43,90.63,54.1,99.7,157.33,99.83,99.83,99.83,66.43,77.13,99.83,False,698.97
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,Wang-13 Unif,4,2353.83,89.4,91.8,95.4,0,96.6,96.6,96.6,65.0,66.6,96.5,False,6993.7
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,fixed,K=4,Wang-13 Crit,4,1804.6,68.5,40.0,78.2,0,77.1,77.1,77.1,59.3,64.0,73.2,False,5000.2
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,OptiCam-Hybrid (MinKPI),4,2575.89,97.8,96.5,98.6,200,98.7,98.7,98.7,94.4,43.1,99.0,True,672.5
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,Erdem-06 SetCov(25),10,2605.45,98.9,97.6,99.8,161,99.9,99.9,99.9,96.2,97.2,99.9,True,11352.3
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,Erdem-06 SetCov(250),12,2622.72,99.6,98.8,99.8,244,99.9,99.9,99.9,98.9,99.2,99.9,True,8202.4
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,Erdem-06 HotSpot(P4),10,2598.94,98.7,100.0,99.3,277,99.5,99.5,99.5,96.0,94.8,99.6,True,4166.5
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,Wang-13 Unif (Min),19,2630.46,99.9,98.8,100.0,236,100.0,100.0,100.0,99.7,99.9,100.0,True,6993.7
+vn_chu_l_70m2.json,VN 03 · Mặt bằng chữ L 70 m²,minK,Auto,Wang-13 Crit (Min),46,2630.49,99.9,100.0,100.0,374,100.0,100.0,100.0,99.5,99.8,100.0,True,5000.2
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",base,K=4,Manual-4Corners,4,2442.02,93.8,95.3,94.5,0,95.7,95.7,95.7,87.2,92.8,95.9,True,0.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",base,K=4,Preset-Cameras (NativeHW),4,2401.14,92.2,81.1,97.1,155,97.9,97.9,97.9,75.1,86.6,97.9,False,0.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",base,K=4,Preset-Cameras (Std4MP),4,2394.75,91.9,83.8,98.1,156,98.2,98.2,98.2,71.0,81.4,98.5,False,0.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,OptiCam-Hybrid,3,2465.46,94.7,90.5,98.1,0,98.3,98.3,98.3,83.3,65.4,98.3,False,388.7
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,OptiCam-Wall,3,2450.07,94.1,93.2,97.3,155,98.0,98.0,98.0,81.2,86.6,98.1,False,302.9
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,Erdem-06 MaxCov,3,2370.94,91.0,82.4,94.4,146,95.9,95.9,95.9,75.9,86.4,96.0,False,1802.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,2339.4,89.83,70.5,94.37,0.0,95.1,95.1,95.1,76.2,55.67,94.97,False,9880.77
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,Kim-19 SemGA (3-seed),3.0,2320.81,89.13,58.53,99.63,159.67,99.73,99.73,99.73,57.93,68.6,99.77,False,473.2
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,Wang-13 Unif,3,1205.55,46.3,26.4,55.8,0,54.1,54.1,54.1,44.2,8.3,48.3,False,5468.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=3,Wang-13 Crit,3,2201.2,84.5,41.2,95.5,0,95.2,95.2,95.2,56.0,83.7,94.5,False,5411.7
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,OptiCam-Hybrid,4,2532.37,97.2,97.3,99.5,149,99.6,99.6,99.6,89.1,91.6,99.7,True,428.2
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,OptiCam-Wall,4,2533.23,97.3,98.0,99.4,166,99.5,99.5,99.5,89.6,80.6,99.5,True,363.2
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,Erdem-06 MaxCov,4,2408.58,92.5,84.5,94.7,156,96.1,96.1,96.1,81.7,87.8,96.3,False,5834.4
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,2458.78,94.4,96.6,95.87,84.33,96.07,96.07,96.07,88.5,61.7,96.17,False,13324.3
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,Kim-19 SemGA (3-seed),4.0,2390.6,91.8,68.47,100.0,159.67,100.0,100.0,100.0,67.4,76.8,100.0,False,461.4
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,Wang-13 Unif,4,1978.83,76.0,73.0,78.3,0,80.3,80.3,80.3,66.1,32.2,79.1,False,5468.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",fixed,K=4,Wang-13 Crit,4,2201.95,84.5,41.2,95.5,0,95.2,95.2,95.2,56.1,84.2,94.5,False,5411.7
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,OptiCam-Hybrid (MinKPI),4,2532.37,97.2,97.3,99.5,149,99.6,99.6,99.6,89.1,91.6,99.7,True,457.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,Erdem-06 SetCov(25),10,2576.13,98.9,99.3,99.8,168,99.9,99.9,99.9,95.7,97.3,99.9,True,3274.4
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,Erdem-06 SetCov(250),12,2595.66,99.7,100.0,100.0,299,100.0,100.0,100.0,98.5,98.8,100.0,True,3366.8
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,Erdem-06 HotSpot(P4),10,2572.46,98.8,99.3,99.8,168,99.9,99.9,99.9,95.2,98.1,99.9,True,3587.8
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,Wang-13 Unif (Min),18,2575.87,98.9,97.3,100.0,222,100.0,100.0,100.0,95.6,99.6,100.0,True,5468.0
+vn_hinh_thang_67m2.json,"VN 04 · Mặt bằng hình thang 67,5 m²",minK,Auto,Wang-13 Crit (Min),51,2598.99,99.8,100.0,100.0,303,100.0,100.0,100.0,99.1,100.0,100.0,True,5411.7
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,base,K=4,Manual-4Corners,4,2613.44,87.0,66.0,93.5,0,93.4,93.4,93.4,69.1,85.5,93.0,False,0.0
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,base,K=5,Preset-Cameras (NativeHW),5,2817.28,93.7,70.0,97.3,137,99.0,99.0,98.0,81.5,96.4,99.1,False,0.0
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,base,K=5,Preset-Cameras (Std4MP),5,2808.58,93.4,86.5,97.3,0,97.5,97.5,97.5,81.3,93.1,97.4,False,0.0
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,OptiCam-Hybrid,3,2803.98,93.3,91.5,99.3,0,98.9,98.9,98.9,73.5,39.3,98.7,False,617.6
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,OptiCam-Wall,3,2774.17,92.3,90.5,97.7,0,97.7,97.7,97.7,73.9,43.4,97.4,False,364.2
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,Erdem-06 MaxCov,3,2595.98,86.4,59.0,96.4,0,94.1,94.1,94.1,69.3,84.5,92.4,False,11134.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,Aziz-24 GA#3 (3-seed),3.0,2692.17,89.57,75.17,97.1,0.0,97.7,97.7,97.7,62.8,43.07,97.77,False,13601.67
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,Kim-19 SemGA (3-seed),3.0,2676.27,89.03,62.33,99.37,93.67,99.53,99.53,99.53,57.2,37.93,99.53,False,622.2
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,Wang-13 Unif,3,2108.43,70.2,40.5,79.2,0,80.3,80.3,80.3,44.6,16.3,79.3,False,8001.8
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=3,Wang-13 Crit,3,2354.97,78.4,33.5,95.8,0,91.8,91.8,91.8,46.8,79.8,89.4,False,4791.8
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,OptiCam-Hybrid,4,2931.51,97.5,99.0,97.1,244,97.8,97.8,97.8,95.8,21.5,98.0,True,716.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,OptiCam-Wall,4,2884.59,96.0,89.5,99.3,0,99.4,99.4,99.4,85.6,88.4,99.3,False,408.6
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,Erdem-06 MaxCov,4,2724.58,90.7,75.5,96.1,0,96.8,96.8,96.8,70.8,86.8,96.9,False,16708.0
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,Aziz-24 GA#3 (3-seed),4.0,2756.07,91.7,89.33,96.23,0.0,96.27,96.27,96.27,77.8,78.9,95.93,False,16405.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,Kim-19 SemGA (3-seed),4.0,2745.03,91.33,72.0,99.7,144.67,99.77,99.77,99.77,64.83,64.9,99.77,False,617.37
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,Wang-13 Unif,4,2499.03,83.1,54.0,90.2,0,92.2,92.2,92.2,55.5,38.7,92.6,False,8001.8
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,fixed,K=4,Wang-13 Crit,4,2393.92,79.7,34.5,96.2,0,92.3,92.3,92.3,50.8,84.8,90.0,False,4791.8
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,OptiCam-Hybrid (MinKPI),4,2931.51,97.5,99.0,97.1,244,97.8,97.8,97.8,95.8,21.5,98.0,True,691.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,Erdem-06 SetCov(25),10,2973.41,98.9,98.0,99.6,140,99.7,99.7,99.7,96.6,98.0,99.7,True,2867.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,Erdem-06 SetCov(250),12,2991.29,99.5,99.0,99.6,249,99.7,99.7,99.7,99.0,99.0,99.7,True,1945.1
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,Erdem-06 HotSpot(P4),11,2984.64,99.3,100.0,99.6,286,99.7,99.7,99.7,98.0,98.4,99.7,True,13281.7
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,Wang-13 Unif (Min),43,3004.79,100.0,100.0,100.0,370,100.0,100.0,100.0,99.9,99.9,100.0,True,8001.8
+vn_co_nguoi_78m2.json,VN 05 · Cửa hàng giờ cao điểm 78 m²,minK,Auto,Wang-13 Crit (Min),52,2991.49,99.5,100.0,100.0,376,100.0,100.0,100.0,98.0,100.0,100.0,True,4791.8

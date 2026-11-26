@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Fixture, Layout, Obstacle } from '../types';
 import { PRESETS } from '../data/presets';
-import { addObstacle, moveObstacle, rotateObstacle } from './editor';
+import { addObstacle, moveObstacle, resizeObstacle, rotateObstacle } from './editor';
+import { FIXTURE_VALUES, sizePresetsForObstacle } from './fixtures';
 import { footprintFits } from './footprint';
 import { obstacleFitsRoom, obsPoly, satCollide } from './geometry';
 
@@ -62,7 +63,7 @@ describe('Fixture rotation and movement', () => {
 });
 
 describe('Specific fixture additions', () => {
-  it.each(['gondola', 'wall-shelf', 'fridge', 'freezer', 'food-counter', 'seating', 'partition', 'column'] as Fixture[])('adds a %s with its own geometry', fixture => {
+  it.each([...FIXTURE_VALUES] as Fixture[])('adds a %s with its own geometry and presets', fixture => {
     const layout = room();
     const next = addObstacle(layout, 'shelf', fixture);
     expect(next).not.toBeNull();
@@ -72,5 +73,19 @@ describe('Specific fixture additions', () => {
     expect(obstacle.h).toBeGreaterThan(0);
     expect(obstacle.elev).toBeGreaterThan(0);
     expect(obstacleFitsRoom(obstacle, layout.widthM, layout.heightM)).toBe(true);
+    const presets = sizePresetsForObstacle(obstacle, 3.2);
+    expect(presets).toHaveLength(3);
+    const small = resizeObstacle(next!, obstacle.id, presets[0].w, presets[0].h);
+    expect(small.obstacles[0].w).toBeCloseTo(presets[0].w, 2);
+  });
+
+  it('resizes smoothly near walls without snapping center to 0.5m grid steps', () => {
+    const nearWall: Obstacle = { id: 'nw', type: 'shelf', fixture: 'fridge', label: 'Tủ mát', x: 0.05, y: 1.15, w: 1.2, h: 0.7, elev: 2.0, angle: 0 };
+    const layout = { ...room(), obstacles: [nearWall] };
+    const bigger = resizeObstacle(layout, nearWall.id, 2.0, 0.85);
+    expect(bigger.obstacles[0].w).toBeCloseTo(2.0, 2);
+    expect(bigger.obstacles[0].h).toBeCloseTo(0.85, 2);
+    expect(bigger.obstacles[0].x).toBeGreaterThanOrEqual(0);
+    expect(bigger.obstacles[0].y + bigger.obstacles[0].h / 2).toBeCloseTo(1.5, 1);
   });
 });

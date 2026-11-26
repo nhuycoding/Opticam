@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+import threading
 import time
 import tempfile
 from datetime import datetime, timezone
@@ -43,6 +44,7 @@ DATA_DIR = Path(os.environ.get("OPTICAM_DATA_DIR", Path(__file__).parent / "stor
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_GRID_CELLS = 12_000
 MAX_CANDIDATE_CELL_EVALUATIONS = 1_000_000
+_SAVE_LOCK = threading.Lock()
 
 
 class FiniteModel(BaseModel):
@@ -132,8 +134,9 @@ class RiskStroke(FiniteModel):
 
 
 class OptimizationSettings(FiniteModel):
-    algorithm: Literal["greedy", "hybrid"] = "hybrid"
+    algorithm: Literal["greedy", "hybrid", "kpi_hybrid"] = "kpi_hybrid"
     mounts: Literal["wall", "mixed", "ceiling"] = "mixed"
+    dualHeight: bool = False
 
 
 class LayoutData(FiniteModel):
@@ -327,6 +330,7 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
     selected, coverage = optimizer.run_greedy(
         candidate_groups[0] if candidate_groups else [], cells, request.cameraBudgetK,
         camera_candidate_groups=candidate_groups, algorithm=layout.optimization.algorithm,
+        dual_height=layout.optimization.dualHeight,
     )
     diagnostics = {**coverage["diagnostics"], "ms": (time.perf_counter() - started) * 1000}
     cameras = [
@@ -378,12 +382,21 @@ def save_layout(
 ) -> dict[str, str]:
     safe_name = _safe_filename(filename)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = DATA_DIR / safe_name
     temporary_path = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=DATA_DIR, suffix=".tmp", delete=False) as output:
             temporary_path = Path(output.name)
             json.dump(payload.dict(), output, ensure_ascii=False, indent=2)
-        os.replace(temporary_path, DATA_DIR / safe_name)
+        with _SAVE_LOCK:
+            for attempt in range(10):
+                try:
+                    os.replace(temporary_path, target_path)
+                    break
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.01 * (attempt + 1))
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

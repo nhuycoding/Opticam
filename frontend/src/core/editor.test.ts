@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, withManualCams } from '../data/presets';
-import { addObstacle, removeObstacle, resizeObstacle, resizeRoom } from './editor';
+import { addObstacle, buildCustomLayout, buildWallObstacle, removeObstacle, resizeObstacle, resizeRoom, rotateLayout90 } from './editor';
+import { floorOutline, footprintFits } from './footprint';
 import { fromApiResponse, toApiPayload } from './api';
 import { normalizeLayout } from './io';
 import { priorityBand, riskColor, shouldShowRiskWeight } from '../components/canvas/shared';
@@ -36,6 +37,45 @@ describe('Editor', () => {
     expect(r.widthM).toBe(9); expect(r.heightM).toBe(5.5);
     expect(r.cameras.every((c) => c.x === 0 || c.x === 9 || c.y === 0 || c.y === 5.5)).toBe(true);
     expect(r.obstacles.every((o) => o.x >= -1e-9 && o.y >= -1e-9)).toBe(true);
+  });
+  it('rotates entire layout 90 degrees clockwise cleanly including polygon and people', () => {
+    const base = withManualCams(PRESETS[4]);
+    const rotated = rotateLayout90(base, base.people ?? []);
+    expect(rotated.layout.widthM).toBe(base.heightM);
+    expect(rotated.layout.heightM).toBe(base.widthM);
+    expect(rotated.layout.obstacles).toHaveLength(base.obstacles.length);
+    expect(rotated.layout.obstacles.every((o) => footprintFits(o, rotated.layout.floorPolygon))).toBe(true);
+    expect(noOverlap(rotated.layout)).toBe(true);
+    expect(rotated.layout.cameras.map((c) => c.pan)).toEqual(
+      base.cameras.map((c) => ((Math.round(c.pan + 90) % 360) + 360) % 360),
+    );
+    expect(rotated.people).toHaveLength((base.people ?? []).length);
+    let back = rotated;
+    for (let i = 0; i < 3; i++) back = rotateLayout90(back.layout, back.people);
+    expect(back.layout.widthM).toBe(base.widthM);
+    expect(back.layout.heightM).toBe(base.heightM);
+  });
+  it('builds interior partition walls and custom multi-shape store layouts', () => {
+    const custom = buildCustomLayout({
+      name: 'Cửa hàng L tự tạo',
+      shape: 'l-shape',
+      widthM: 10,
+      heightM: 8,
+      gridM: 0.5,
+      ceilingHeight: 3.4,
+      turns90: 1,
+      starterKit: 'basic',
+    });
+    expect(custom.layout.widthM).toBe(8);
+    expect(custom.layout.heightM).toBe(10);
+    expect(floorOutline(custom.layout)).toHaveLength(6);
+    expect(custom.layout.obstacles.some((o) => o.type === 'entrance')).toBe(true);
+    expect(custom.layout.obstacles.some((o) => o.type === 'pos')).toBe(true);
+    const wall = buildWallObstacle(custom.layout, [1, 5], [4, 5], { elev: 3.4 });
+    expect(wall.valid).toBe(true);
+    expect(wall.obstacle.fixture).toBe('partition');
+    expect(wall.obstacle.riskWmax).toBe(1.0);
+    expect(wall.length).toBe(3);
   });
 });
 describe('API adapter', () => {

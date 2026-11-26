@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
-import type { Obstacle } from '../../types';
+import type { Obstacle, ShelfTier } from '../../types';
 import type { Selection } from '../canvas/shared';
 import type { Pt } from '../../core/geometry';
 import { fixtureBodyRotation } from './sceneGeometry';
@@ -18,8 +18,8 @@ export function Block({ size, at = [0, 0, 0], color = '#dadbd3', roughness = 0.8
   </mesh>;
 }
 
-function Shelving({ w, d, h, oneSided, productLimit }: { w: number; d: number; h: number; oneSided: boolean; productLimit: number }) {
-  const levels = Math.max(2, Math.min(5, Math.round(h / 0.4)));
+function Shelving({ w, d, h, oneSided, productLimit, tiers }: { w: number; d: number; h: number; oneSided: boolean; productLimit: number; tiers?: ShelfTier[] }) {
+  const levels = Math.max(2, Math.min(5, tiers?.length || Math.round(h / 0.4)));
   const baseHeight = Math.min(0.12, h * 0.14), thickness = Math.min(0.035, h * 0.035);
   const shelfYs = Array.from({ length: levels }, (_, i) => baseHeight + thickness / 2 + (h - baseHeight - thickness) * i / (levels - 1));
   const panelHeight = Math.max(h * 0.1, h - baseHeight - thickness - 0.01);
@@ -29,7 +29,57 @@ function Shelving({ w, d, h, oneSided, productLimit }: { w: number; d: number; h
     <Block size={[Math.max(0.02, w - 0.05), panelHeight, Math.min(0.045, d * 0.18)]} at={[0, baseHeight + panelHeight / 2, oneSided ? -d / 2 + 0.025 : 0]} color="#bdc7be" />
     {[-1, 1].map(side => <Block key={side} size={[Math.min(0.03, w * 0.1), postHeight, Math.max(0.02, d - 0.03)]} at={[side * (w / 2 - 0.025), postHeight / 2, 0]} color="#8b9991" />)}
     {shelfYs.map((y, i) => <Block key={i} size={[w, thickness, d]} at={[0, y, 0]} color="#e2e7df" />)}
-    <ShelfProducts3D w={w} d={d} shelfYs={shelfYs} thickness={thickness} oneSided={oneSided} limit={productLimit} />
+    <ShelfProducts3D w={w} d={d} shelfYs={shelfYs} thickness={thickness} oneSided={oneSided} limit={productLimit} tiers={tiers} />
+  </>;
+}
+
+function LockedCabinet({ w, d, h, productLimit, tiers }: { w: number; d: number; h: number; productLimit: number; tiers?: ShelfTier[] }) {
+  const frame = 0.035;
+  const levels = Math.max(2, Math.min(5, tiers?.length || 4));
+  const baseHeight = Math.min(0.18, h * 0.12);
+  const shelfYs = Array.from({ length: levels }, (_, i) => baseHeight + frame / 2 + (h - baseHeight - frame) * i / (levels - 1));
+  return <>
+    <Block size={[w, baseHeight, d]} at={[0, baseHeight / 2, 0]} color="#516667" />
+    <Block size={[w, frame, d]} at={[0, h - frame / 2, 0]} color="#516667" />
+    <Block size={[w - 0.02, h - baseHeight - frame, 0.03]} at={[0, (h + baseHeight - frame) / 2, -d / 2 + 0.02]} color="#dce6e7" />
+    {[-1, 1].map((side) => (
+      <Block key={side} size={[frame, h, d]} at={[side * (w / 2 - frame / 2), h / 2, 0]} color="#495d5e" />
+    ))}
+    {shelfYs.map((y, i) => <Block key={i} size={[w - frame * 2, 0.025, d - 0.05]} at={[0, y, 0]} color="#d6e2e2" />)}
+    <ShelfProducts3D w={Math.max(0.2, w - 0.08)} d={Math.max(0.15, d - 0.08)} shelfYs={shelfYs} thickness={0.025} oneSided limit={productLimit} tiers={tiers} />
+    <Block size={[w - frame * 2, Math.max(0.2, h - baseHeight - frame), 0.014]} at={[0, (h + baseHeight - frame) / 2, d / 2 - 0.015]} color="#cbe2e6" opacity={0.28} roughness={0.12} />
+    <Block size={[0.04, 0.07, 0.02]} at={[0, h * 0.52, d / 2]} color="#c49446" />
+  </>;
+}
+
+function PromoIsland({ w, d, h, productLimit, tiers }: { w: number; d: number; h: number; productLimit: number; tiers?: ShelfTier[] }) {
+  const baseH = Math.min(0.45, h * 0.42);
+  const midH = Math.max(0.25, h * 0.35);
+  const topW = w * 0.72, topD = d * 0.72;
+  const shelfYs = [baseH, baseH + midH * 0.85, h];
+  return <>
+    <Block size={[w, baseH, d]} at={[0, baseH / 2, 0]} color="#c5bba4" />
+    <Block size={[w + 0.02, 0.035, d + 0.02]} at={[0, baseH, 0]} color="#8f8672" />
+    <Block size={[topW, midH, topD]} at={[0, baseH + midH / 2, 0]} color="#dfd8c5" />
+    <ShelfProducts3D w={topW} d={topD} shelfYs={shelfYs} thickness={0.03} oneSided={false} limit={Math.min(48, productLimit)} tiers={tiers} />
+  </>;
+}
+
+function LockerBank({ w, d, h }: { w: number; d: number; h: number }) {
+  const cols = Math.max(2, Math.min(6, Math.round(w / 0.35)));
+  const rows = Math.max(2, Math.min(4, Math.round(h / 0.45)));
+  return <>
+    <Block size={[w, h, d]} at={[0, h / 2, 0]} color="#9aa7a2" />
+    {Array.from({ length: cols }, (_, c) =>
+      Array.from({ length: rows }, (_, r) => {
+        const cw = w / cols - 0.025, ch = h / rows - 0.03;
+        const cx = -w / 2 + (c + 0.5) * (w / cols), cy = (r + 0.5) * (h / rows);
+        return <group key={`${c}_${r}`}>
+          <Block size={[cw, ch, 0.02]} at={[cx, cy, d / 2 + 0.008]} color="#cad4d0" />
+          <Block size={[0.02, 0.04, 0.015]} at={[cx + cw * 0.35, cy, d / 2 + 0.02]} color="#4e5c57" />
+        </group>;
+      })
+    )}
   </>;
 }
 
@@ -88,12 +138,15 @@ export const Fixture3D = memo(function Fixture3D({ obstacle: o, selected, onSele
   if (o.type === 'entrance') body = <Entrance w={w} d={d} h={h} />;
   else if (o.type === 'pos' || o.fixture === 'food-counter') body = <Counter w={w} d={d} h={h} pos={o.type === 'pos'} />;
   else if (o.fixture === 'fridge' || o.fixture === 'freezer') body = <Cabinet w={w} d={d} h={h} freezer={o.fixture === 'freezer'} />;
+  else if (o.fixture === 'locked-cabinet') body = <LockedCabinet w={w} d={d} h={h} productLimit={productLimit} tiers={o.tiers} />;
+  else if (o.fixture === 'promo-island') body = <PromoIsland w={w} d={d} h={h} productLimit={productLimit} tiers={o.tiers} />;
+  else if (o.fixture === 'locker') body = <LockerBank w={w} d={d} h={h} />;
   else if (o.fixture === 'seating') body = <>
     <Block size={[w, Math.min(0.06, h * 0.25), d]} at={[0, h - Math.min(0.06, h * 0.25) / 2, 0]} color="#cdbb99" />
     {[-1, 1].map(side => <Block key={side} size={[Math.min(0.06, w * 0.15), h - Math.min(0.06, h * 0.25), Math.max(0.05, d * 0.7)]} at={[side * w * 0.36, (h - Math.min(0.06, h * 0.25)) / 2, 0]} color="#7e8980" />)}
   </>;
   else if (o.fixture === 'partition' || o.fixture === 'column') body = <Block size={[w, h, d]} at={[0, h / 2, 0]} color="#d5d1c5" />;
-  else body = <Shelving w={w} d={d} h={h} oneSided={o.fixture === 'wall-shelf'} productLimit={productLimit} />;
+  else body = <Shelving w={w} d={d} h={h} oneSided={o.fixture === 'wall-shelf' || o.fixture === 'endcap' || o.fixture === 'checkout-rack'} productLimit={productLimit} tiers={o.tiers} />;
   return <group position={[o.x + o.w / 2, 0, o.y + o.h / 2]} rotation={[0, -o.angle * Math.PI / 180, 0]} onClick={click}>
     <group rotation={[0, fixtureBodyRotation(o, outline), 0]}>{body}</group>
     {selected && <mesh position={[0, h / 2, 0]} raycast={() => {}}>

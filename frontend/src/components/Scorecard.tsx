@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react';
 import type { Score } from '../types';
 import type { ViewMode } from './canvas/shared';
 
@@ -13,7 +14,7 @@ export function Scorecard({ d, preview, view, riskMetrics, onFocusHighUncovered 
   preview?: Score; d: Compare; view: ViewMode; riskMetrics: RiskMetrics; onFocusHighUncovered: () => void;
 }) {
   const shown = preview ?? d.live;
-  const cols: [string, Score | null][] = [...(d.before ? [['Trước tối ưu', d.before] as [string, Score]] : []), ['Thủ công 4 góc', d.manual], ['Hiện tại', d.live], ['Greedy không trọng số', d.unweighted]];
+  const cols: [string, Score | null][] = [...(d.before ? [['Trước tối ưu', d.before] as [string, Score]] : []), ['Thủ công 4 góc', d.manual], ['Hiện tại', d.live], ['Không trọng số', d.unweighted]];
   const row = (label: string, f: (s: Score) => string, cls?: (s: Score) => string) => (
     <tr key={label}><th>{label}</th>{cols.map(([k, s]) => <td key={k} className={s && cls ? cls(s) : ''}>{s ? f(s) : '—'}</td>)}</tr>
   );
@@ -71,21 +72,44 @@ export function Scorecard({ d, preview, view, riskMetrics, onFocusHighUncovered 
               </div>
             ))}
           </div>
-          <details className="score-details" open={Boolean(d.before)}><summary>So sánh phương án</summary><div className="scroll-x"><table aria-label="So sánh các chỉ số hiệu quả phương án">
-            <thead><tr><th scope="col" aria-label="Chỉ số"></th>{cols.map(([k]) => <th key={k} scope="col">{k}</th>)}</tr></thead>
-            <tbody>
-              {row('Vùng Đỏ ≥ 250 PPM (KPI ≥ 95%)', (s) => s.redCells === 0 ? '—' : `${s.red}%`, (s) => ok(s.red, 95))}
-              {row('Vùng vàng ≥ 125 PPM (KPI ≥ 80%)', (s) => s.yellowCells === 0 ? '—' : `${s.yellow}%`, (s) => ok(s.yellow, 80))}
-              {row('PPM thấp nhất vùng Đỏ', (s) => String(s.redMinPpm))}
-              {row('Tổng điểm Σ W × DORI', (s) => String(s.weighted))}
-              {row('Số camera', (s) => String(s.cams))}
-            </tbody>
-          </table></div></details>
+          {((shown.headOnlyCells ?? 0) > 0 || shown.handCoverage !== undefined) && (
+            <p className="head-only-note">
+              Độ phủ tầm tay 1.0 m (≥ 62,5 PPM): <strong>{shown.handCoverage ?? 100}%</strong> vùng ưu tiên
+              {(shown.headOnlyCells ?? 0) > 0 && <> · Khuất hoàn toàn dưới 1.6 m: <strong>{shown.headOnlyPct ?? 0}%</strong> ({shown.headOnlyCells} ô)</>}.
+            </p>
+          )}
+          <details className="accordion-card score-details" open={Boolean(d.before)}>
+            <summary className="accordion-summary">
+              <span>So sánh phương án</span>
+              <span className="accordion-pill">{cols.length} bản</span>
+              <ChevronRight size={14} className="accordion-chevron" aria-hidden="true" />
+            </summary>
+            <div className="accordion-body">
+              <div className="scroll-x"><table aria-label="So sánh các chỉ số hiệu quả phương án">
+                <thead><tr><th scope="col" aria-label="Chỉ số"></th>{cols.map(([k]) => <th key={k} scope="col">{k}</th>)}</tr></thead>
+                <tbody>
+                  {row('Vùng Đỏ ≥ 250 PPM (KPI ≥ 95%)', (s) => s.redCells === 0 ? '—' : `${s.red}%`, (s) => ok(s.red, 95))}
+                  {row('Vùng vàng ≥ 125 PPM (KPI ≥ 80%)', (s) => s.yellowCells === 0 ? '—' : `${s.yellow}%`, (s) => ok(s.yellow, 80))}
+                  {shown.handCoverage !== undefined && row('Tầm tay 1.0 m ≥ 62,5 PPM', (s) => s.handCoverage === undefined ? '—' : `${s.handCoverage}%`, (s) => ok(s.handCoverage ?? 0, 80))}
+                  {row('PPM thấp nhất vùng Đỏ', (s) => String(s.redMinPpm))}
+                  {row('Tổng điểm Σ W × DORI', (s) => String(s.weighted))}
+                  {row('Số camera', (s) => String(s.cams))}
+                </tbody>
+              </table></div>
+            </div>
+          </details>
         </>
       ) : <p className="muted">Chọn lớp DORI hoặc Rủi ro để xem số liệu tương ứng.</p>}
-      <details className="score-details performance-details"><summary>Hiệu năng tính toán</summary>
-      <p className="muted">Giải + vẽ lại heatmap: <b className={d.solveMs && d.solveMs + d.renderMs < 2000 ? 'pass' : ''}>{d.solveMs ? `${(d.solveMs + d.renderMs).toFixed(0)} ms` : '—'}</b> (KPI &lt; 2000 ms) · tính lưới: {d.live.ms} ms</p>
-      <p className="muted">Vẽ heatmap (lần cuối): <b className={d.heatMs && d.heatMs <= 200 ? 'pass' : ''}>{d.heatMs ? `${d.heatMs.toFixed(1)} ms` : '—'}</b> (KPI ≤ 200 ms)</p>
+      <details className="accordion-card score-details performance-details">
+        <summary className="accordion-summary">
+          <span>Hiệu năng tính toán</span>
+          <span className="accordion-pill">{d.solveMs ? `${(d.solveMs + d.renderMs).toFixed(0)} ms` : `${d.live.ms} ms`}</span>
+          <ChevronRight size={14} className="accordion-chevron" aria-hidden="true" />
+        </summary>
+        <div className="accordion-body">
+          <p className="muted">Giải + vẽ lại heatmap: <b className={d.solveMs && d.solveMs + d.renderMs < 2000 ? 'pass' : ''}>{d.solveMs ? `${(d.solveMs + d.renderMs).toFixed(0)} ms` : '—'}</b> (KPI &lt; 2000 ms) · tính lưới: {d.live.ms} ms</p>
+          <p className="muted">Vẽ heatmap (lần cuối): <b className={d.heatMs && d.heatMs <= 200 ? 'pass' : ''}>{d.heatMs ? `${d.heatMs.toFixed(1)} ms` : '—'}</b> (KPI ≤ 200 ms)</p>
+        </div>
       </details>
     </div>
   );

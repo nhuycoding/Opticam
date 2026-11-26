@@ -1,8 +1,29 @@
 export type ObsType = 'shelf' | 'pos' | 'entrance';
-export type Fixture = 'wall-shelf' | 'gondola' | 'fridge' | 'freezer' | 'food-counter' | 'seating' | 'partition' | 'column';
+export type Fixture =
+  | 'wall-shelf'
+  | 'gondola'
+  | 'endcap'
+  | 'promo-island'
+  | 'checkout-rack'
+  | 'fridge'
+  | 'freezer'
+  | 'locked-cabinet'
+  | 'food-counter'
+  | 'seating'
+  | 'locker'
+  | 'partition'
+  | 'column';
 export type ShelfRiskCategory = 'high' | 'standard' | 'bulky' | 'custom';
 export type Weight = number;
 export type Dori = 'identification' | 'recognition' | 'observation' | 'detection' | 'blind';
+
+export interface ShelfTier {
+  id: string;
+  name: string;
+  zMin: number;
+  zMax: number;
+  goodsIds: string[];
+}
 export const PERSON_TARGETS = [
   { height: 1.6, label: 'Mặt' },
   { height: 1.2, label: 'Ngực' },
@@ -21,6 +42,7 @@ export interface Obstacle {
   riskWmax?: number;
   riskR0?: number;
   riskR?: number;
+  tiers?: ShelfTier[];
 }
 
 export interface Camera {
@@ -57,12 +79,14 @@ export interface RiskStroke {
   weight: Weight;
 }
 
+export type OptimizationAlgorithm = 'greedy' | 'hybrid' | 'kpi_hybrid';
+
 export interface Layout {
   version: string; name: string;
   widthM: number; heightM: number; gridM: number; pixelsPerMeter: number;
   targetHeight: TargetHeight;
   ceilingHeight?: number;
-  optimization?: { algorithm: 'greedy' | 'hybrid'; mounts: 'wall' | 'mixed' | 'ceiling' };
+  optimization?: { algorithm: OptimizationAlgorithm; mounts: 'wall' | 'mixed' | 'ceiling'; dualHeight?: boolean };
   floorPolygon?: [number, number][];
   description?: string;
   designNotes?: string[];
@@ -76,12 +100,14 @@ export interface Layout {
 }
 
 export interface Zone { r: number; c: number; cx: number; cy: number; w: Weight; solid: boolean }
-export interface Cell extends Zone { ppm: number; dori: Dori }
+export interface Cell extends Zone { ppm: number; dori: Dori; handPpm?: number; headOnly?: boolean }
 
 export interface Score {
   red: number; yellow: number;   // % ô đạt chuẩn DORI của vùng
   redCells?: number; yellowCells?: number;
   redMinPpm: number;
   weighted: number;              // Σ W × Score_DORI
+  handCoverage?: number;         // % ô ưu tiên (W ≥ 2) đạt tầm tay 1.0 m (≥ 62.5 PPM)
+  headOnlyCells?: number; headOnlyPct?: number;
   cams: number; ms: number;
 }

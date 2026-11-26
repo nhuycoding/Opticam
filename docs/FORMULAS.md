@@ -20,8 +20,9 @@ và backend (`backend/greedy_optimizer.py`). Mô hình lấy mẫu mục tiêu t
   hệ tọa độ local của hình chữ nhật. Ô nằm trong kệ/POS là ô đặc và không được tính là
   sàn; cửa không tạo ô đặc.
 - Mỗi vật thể có hồ sơ `(Wmax, r0, R)`. Mặc định POS/cửa là `(5, 1.0 m, 2.5 m)`.
-  Kệ thông thường dùng `(3, 1.0 m, 2.0 m)`; nhóm CRAVED cao mặc định `Wmax=4.5`, nhóm
-  cồng kềnh `Wmax=1.8`, cùng `r0=1.0 m`, `R=2.0 m`:
+  Thư viện nội thất gồm **13 phân loại** trong [`fixtures.ts`](../frontend/src/core/fixtures.ts) (`wall-shelf`, `gondola`, `endcap`, `promo-island`, `checkout-rack`, `locked-cabinet`, `fridge`, `freezer`, `food-counter`, `seating`, `locker`, `partition`, `column`), cùng `pos` và `entrance`.
+- Mô hình **CRAVED theo tầng kệ** ([`craved.ts`](../frontend/src/core/craved.ts)): kệ hàng hóa hỗ trợ các tầng xếp lớp `tiers?: ShelfTier[]` (`zMin–zMax`, `categoryId` từ **16 nhóm hàng CRAVED** hoặc `wmax` riêng). Khi thay đổi tầng hoặc nhóm hàng, hệ thống tự tổng hợp mức rủi ro cao nhất của kệ: `riskWmax = max_tier(wmax)` và suy ra `riskCategory` (`high` khi `W >= 4.0`, `standard` khi `2.3 <= W < 4.0`, `bulky` khi `W < 2.3`).
+- Kệ thông thường dùng `(3, 1.0 m, 2.0 m)`; nhóm CRAVED cao mặc định `Wmax = 4.5` (hoặc theo nhóm hàng như mỹ phẩm `4.8`, rượu ngoại `4.6`), nhóm cồng kềnh `Wmax = 1.8`, cùng `r0 = 1.0 m`, `R = 2.0 m`:
 
   ```text
   t = clamp((d - r0) / (R - r0), 0, 1)
@@ -30,13 +31,13 @@ và backend (`backend/greedy_optimizer.py`). Mô hình lấy mẫu mục tiêu t
   ```
 
   Trọng số giữ ở `Wmax` trong bán kính lõi `r0`, giảm tuyến tính về 1 tại `R`, và không
-  cộng dồn giữa vật thể. Người dùng có thể chọn nhóm hàng và chỉnh Wmax/hồ sơ từng kệ
-  trong Inspector. Khi chỉnh Wmax trực tiếp, nhóm được chuyển thành `custom`.
-- CRAVED dùng ở đây để tạo các nhóm khởi tạo (hàng có thuộc tính dễ che giấu/lấy, giá trị
-  hoặc sức hấp dẫn cao; hàng thông thường; hàng cồng kềnh), không tính điểm sáu thuộc tính
-  riêng lẻ. Các Wmax là giả định cấu hình, không phải hệ số đã được tài liệu nghiên cứu
-  xác nhận hoặc dự báo xác suất phạm tội; nên hiệu chỉnh theo dữ liệu tổn thất/kiểm kê của
-  cửa hàng.
+  cộng dồn giữa vật thể. Khi người dùng chỉnh trực tiếp `Wmax` trên kệ không đồng bộ tầng,
+  nhóm được đánh dấu `custom`.
+- Điểm CRAVED 6 trục (`concealable`, `removable`, `available`, `valuable`, `enjoyable`,
+  `disposable`) được dùng để phân nhóm hàng khởi tạo (`GOODS_CATALOG`), hiển thị hình khối
+  hàng hóa (`ItemShape`) và gắn cảnh báo cho tầng thấp `zMin <= 1.0 m`. Các `Wmax` là
+  giả định thiết kế phục vụ ưu tiên quan sát, cần hiệu chỉnh thêm theo dữ liệu kiểm kê thực tế
+  của cửa hàng.
 - Cọ rủi ro ghi các nét hình tròn `(x, y, radius, W)` theo mét. Mọi nét có tâm nằm trong
   bán kính đều áp dụng; nét sau cùng khớp với ô sẽ ghi đè nét trước và công thức tự động.
   Vì lưu theo tọa độ thực, thay đổi lưới không làm nét cọ lệch vị trí. Layout cũ vẫn đọc
@@ -146,11 +147,12 @@ Yellow % = 100 × số ô 2≤W<4 có PPM≥125 / tổng số ô 2≤W<4
 Scorecard cũng hiển thị PPM thấp nhất trong các ô vùng Đỏ. Nếu một nhóm không có ô nào,
 phần trăm nhóm đó được xem là 100%.
 
-## 5. Greedy và Greedy + Local Search
+## 5. Greedy, Greedy + Local Search và kpi_hybrid
 
-Thiết lập `optimization` gồm `algorithm: greedy | hybrid` và
-`mounts: wall | mixed | ceiling`, mặc định `hybrid` và `mixed`. Cả hai thuật toán dùng
-chính xác cùng tập ứng viên của một lần giải, cùng profile camera và cùng hàm mục tiêu.
+Thiết lập `optimization` gồm `algorithm: greedy | hybrid | kpi_hybrid` và
+`mounts: wall | mixed | ceiling`, mặc định `kpi_hybrid` và `mixed` cùng `dualHeight`
+(mặc định bật `true` trên giao diện thiết lập mới). Các thuật toán dùng chính xác cùng tập
+ứng viên của một lần giải và cùng profile camera.
 
 ### Tập ứng viên hữu hạn
 
@@ -207,18 +209,44 @@ lớn nhất khoảng 2,03%. Thời gian trong CSV là của lần chạy tại 
 phải cam kết trên thiết bị khác. VN 02 và VN 05 có cùng bài toán phân tích vì người chưa
 tham gia hàm mục tiêu. Kết quả không suy rộng thành mức cải thiện cho mọi mặt bằng.
 
-### Giảm số camera theo KPI vùng rủi ro
+### Thuật toán mặc định `kpi_hybrid` & Chấm điểm phân bậc 2 cao độ (`1.6 m + 1.0 m`)
 
-Lệnh giảm camera tối ưu với ngân sách camera hiện có theo thuật toán/phạm vi đã chọn,
-rồi đánh giá các tiền tố và chọn tiền tố ngắn nhất đạt đồng thời:
+1. **Two-Stage KPI + Local Search (`kpi_hybrid`):**
+   - Giai đoạn 1 (`slot < max(1, ceil(0.67 * K))` khi `Red% < 95%`): tối đa hóa `ΔRed × (Σ W_j / max(1, |Red|)) + 0.1 × ΔW` để khóa sớm nhận dạng khuôn mặt vùng POS/cửa.
+   - Giai đoạn 2 và tối đa 3 vòng Local Search 1-swap: tối ưu `ΔWeighted + (H(base) - H(base ∪ c))` với hệ số phạt hinge `λ_Red = 1.5`, `λ_Yel = 0.75` và (khi `dualHeight = true`) **`λ_Hand = 0.50`** cho phần thiếu hụt dưới mục tiêu **`handTargetPct = 80%`**.
+
+2. **Cơ chế phân bậc 2 cao độ (`DUAL_HEIGHT_SCORING`, `optics.ts` / `greedy_optimizer.py`):**
+   - `evaluate()` luôn tính song song `facePpm` tại `targetHeight` (`1.6 m`) và `handPpm` tại `handHeight = min(targetHeight, 1.0 m)` trong cùng vòng cắt XY 2D (`dualPpmAt`), đồng thời đếm ô chỉ thấy đầu `headOnly` (`facePpm >= 25` và `handPpm < 25`) và tính KPI **`handCoverage`** (`%` ô trống đạt `handPpm >= 62.5 PPM`, ngưỡng Quan sát DORI).
+   - Khi bật `dualHeight = true`, thay cho ngưỡng cắt nhị phân cũ (gây sụt KPI từ `17/18` xuống `8/18` cửa hàng), hệ thống chỉ áp dụng giảm điểm có trọng số tại các ô ưu tiên **`W >= 3.0`** (`minWeightForHandCheck`):
+
+   ```text
+   M_hand(h):
+     h >= 125.0 PPM  -> 1.00
+     h >=  62.5 PPM  -> 0.85
+     h >=  25.0 PPM  -> 0.50
+     h <   25.0 PPM  -> 0.00
+
+   Nếu W < 3.0 hoặc dualHeight = false:
+     factor = F(facePpm)
+   Nếu W >= 4.0 (Vùng Đỏ):
+     factor = 0.65 × F(facePpm) + 0.35 × min(F(facePpm), F(facePpm) × M_hand(handPpm))
+   Nếu 3.0 <= W < 4.0 (Kệ/Vùng Vàng trọng số cao):
+     factor = 0.80 × F(facePpm) + 0.20 × min(F(facePpm), F(facePpm) × M_hand(handPpm))
+   ```
+
+   - **Chỉ số Đỏ (`>= 250 PPM`) & Vàng (`>= 125 PPM`):** đánh giá theo `facePpm` (`1.6 m`) nên không đánh rớt oan khi quầy POS cao `1.1 m` che tầm thấp sát chân quầy; trong khi **`handCoverage`** đo riêng độ phủ tầm tay `1.0 m >= 62.5 PPM` (mục tiêu `80%`).
+   - Kết quả tinh chỉnh trên **18 mặt bằng mẫu**: đạt KPI **`17/18` (`94.4%`)** (so với **`8/18` = `44.4%`** ở mô hình nhị phân cũ), đẩy độ phủ tay vùng Đỏ lên **`98.7%`** và giảm **`44%`** ô chỉ thấy đầu (`11.8% → 6.6%`).
+
+3. **Giảm số camera theo KPI vùng rủi ro (`minimumCamerasForTargets`):**
+
+Tái sử dụng một lượt raycast ứng viên duy nhất rồi giải độc lập từng mức `count = 1..M` cho tới khi đạt đồng thời:
 
 ```text
-Đỏ:   tỷ lệ ô có PPM ≥ 250 ≥ 95%
-Vàng: tỷ lệ ô có PPM ≥ 125 ≥ 80%
+Đỏ:   tỷ lệ ô có PPM (1.6 m) ≥ 250 ≥ 95%
+Vàng: tỷ lệ ô có PPM (1.6 m) ≥ 125 ≥ 80%
 ```
 
-Đây là số camera ít nhất trong các tiền tố đã xét, không phải nghiệm tối thiểu toàn cục.
-Nếu phương án đủ ngân sách chưa đạt KPI, giữ phương án đó và báo tỷ lệ thực tế. Cờ
+Nếu phương án đủ ngân sách vẫn chưa đạt KPI, giữ phương án đó và báo tỷ lệ thực tế. Cờ
 `target_coverage_reached` của API tối ưu vị trí lại dùng ngưỡng 95% ô trống đạt Detection;
 không đồng nghĩa đạt KPI Đỏ/Vàng của giao diện.
 

@@ -31,7 +31,7 @@ describe('Ceiling mounting and project persistence', () => {
   it('imports old projects with wall defaults and rejects ceiling lenses embedded in tall furniture', () => {
     const legacy = normalizeLayout({ ...room, ceilingHeight: undefined, cameras: [{ ...camera, mount: undefined, tilt: undefined }] });
     expect(cameraProjection(legacy.cameras[0]).tilt).toBe(20);
-    expect(legacy.optimization).toEqual({ algorithm: 'hybrid', mounts: 'mixed' });
+    expect(legacy.optimization).toEqual({ algorithm: 'kpi_hybrid', mounts: 'mixed' });
     const obstacle = { id: 'tall', type: 'shelf', x: 3.5, y: 2.5, w: 1, h: 1, angle: 0, elev: 3.1 };
     expect(() => normalizeLayout({ ...room, obstacles: [obstacle], cameras: [camera] })).toThrow(/vật cản cao/);
     expect(() => normalizeLayout({ ...room, cameras: [{ ...camera, x: 0.05 }] })).toThrow(/cách tường/);

@@ -8,50 +8,33 @@ trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian ch�
 
 ## Khu vực giao diện
 
-- **Thanh đầu trang:** chọn mặt bằng mẫu, hoàn tác/làm lại, tối ưu vị trí, mở BOM và xuất JSON.
-- **Thanh công cụ bên trái:** chọn/kéo, thêm camera/kệ/POS/cửa, đặt người đánh giá, đo và tô mức ưu tiên W.
-- **Canvas:** mặt bằng theo mét, lưới, vật cản, camera, vùng FOV và heatmap. Chọn lớp DORI/rủi ro/tắt
-  và bật lưới/điểm neo ngay phía trên canvas.
-- **Inspector bên phải:** KPI trực tiếp, so sánh phương án, chỉnh tường bao và thông số của vật thể/camera đang chọn.
+- **Thanh đầu trang:** chọn 1 trong 18 mặt bằng mẫu qua popover `StudioSelect`, nút **Tạo layout** để mở trình dựng cửa hàng mới, chuyển bước **Mặt bằng** / **Kết quả**, hoàn tác/làm lại, nút **Hướng dẫn (`?`)** để mở lại tour tương tác 6 bước bất kỳ lúc nào, và xuất JSON/BOM.
+- **Thanh công cụ bên trái:** chọn/kéo, thêm **13 loại nội thất chuyên dụng** (15 mục trong thư viện thu gọn), POS, cửa, **Dựng vách (`W`)** chấm 2 điểm dựng tường ngăn, camera tường/trần, đặt người đánh giá, đo và tô mức ưu tiên W.
+- **Canvas 2.5D & Cột Camera thu gọn:** mặt bằng theo mét, lưới, bóng xem trước vị trí đặt (**ghost placement**), tay kéo góc đổi kích thước trực tiếp trên vật thể đang chọn, nhãn kệ tự lật thẳng đứng (`180°`), DORI/rủi ro kèm gạch chéo cảnh báo khuất 1.0 m, và cột **Camera** cạnh canvas có thể thu gọn thành thanh mini (`190 px` ↔ `46 px`).
+- **Inspector / Bảng thiết lập bên phải (`396 px`):** KPI trực tiếp (gồm tỷ lệ phủ tầm tay `1.0 m`), bảng so sánh, preset kích thước **S / M / L**, thanh trượt + stepper `−/+` cập nhật ngay lập tức, **folder xếp tầng kệ CRAVED**, và chỉnh thông số camera/tường bao.
 - **Xuất và dự án / Công cụ nâng cao:** nhập layout JSON, lưu PNG, Greedy không trọng số, ảnh nền và các thao tác ít dùng.
 - **Hoàn tác/Làm lại:** các thay đổi sơ đồ và hình người được gom theo thao tác; dùng nút hoặc
-  `Ctrl+Z` / `Ctrl+Y` (Mac: `⌘Z` / `⌘Y`). Thay layout, xóa vật thể và xóa cọ sẽ hỏi xác nhận.
+  `Ctrl+Z` / `Ctrl+Y` (Mac: `⌘Z` / `⌘Y`). Thay layout, xóa vật thể và xóa cọ đều dùng hộp thoại xác nhận đồng bộ trong ứng dụng.
 
 ## Các thao tác chính
 
-1. Chọn một trong tám layout mẫu ở thanh đầu trang; nhập layout JSON trong mục **Xuất và dự án**.
-2. Thêm kệ, POS, cửa hoặc camera bằng thanh công cụ bên trái.
-   Chọn **Người đánh giá**, rồi bấm vào mặt bằng để đặt hình người; chọn/kéo hình người để
-   mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
+1. Khi mở lần đầu, **Hướng dẫn tương tác 6 bước (`SpotlightOverlay` + `TutorialModal`)** làm tối vùng xung quanh và chiếu sáng trực tiếp từng khu vực từ Chọn/Tạo layout → Kích thước & Xoay 90° → Thanh công cụ & Dựng vách (`W`) → Thư viện 15 nội thất & CRAVED → Tối ưu 1.0 m → DORI/3D (mở lại qua nút `?`). Ngoài ra, hộp thoại **Tạo layout** (`CustomLayoutModal`) cho phép chọn **Chữ nhật, Chữ L, Vát góc, Hình thang** hoặc **Tự vẽ tường bao** đa giác, xoay khung **90°** (`Xoay 90° (R↔D)` tự động xoay toàn bộ phòng & nội thất theo chiều mới) và có nút **Hướng dẫn 3 bước** riêng. Chọn nhanh 1 trong 18 layout mẫu ở thanh đầu trang hoặc nhập layout JSON trong menu **Xuất dự án**.
+2. Thêm nội thất (**kệ sát tường, kệ đôi, kệ đầu dãy `endcap`, đảo khuyến mãi `promo-island`, kệ trước thu ngân `checkout-rack`, tủ kính khóa `locked-cabinet`, tủ gửi đồ `locker`, tủ mát, tủ đông, quầy đồ nóng, bàn ngồi, vách ngăn, cột**), POS, cửa, **vách ngăn (`W`)** hoặc camera:
+   - Dùng **Dựng vách (`W`)** rồi nhấp 2 điểm bất kỳ trên sàn để dựng vách ngăn (giữ góc 45°/90° hoặc nối tiếp nhiều đoạn); hoặc bấm **Tạo layout → Tự vẽ tường bao** để chấm đỉnh vẽ đường bao cửa hàng tùy ý rồi nhấn **Hoàn tất khung**.
+   - Trên 2.5D, chọn loại nội thất để bật **chế độ đặt theo con trỏ (ghost preview)**: di chuyển chuột xem trước vị trí, bấm `R` để xoay 15°, nhấp để đặt, `Esc` để thoát hoặc bấm **Đặt tự động** để đặt ngay vào vùng sàn trống.
+   - Chọn **Người đánh giá**, rồi bấm vào mặt bằng để đặt hình người (2.5D/3D đã tinh chỉnh hình dáng giải phẫu); chọn/kéo hình người để mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
 3. Kéo camera tường dọc tường hoặc camera trần bên trong mặt bằng để đổi vị trí; chọn camera rồi kéo tay cầm màu cam để đổi hướng theo nấc 15°.
    Chọn camera rồi chỉnh chất lượng, model, pan, FOV, tầm xa và chiều cao trong Inspector.
-   Ô số cho phép xóa giá trị cũ để nhập lại; nhấn `Enter` hoặc rời ô để áp dụng, `Esc` để
-   hủy nội dung đang nhập. Giá trị ngoài phạm vi được báo ngay dưới ô.
-4. Chọn vật cản để đổi tên/kích thước/chiều cao; xoay bằng nút xoay hoặc phím `R`.
-   Cửa được khóa vào cạnh tường. Có thể xoay vật thể qua vật thể khác để sắp xếp lại;
-   di chuyển chặn chồng lấn mới và cho phép tách những vật thể đang chồng nhau.
-5. Chọn **DORI**, **Rủi ro**, hoặc **Tắt lớp phủ** phía trên canvas để đổi lớp phủ.
-   Chọn cọ `W 5`, `W 3`, `W 1` ở thanh công cụ bên trái, rồi kéo trên sơ đồ để ghi đè trọng số. Nét cọ được
-   lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới. Heatmap rủi ro dùng
-   thang đơn sắc theo độ ưu tiên; lưới nhỏ hơn 0.5 m ẩn số, ở 0.5 m hiện mọi W, lưới lớn hơn chỉ hiện W ≥ 2.
-   Chú giải bên dưới sơ đồ lọc Thấp/Vừa/Cao.
-6. Trong **Trần nhà & vị trí lắp**, chọn **Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**,
-   rồi chọn **Greedy + Local Search** hoặc **Greedy (đối chứng)**. Nhập số camera 1–20
-   vào **Số camera muốn bố trí** và bấm **Tối ưu số camera đã nhập**. Các lệnh tối ưu
-   số camera hiện có và giảm số camera theo KPI vẫn có trong menu tối ưu.
-   Bộ tối ưu giữ các thông số quang học của từng profile, đồng thời tìm lại vị trí, kiểu
-   lắp, pan và tilt theo phạm vi cho phép. Camera tường giữ chiều cao trong giới hạn trần;
-   camera trần dùng chiều cao trần trừ khoảng hạ. Bảng kết quả cho biết điểm Greedy,
-   điểm sau Local Search, số ứng viên và số lần thay camera giúp tăng điểm.
-   Lệnh giảm camera chọn tiền tố ngắn nhất đạt Đỏ 95% và Vàng 80% trong phương án tìm được;
-   không chứng minh số camera tối thiểu toàn cục. Nếu chưa đạt KPI, ứng dụng giữ phương án
-   đủ ngân sách tìm được và báo tỷ lệ thực tế. **Hủy** dừng tác vụ; chỉnh mặt bằng trong lúc
-   tối ưu làm kết quả cũ không còn được áp dụng.
-7. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ. Nút **Vừa khung**,
-   **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas; giữ `Alt` khi cuộn
-   để xoay camera/vật thể đang chọn.
-8. Chọn **BOM** hoặc **Xuất JSON** ở thanh đầu trang. Các thao tác nhập layout, lưu PNG và
-   so sánh Greedy không trọng số nằm trong mục **Xuất và dự án** ở Inspector.
+   Ô số (`NumberField`) áp dụng giá trị **ngay khi đang nhập** nếu hợp lệ (hết trễ chờ rời ô), đồng thời hỗ trợ `Enter` / `Esc` và báo lỗi ngay nếu vượt phạm vi.
+4. Chọn vật cản để đổi kích thước tức thì bằng preset **S / M / L**, thanh trượt Dài/Rộng/Cao, stepper `−/+` hoặc kéo trực tiếp **tay cầm góc** trên 2.5D (kể cả trên vật thể đã xoay, tự kẹp trong tường bao); xoay bằng nút xoay, `Alt + cuộn chuột` hoặc phím `R`. Cửa được khóa vào cạnh tường.
+5. Trong thẻ **Tầng kệ & CRAVED (`ShelfTierFolders`)**, bấm các thẻ tầng xếp lớp (`Tầng 1`, `Tầng 2`, …) để chỉnh khoảng cao `zMin–zMax`, gán nhóm hàng từ **16 danh mục CRAVED** (từ bánh kẹo, đồ uống đến mỹ phẩm, rượu, thực phẩm đông lạnh…). Kệ tự động tính lại mức độ rủi ro tổng (`riskWmax`/`riskCategory`) theo tầng nguy hiểm nhất, cảnh báo bằng biểu tượng khi tầng có `zMin <= 1.0 m` dễ bị che khuất, và dựng khối hàng hóa minh họa (`box`, `bottle`, `snack`, `wine`, v.v.) trên sơ đồ 2.5D & 3D.
+6. Chọn **DORI**, **Rủi ro**, hoặc **Tắt lớp phủ** phía trên canvas để đổi lớp phủ.
+   Chọn cọ `W 5`, `W 3`, `W 1` ở thanh công cụ bên trái, rồi kéo trên sơ đồ để ghi đè trọng số. Nét cọ được lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới.
+7. Trong **Camera và tối ưu → Thiết lập tối ưu**, chọn phạm vi lắp (**Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**), bật/tắt **Chống khuất tầm tay (1.0 m)** (`dualHeight`, mặc định bật) để bộ tối ưu bảo vệ cả tầm tay trên các khu vực trọng yếu (`W >= 3.0`) bằng mô hình phân bậc `DUAL_HEIGHT_SCORING`, và nhập **Số camera muốn bố trí (1–20)** rồi bấm **Tối ưu phương án**.
+   Hệ thống mặc định dùng **Two-Stage KPI + Local Search (`kpi_hybrid`)**: khóa sớm ≥95% vùng Đỏ, sau đó tối ưu điểm có trọng số + penalty Đỏ/Vàng/Tay (`λ_Hand = 0.50`, mục tiêu `80%` ô đạt `≥ 62,5 PPM` ở `1.0 m`) qua tối đa 3 vòng 1-swap. Trên heatmap DORI, ô chỉ thấy mặt `1.6 m` nhưng bị che hoàn toàn ở `1.0 m` hiện gạch chéo vàng cam kèm tỷ lệ **Độ phủ tầm tay 1.0 m (`≥ 62,5 PPM`)** trong Scorecard.
+   Lệnh **Giảm số camera theo KPI** giải độc lập từng ngân sách `K = 1..M` trên cùng pool ứng viên để tìm số camera ít nhất đạt đồng thời Đỏ ≥95% và Vàng ≥80%. **Hủy** dừng tác vụ; chỉnh mặt bằng trong lúc tối ưu làm kết quả cũ không còn được áp dụng.
+8. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ cả mặt & tầm tay. Nút **Vừa khung**, **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas.
+9. Chọn **BOM** hoặc **Xuất JSON** ở thanh đầu trang. Các thao tác nhập layout, lưu PNG và so sánh Greedy không trọng số nằm trong mục **Xuất và dự án** ở Inspector.
 
 Trên màn hình nhỏ, bấm **Mở công cụ mặt bằng** dưới canvas để hiện thanh công cụ. Inspector nằm
 dưới sơ đồ; kéo nền trống để pan khi phóng lớn.
@@ -78,11 +61,12 @@ dưới sơ đồ; kéo nền trống để pan khi phóng lớn.
   Cọ thủ công vẫn dùng mức 5/3/1 và ghi đè lên vùng tự động; nét vẽ sau cùng được ưu tiên.
   Có thể chỉnh kích thước ô trong Inspector; nên chọn `gridM ≤ (R-r0)/3` để lấy mẫu vùng
   chuyển tiếp đủ mịn (ví dụ vùng kệ mặc định khuyến nghị lưới không quá khoảng 0,33 m).
-  Với kệ, chọn nhóm hàng **CRAVED cao** (Wmax 4.5), **thông thường** (3.0) hoặc
-  **cồng kềnh** (1.8); có thể chọn **Tùy chỉnh** hoặc sửa Wmax trực tiếp. Đây là trọng số
-  khởi tạo để ưu tiên bố trí, không phải xác suất/mức trộm cắp đã hiệu chuẩn. CRAVED giúp
-  phân nhóm theo thuộc tính sản phẩm; dữ liệu tổn thất và kiểm kê tại cửa hàng mới nên được
-  dùng để tinh chỉnh các giá trị.
+  Với kệ, có thể chọn nhanh mức **CRAVED cao** (`Wmax 4.5`), **thông thường** (`3.0`),
+  **cồng kềnh** (`1.8`) hoặc quản lý từng **Tầng kệ CRAVED** (16 nhóm hàng chi tiết và cao
+  độ `zMin–zMax`, tự tính mức cao nhất của kệ); có thể chọn **Tùy chỉnh** hoặc sửa `Wmax`
+  trực tiếp. Đây là trọng số khởi tạo để ưu tiên bố trí, không phải xác suất/mức trộm cắp
+  đã hiệu chuẩn. CRAVED giúp phân nhóm theo thuộc tính sản phẩm; dữ liệu tổn thất và kiểm
+  kê tại cửa hàng mới nên được dùng để tinh chỉnh các giá trị.
 
 ### Ảnh nền và tỷ lệ
 
@@ -95,6 +79,7 @@ của sơ đồ, không làm thay đổi kích thước phòng tính bằng mét
 | Phím | Tác vụ |
 |---|---|
 | `O` | Auto-Optimize |
+| `W` | Bật/tắt công cụ Dựng vách |
 | `B` | Mở/đóng BOM |
 | `G` | Bật/tắt lưới |
 | `A` | Bật/tắt điểm neo |

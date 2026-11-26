@@ -1,0 +1,292 @@
+{
+  "version": "1.1",
+  "name": "VN 15 · Siêu thị chữ U có vách kho (108 m²)",
+  "widthM": 12,
+  "heightM": 9,
+  "gridM": 0.5,
+  "pixelsPerMeter": 54,
+  "targetHeight": 1.6,
+  "ceilingHeight": 3.3,
+  "description": "Cửa hàng 108 m² có 2 vách ngăn kho đệm cao 2.2 m tạo hốc khuất phía sau, cột giữa sảnh, quầy cafe và 12 người hoạt động.",
+  "obstacles": [
+    {
+      "id": "entry-1",
+      "type": "entrance",
+      "label": "Cửa đôi mặt tiền",
+      "x": 5.2,
+      "y": 0,
+      "w": 2.0,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.8,
+      "riskR": 2.0
+    },
+    {
+      "id": "pos-1",
+      "type": "pos",
+      "label": "Thu ngân chính",
+      "x": 2.0,
+      "y": 1.0,
+      "w": 2.4,
+      "h": 0.8,
+      "elev": 1.1,
+      "angle": 0,
+      "fixture": "food-counter",
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "hot-1",
+      "type": "pos",
+      "label": "Quầy bánh mì & Cafe",
+      "x": 8.2,
+      "y": 0.9,
+      "w": 2.4,
+      "h": 0.75,
+      "elev": 1.1,
+      "angle": 0,
+      "fixture": "food-counter",
+      "riskCategory": "high"
+    },
+    {
+      "id": "col-1",
+      "type": "shelf",
+      "label": "Cột sảnh",
+      "x": 6.0,
+      "y": 3.2,
+      "w": 0.45,
+      "h": 0.45,
+      "elev": 3.3,
+      "angle": 0,
+      "fixture": "column",
+      "riskCategory": "bulky"
+    },
+    {
+      "id": "gond-1",
+      "type": "shelf",
+      "label": "Kệ A",
+      "x": 2.2,
+      "y": 3.0,
+      "w": 0.8,
+      "h": 3.0,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "gond-2",
+      "type": "shelf",
+      "label": "Kệ B",
+      "x": 4.6,
+      "y": 3.0,
+      "w": 0.8,
+      "h": 3.0,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "gond-3",
+      "type": "shelf",
+      "label": "Kệ C",
+      "x": 7.8,
+      "y": 3.0,
+      "w": 0.8,
+      "h": 3.0,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "wall-1",
+      "type": "shelf",
+      "label": "Mỹ phẩm & Thẻ",
+      "x": 0.0,
+      "y": 2.6,
+      "w": 0.42,
+      "h": 3.2,
+      "elev": 1.8,
+      "angle": 0,
+      "fixture": "wall-shelf",
+      "riskCategory": "high"
+    },
+    {
+      "id": "part-1",
+      "type": "shelf",
+      "label": "Vách kho đệm trái",
+      "x": 0.0,
+      "y": 7.0,
+      "w": 3.2,
+      "h": 0.18,
+      "elev": 2.2,
+      "angle": 0,
+      "fixture": "partition",
+      "riskCategory": "bulky"
+    },
+    {
+      "id": "part-2",
+      "type": "shelf",
+      "label": "Vách kho đệm phải",
+      "x": 8.8,
+      "y": 7.0,
+      "w": 3.2,
+      "h": 0.18,
+      "elev": 2.2,
+      "angle": 0,
+      "fixture": "partition",
+      "riskCategory": "bulky"
+    },
+    {
+      "id": "fridge-1",
+      "type": "shelf",
+      "label": "Tủ mát chữ U",
+      "x": 4.0,
+      "y": 8.3,
+      "w": 4.0,
+      "h": 0.7,
+      "elev": 2.0,
+      "angle": 0,
+      "fixture": "fridge",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "seat-1",
+      "type": "shelf",
+      "label": "Khu ngồi chờ",
+      "x": 10.6,
+      "y": 2.8,
+      "w": 1.0,
+      "h": 2.2,
+      "elev": 0.8,
+      "angle": 0,
+      "fixture": "seating",
+      "riskCategory": "bulky"
+    }
+  ],
+  "optimization": {
+    "algorithm": "kpi_hybrid",
+    "mounts": "mixed"
+  },
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "x": 0.1,
+      "y": 0.1,
+      "pan": 45,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-02",
+      "x": 11.9,
+      "y": 0.1,
+      "pan": 135,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-03",
+      "x": 11.9,
+      "y": 8.9,
+      "pan": 225,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-04",
+      "x": 0.1,
+      "y": 8.9,
+      "pan": 315,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    }
+  ],
+  "people": [
+    {
+      "id": "PERSON-01",
+      "x": 3.0,
+      "y": 0.45
+    },
+    {
+      "id": "PERSON-02",
+      "x": 3.2,
+      "y": 2.2
+    },
+    {
+      "id": "PERSON-03",
+      "x": 6.2,
+      "y": 1.1
+    },
+    {
+      "id": "PERSON-04",
+      "x": 9.2,
+      "y": 2.0
+    },
+    {
+      "id": "PERSON-05",
+      "x": 1.3,
+      "y": 4.2
+    },
+    {
+      "id": "PERSON-06",
+      "x": 3.6,
+      "y": 4.5
+    },
+    {
+      "id": "PERSON-07",
+      "x": 6.4,
+      "y": 4.9
+    },
+    {
+      "id": "PERSON-08",
+      "x": 9.2,
+      "y": 4.4
+    },
+    {
+      "id": "PERSON-09",
+      "x": 5.8,
+      "y": 7.4
+    },
+    {
+      "id": "PERSON-10",
+      "x": 2.2,
+      "y": 8.0
+    },
+    {
+      "id": "PERSON-11",
+      "x": 9.6,
+      "y": 7.9
+    },
+    {
+      "id": "PERSON-12",
+      "x": 9.8,
+      "y": 3.6
+    }
+  ]
+}

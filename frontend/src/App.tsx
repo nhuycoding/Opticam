@@ -1,7 +1,20 @@
-import { floorArea } from './core/footprint';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { floorArea, validateFloorPolygon } from './core/footprint';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type Konva from 'konva';
-import { ArrowRight, ArrowLeft, ChevronDown, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, FileUp, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Box, BrickWall, ChevronDown, ChevronRight, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map, HelpCircle, Plus, FileJson, ImageDown, FolderOpen, Wand2, Gauge, SlidersHorizontal, FilePlus2 } from 'lucide-react';
+import { TutorialModal, type TutorialStep } from './components/TutorialModal';
+import { CustomLayoutModal } from './components/CustomLayoutModal';
+import { StudioSelect } from './components/StudioSelect';
+import { applyTiersToObstacle, defaultTiersForObstacle, rescaleTiersToElevation } from './core/craved';
+import { FIXTURE_GROUP_LABELS, FIXTURE_SPECS, FURNITURE_CATALOG, isMerchandisable, type FixtureGroup } from './core/fixtures';
+
+const TUTORIAL_STORAGE_KEY = 'opticam.tutorial.dismissed';
+
+function shouldAutoOpenTutorial(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.localStorage?.getItem === 'function'
+    && window.localStorage.getItem(TUTORIAL_STORAGE_KEY) !== '1';
+}
 import '@fontsource/be-vietnam-pro/vietnamese-400.css';
 import '@fontsource/be-vietnam-pro/vietnamese-500.css';
 import '@fontsource/be-vietnam-pro/vietnamese-600.css';
@@ -17,30 +30,46 @@ import { BomModal } from './components/BomModal';
 import { Scorecard, type RiskMetrics } from './components/Scorecard';
 import { PRESETS, withManualCams } from './data/presets';
 import { buildZones, evaluate, RISK_DEFAULTS, SHELF_RISK_PROFILES } from './core/optics';
-import { makeCamera, manualFourCorners, type OptimizationDiagnostics } from './core/optimizer';
+import { makeCamera, manualFourCorners } from './core/optimizer';
 import { solveLocally } from './core/localSolver';
 import { requestOptimize } from './core/api';
-import { addObstacle, moveObstacle, removeObstacle, resizeObstacle, resizeRoom, rotateObstacle } from './core/editor';
+import { addObstacle, buildCustomLayout, makePlacementDraft, moveObstacle, removeObstacle, resizeObstacle, resizeRoom, rotateLayout90, rotateObstacle, type PlacementDraft } from './core/editor';
 import { exportBundle, download, parseBundle } from './core/io';
-import { snapAngle, wallAnchors } from './core/geometry';
+import { snapAngle, wallAnchors, type Pt } from './core/geometry';
 import { canPlacePerson, MAX_PEOPLE } from './core/person';
 import { SceneInspector } from './components/three/SceneInspector';
 import { SceneBoundary } from './components/three/SceneBoundary';
 import { CameraSchedule } from './components/CameraSchedule';
-import { cameraNumber, cameraMount, normalizeCameraPlacement } from './core/camera';
+import { cameraNumber, cameraMount, ceilingHeightFor, normalizeCameraPlacement } from './core/camera';
 import { canPlaceCeilingCamera, ceilingInsertionPoint, placeEditedCamera } from './core/cameraEditing';
 import { PlanningSettings } from './components/PlanningSettings';
-import { CameraCountOptimizer } from './components/CameraCountOptimizer';
+import { CAMERA_OPTIMIZATION_FORM, CameraCountOptimizer } from './components/CameraCountOptimizer';
 import type { Camera, Fixture, Layout, Obstacle, ObsType, Person, RiskStroke, Score, ShelfRiskCategory, Weight } from './types';
 
 const MAX_CAMS = 20;
 const Store3D = lazy(() => import('./components/three/Store3D'));
 const STEPS = [
-  { title: 'Mặt bằng', note: 'Dựng không gian', icon: Map },
-  { title: 'Ưu tiên', note: 'Xác định trọng điểm', icon: ShieldCheck },
-  { title: 'Camera', note: 'Thiết kế góc nhìn', icon: CameraIcon },
-  { title: 'Kết quả', note: 'Đánh giá phương án', icon: ScanLine }
-];
+  { id: 'plan', title: 'Mặt bằng', icon: Map },
+  { id: 'results', title: 'Kết quả', icon: ScanLine },
+] as const;
+type Step = typeof STEPS[number]['id'];
+type PlanGroup = 'room' | 'priority' | 'camera';
+
+function PlanSection({ id, title, icon: Icon, expanded, onToggle, children }: {
+  id: PlanGroup; title: string; icon: typeof Map; expanded: boolean; onToggle: () => void; children: ReactNode;
+}) {
+  return <section className="sidebar-group">
+    <h3 className="sidebar-group-heading">
+      <button type="button" id={`group-${id}`} className="sidebar-group-toggle" aria-expanded={expanded} aria-controls={`section-${id}`} onClick={onToggle}>
+        <span className="sidebar-group-icon"><Icon size={17} aria-hidden="true" /></span>
+        <span>{title}</span>
+        <ChevronRight className="sidebar-chevron" size={16} aria-hidden="true" />
+      </button>
+    </h3>
+    <div id={`section-${id}`} className="sidebar-group-content" aria-labelledby={`group-${id}`} hidden={!expanded}>{children}</div>
+  </section>;
+}
+
 type EditorSnapshot = { layout: Layout; people: Person[] };
 
 export default function App() {
@@ -48,8 +77,10 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('off');
   const [dimension, setDimension] = useState<'plan' | '3d'>('plan');
   const [cameraViewId, setCameraViewId] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
-  const [comparison, setComparison] = useState<{ before: Layout; after: Layout; score: Score; diagnostics?: OptimizationDiagnostics } | null>(null);
+  const [step, setStep] = useState<Step>('plan');
+  const [group, setGroup] = useState<PlanGroup | null>('room');
+  const isPlanning = step === 'plan';
+  const [comparison, setComparison] = useState<{ before: Layout; after: Layout; score: Score } | null>(null);
   const [showBefore, setShowBefore] = useState(false);
   const [brush, setBrush] = useState<Weight | null>(null);
   const [riskFilter, setRiskFilter] = useState<PriorityBand | null>(null);
@@ -57,6 +88,34 @@ export default function App() {
   const [sel, setSel] = useState<Selection>(null);
   const [people, setPeople] = useState<Person[]>(() => structuredClone(PRESETS[0].people ?? []));
   const [grid, setGrid] = useState(true), [anchors, setAnchors] = useState(false), [bom, setBom] = useState(false);
+  const [catalogGroup, setCatalogGroup] = useState<'all' | FixtureGroup>('all');
+  const [showCustomBuilder, setShowCustomBuilder] = useState(false);
+  const [builderTourOnOpen, setBuilderTourOnOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState<boolean>(shouldAutoOpenTutorial);
+  const handleTutorialFocus = useCallback((tourStep: TutorialStep) => {
+    setStep('plan');
+    setDimension('plan');
+    if (tourStep.groupNeeded) setGroup(tourStep.groupNeeded);
+  }, []);
+  const closeTutorial = useCallback((dontShowAgain: boolean) => {
+    if (dontShowAgain) {
+      try {
+        window.localStorage?.setItem(TUTORIAL_STORAGE_KEY, '1');
+      } catch {
+        // Ignore storage errors in private or sandboxed environments.
+      }
+    }
+    setShowTutorial(false);
+  }, []);
+  const [pendingLayout, setPendingLayout] = useState<{ layout: Layout; goPlan: boolean } | null>(null);
+  const [placing, setPlacing] = useState<PlacementDraft | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    body: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
   const [solveMs, setSolveMs] = useState(0), [renderMs, setRenderMs] = useState(0), [unweighted, setUnweighted] = useState<Score | null>(null);
   const [msg, setMsg] = useState('');
   const [cameraBudget, setCameraBudget] = useState(3);
@@ -146,14 +205,17 @@ export default function App() {
     h.last = { layout: nextLayout, people: nextPeople }; h.ignoreNext = true;
     setUndoReady(false); setRedoReady(false);
   };
-  const loadLayout = (l: Layout) => {
-    if (!window.confirm('Thay layout hiện tại? Các thay đổi chưa xuất sẽ bị mất.')) return false;
+  const applyLayout = (l: Layout, goPlan = false) => {
     optimizationController.current?.abort();
     setBrush(null); setTool('select'); setMeasure(null); setRiskFilter(null); setFocusCell(null);
     setCameraViewId(null);
     const nextPeople = structuredClone(l.people ?? []);
     resetHistory(l, nextPeople); setLayout(l); setPeople(nextPeople); setSel(null); setUnweighted(null); setSolveMs(0); setCameraBudget(l.cameras.length || 3);
-    return true;
+    if (goPlan) goStep('plan');
+  };
+  const loadLayout = (l: Layout, goPlan = false) => {
+    setPendingLayout({ layout: l, goPlan });
+    return false;
   };
   const undo = () => {
     const h = history.current;
@@ -197,36 +259,140 @@ export default function App() {
     setPeople(current => current.map(item => item.id === person.id ? person : item));
   }, []);
   const paint = useCallback((strokes: RiskStroke[]) => setLayout((l) => ({ ...l, riskStrokes: [...l.riskStrokes, ...strokes.slice(0, Math.max(0, 50000 - l.riskStrokes.length))] })), []);
-  const select = useCallback((s: Selection) => setSel(s), []);
+  const select = useCallback((selection: Selection) => {
+    setSel(selection);
+    if (selection?.kind === 'cam' || selection?.kind === 'person') {
+      setGroup('camera');
+      setBrush(null);
+    }
+    if (selection?.kind === 'obs') setGroup(current => current === 'priority' ? 'priority' : 'room');
+  }, []);
 
   const addObs = (t: ObsType, fixture?: Fixture) => {
     if (layout.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
     const r = addObstacle(layout, t, fixture);
     if (!r) return flash('Không còn chỗ trống cho khối này');
-    setLayout(r); setSel({ kind: 'obs', id: r.obstacles[r.obstacles.length - 1].id }); setTool('select');
+    setLayout(r); setPlacing(null); setGroup('room'); setBrush(null); setSel({ kind: 'obs', id: r.obstacles[r.obstacles.length - 1].id }); setTool('select');
   };
-  const editObstacle = (id: string, pt: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR' | 'fixture'>>) =>
-    setLayout((l) => {
-      const o = l.obstacles.find((x) => x.id === id); if (!o) return l;
-      const { w, h, ...rest } = pt;
-      if (pt.riskCategory !== undefined) {
-        rest.riskCategory = pt.riskCategory;
-        if (pt.riskCategory !== 'custom' && pt.riskWmax === undefined) {
-          rest.riskWmax = SHELF_RISK_PROFILES[pt.riskCategory].wmax;
+  const startPlacing = (type: ObsType, fixture?: Fixture) => {
+    if (layout.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
+    setDimension('plan'); setBrush(null); setTool('select'); setMeasure(null); setGroup('room');
+    setPlacing(makePlacementDraft(type, fixture, ceilingHeightFor(layout)));
+  };
+  const placeObstacleAt = (obstacle: Obstacle) => {
+    if (layoutRef.current.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
+    setLayout((l) => ({ ...l, walkways: undefined, obstacles: [...l.obstacles, obstacle] }));
+    setPlacing(null); setGroup('room'); setBrush(null); setSel({ kind: 'obs', id: obstacle.id }); setTool('select');
+  };
+  const buildWallSegment = (obstacle: Obstacle) => {
+    if (layoutRef.current.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
+    setLayout((l) => ({ ...l, walkways: undefined, obstacles: [...l.obstacles, obstacle] }));
+    setGroup('room');
+    setSel({ kind: 'obs', id: obstacle.id });
+  };
+  const swapRoom90 = () => {
+    const rotated = rotateLayout90(layoutRef.current, people);
+    setLayout(rotated.layout);
+    setPeople(rotated.people);
+    setFocusCell(null);
+    flash(`Đã xoay mặt bằng & toàn bộ nội thất 90° (${rotated.layout.widthM} × ${rotated.layout.heightM} m).`);
+  };
+  const startPolygonDraw = (seed: { name: string; widthM: number; heightM: number; ceilingHeight: number; gridM: number }) => {
+    const blank = buildCustomLayout({ ...seed, shape: 'rect', starterKit: 'empty' });
+    setShowCustomBuilder(false);
+    setDimension('plan');
+    setPlacing(null);
+    setBrush(null);
+    setSel(null);
+    applyLayout(blank.layout, true);
+    setTool('polygon');
+    flash('Chấm các góc tường bao trên sơ đồ rồi bấm Hoàn tất khung.');
+  };
+  const completePolygon = (points: Pt[]) => {
+    try {
+      const l = layoutRef.current;
+      const validPoly = validateFloorPolygon(points, l.widthM, l.heightM);
+      if (!validPoly) return;
+      const xs = validPoly.map(([px]) => px);
+      const ys = validPoly.map(([, py]) => py);
+      const minX = Math.min(...xs), minY = Math.min(...ys);
+      const maxX = Math.max(...xs), maxY = Math.max(...ys);
+      const newW = Math.max(3, Math.ceil((maxX - minX) / l.gridM) * l.gridM);
+      const newH = Math.max(3, Math.ceil((maxY - minY) / l.gridM) * l.gridM);
+      const shiftedPoly = validPoly.map(([px, py]) => [
+        Math.round((px - minX) * 100) / 100,
+        Math.round((py - minY) * 100) / 100,
+      ] as Pt);
+      setLayout({
+        ...l,
+        widthM: Math.round(newW * 100) / 100,
+        heightM: Math.round(newH * 100) / 100,
+        floorPolygon: shiftedPoly,
+        obstacles: [],
+        cameras: [],
+        risk: {},
+        riskStrokes: [],
+        walkways: undefined,
+      });
+      setPeople([]);
+      setTool('select');
+      flash(`Đã dựng tường bao đa giác (${shiftedPoly.length} cạnh). Hãy dựng vách hoặc thêm nội thất.`);
+    } catch (error) {
+      flash((error as Error).message, 'error');
+    }
+  };
+  const editObstacle = (id: string, pt: Partial<Pick<Obstacle, 'label' | 'elev' | 'w' | 'h' | 'riskCategory' | 'riskWmax' | 'riskR0' | 'riskR' | 'fixture' | 'tiers'>>) => {
+    const l = layoutRef.current;
+    const o = l.obstacles.find((x) => x.id === id);
+    if (!o) return;
+    const { w, h, ...rest } = pt;
+    if (pt.fixture !== undefined && pt.fixture !== o.fixture && !pt.tiers) {
+      const candidate = { ...o, fixture: pt.fixture };
+      if (!isMerchandisable(candidate)) {
+        rest.tiers = undefined;
+      } else if (!o.tiers?.length) {
+        const tiers = defaultTiersForObstacle(candidate);
+        Object.assign(rest, applyTiersToObstacle(candidate, tiers));
+      }
+    }
+    if (pt.elev !== undefined) {
+      const nextFixture = pt.fixture ?? o.fixture;
+      const baseTiers = pt.tiers ?? o.tiers;
+      if (baseTiers?.length) {
+        rest.tiers = rescaleTiersToElevation(baseTiers, pt.elev);
+      } else if (isMerchandisable({ type: o.type, fixture: nextFixture })) {
+        rest.tiers = defaultTiersForObstacle({ type: o.type, fixture: nextFixture, elev: pt.elev, riskCategory: pt.riskCategory ?? o.riskCategory });
+      }
+    }
+    if (pt.riskCategory !== undefined) {
+      rest.riskCategory = pt.riskCategory;
+      if (pt.riskCategory !== 'custom' && pt.riskWmax === undefined) {
+        rest.riskWmax = SHELF_RISK_PROFILES[pt.riskCategory].wmax;
+      }
+    }
+    if (pt.riskWmax !== undefined) {
+      rest.riskWmax = Math.max(1, Math.min(5, pt.riskWmax));
+      if (o.type === 'shelf' && pt.riskCategory === undefined && pt.tiers === undefined) rest.riskCategory = 'custom';
+    }
+    if (pt.riskR0 !== undefined) {
+      rest.riskR0 = Math.max(0, pt.riskR0);
+      if ((pt.riskR ?? o.riskR ?? RISK_DEFAULTS[o.type].radius) <= rest.riskR0) rest.riskR = rest.riskR0 + 0.1;
+    }
+    if (pt.riskR !== undefined) rest.riskR = Math.max((pt.riskR0 ?? o.riskR0 ?? RISK_DEFAULTS[o.type].r0) + 0.1, pt.riskR);
+    const l2 = { ...l, obstacles: l.obstacles.map((x) => (x.id === id ? { ...x, ...rest } : x)) };
+    if (w !== undefined || h !== undefined) {
+      const resized = resizeObstacle(l2, id, w ?? o.w, h ?? o.h);
+      if (resized === l2) {
+        if (rest.elev !== undefined || rest.label !== undefined || rest.fixture !== undefined) {
+          setLayout(l2);
         }
+        return;
       }
-      if (pt.riskWmax !== undefined) {
-        rest.riskWmax = Math.max(1, Math.min(5, pt.riskWmax));
-        if (o.type === 'shelf' && pt.riskCategory === undefined) rest.riskCategory = 'custom';
-      }
-      if (pt.riskR0 !== undefined) {
-        rest.riskR0 = Math.max(0, pt.riskR0);
-        if ((pt.riskR ?? o.riskR ?? RISK_DEFAULTS[o.type].radius) <= rest.riskR0) rest.riskR = rest.riskR0 + 0.1;
-      }
-      if (pt.riskR !== undefined) rest.riskR = Math.max((pt.riskR0 ?? o.riskR0 ?? RISK_DEFAULTS[o.type].r0) + 0.1, pt.riskR);
-      const l2 = { ...l, obstacles: l.obstacles.map((x) => (x.id === id ? { ...x, ...rest } : x)) };
-      return w !== undefined || h !== undefined ? resizeObstacle(l2, id, w ?? o.w, h ?? o.h) : l2;
-    });
+      setLayout(resized);
+      return;
+    }
+    setLayout(l2);
+  };
   const editCamera = (id: string, pt: Partial<Camera>) => {
     const l = layoutRef.current, camera = l.cameras.find(c => c.id === id);
     if (!camera) return;
@@ -270,15 +436,6 @@ export default function App() {
     if (Math.ceil(layout.widthM / gridM) * Math.ceil(layout.heightM / gridM) > 12000) return flash('Lưới vượt giới hạn 12.000 ô. Hãy chọn ô lớn hơn.', 'error');
     patch({ gridM, risk: {} });
   };
-  const calibrate = (real: number) => {
-    if (!measure || !layout.background) return;
-    const len = Math.hypot(measure.b[0] - measure.a[0], measure.b[1] - measure.a[1]);
-    const widthM = Math.round(((layout.background.widthM * real) / len) * 100) / 100;
-    if (!Number.isFinite(widthM) || widthM < 0.1 || widthM > 400) return flash('Tỷ lệ ảnh sau hiệu chuẩn phải trong khoảng 0,1–400 m.', 'error');
-    patch({ background: { ...layout.background, widthM } });
-    setMeasure(null); flash('Đã hiệu chuẩn tỷ lệ ảnh nền');
-  };
-
   const rotate = (dir: 1 | -1) => {
     if (sel?.kind === 'cam') setLayout((l) => ({ ...l, cameras: l.cameras.map((c) => (c.id === sel.id ? { ...c, pan: snapAngle(c.pan + dir * 15) } : c)) }));
     if (sel?.kind === 'obs') setLayout(current => rotateObstacle(current, sel.id, dir));
@@ -299,7 +456,7 @@ export default function App() {
     while (l.cameras.some(c => c.id === `CAM-${String(index).padStart(2, '0')}`)) index++;
     const camera = placeEditedCamera({ ...makeCamera(`CAM-${String(index).padStart(2, '0')}`, x, y, 90), mount, tilt: mount === 'ceiling' ? 45 : 20, target: mount === 'ceiling' ? 'Giám sát từ trần' : 'Giám sát bổ sung' }, l);
     if (!camera || l.cameras.some(c => cameraMount(c) === mount && Math.hypot(c.x - camera.x, c.y - camera.y) < .2)) return flash('Vị trí lắp camera vướng vật thể hoặc trùng camera hiện có.', 'error');
-    setLayout({ ...l, cameras: [...l.cameras, camera] }); setSel({ kind: 'cam', id: camera.id });
+    setLayout({ ...l, cameras: [...l.cameras, camera] }); select({ kind: 'cam', id: camera.id });
   };
   const addCeilingCamera = () => {
     const point = ceilingInsertionPoint(layoutRef.current);
@@ -314,7 +471,7 @@ export default function App() {
     while (used.has(`PERSON-${String(index).padStart(2, '0')}`)) index++;
     const person = { id: `PERSON-${String(index).padStart(2, '0')}`, x, y };
     setPeople((current) => [...current, person]);
-    setSel({ kind: 'person', id: person.id });
+    select({ kind: 'person', id: person.id });
     setTool('select');
   };
   const addPersonInFreeSpace = () => {
@@ -332,11 +489,21 @@ export default function App() {
       flash('Phải giữ ít nhất một camera');
       return;
     }
-    if (!window.confirm(`Xóa ${sel.kind === 'cam' ? 'camera' : sel.kind === 'obs' ? 'vật thể' : 'người'} đã chọn?`)) return;
-    if (sel.kind === 'cam') setLayout((l) => ({ ...l, cameras: l.cameras.filter((c) => c.id !== sel.id) }));
-    if (sel?.kind === 'obs') setLayout((l) => removeObstacle(l, sel.id));
-    if (sel?.kind === 'person') setPeople((current) => current.filter((person) => person.id !== sel.id));
-    setSel(null);
+    const targetKind = sel.kind === 'cam' ? 'camera' : sel.kind === 'obs' ? 'vật thể' : 'người kiểm tra';
+    const targetObj = sel.kind === 'obs' ? layout.obstacles.find((o) => o.id === sel.id)?.label ?? sel.id : sel.id;
+    const targetSel = sel;
+    setPendingConfirm({
+      title: `Xóa ${targetKind} đang chọn?`,
+      body: `Bạn có chắc muốn xóa ${targetObj} khỏi mặt bằng? Bạn vẫn có thể hoàn tác bằng Ctrl+Z.`,
+      confirmLabel: 'Xác nhận xóa',
+      danger: true,
+      onConfirm: () => {
+        if (targetSel.kind === 'cam') setLayout((l) => ({ ...l, cameras: l.cameras.filter((c) => c.id !== targetSel.id) }));
+        if (targetSel.kind === 'obs') setLayout((l) => removeObstacle(l, targetSel.id));
+        if (targetSel.kind === 'person') setPeople((current) => current.filter((person) => person.id !== targetSel.id));
+        setSel((cur) => (cur?.id === targetSel.id && cur?.kind === targetSel.kind ? null : cur));
+      },
+    });
   };
 
   const cameraProfilesFor = (count: number) => Array.from({ length: count }, (_, index) =>
@@ -355,15 +522,15 @@ export default function App() {
     const t0 = performance.now();
     const cameraProfiles = cameraProfilesFor(count);
     try {
-      const { cameras, source, diagnostics } = await requestOptimize(layout, zones, count, cameraProfiles, controller.signal);
+      const { cameras } = await requestOptimize(layout, zones, count, cameraProfiles, controller.signal);
       if (controller.signal.aborted) return flash('Đã hủy tối ưu.');
       if (layoutRef.current !== inputLayout) return flash('Mặt bằng đã thay đổi. Hãy tối ưu lại với cấu hình mới.', 'error');
       const t1 = performance.now();
       setSel(null);
       const after = { ...inputLayout, cameras };
       setLayout(after);
-      setComparison({ before: inputLayout, after, score, diagnostics }); setShowBefore(false); setStep(3); setView('dori'); setSolveMs(t1 - t0);
-      flash(`Đã tối ưu ${cameras.length}/${count} camera · ${source === 'api' ? 'Backend' : 'dự phòng trên trình duyệt'}`);
+      setComparison({ before: inputLayout, after, score }); goStep('results'); setSolveMs(t1 - t0);
+      flash(`Đã tối ưu ${cameras.length}/${count} camera.`);
       requestAnimationFrame(() => requestAnimationFrame(() => setRenderMs(performance.now() - t1)));
     } catch (error) {
       flash((error as Error).name === 'AbortError' ? 'Đã hủy tối ưu.' : `Tối ưu thất bại — ${(error as Error).message}`, (error as Error).name === 'AbortError' ? 'success' : 'error');
@@ -391,7 +558,7 @@ export default function App() {
       const t1 = performance.now();
       const after = { ...inputLayout, cameras: result.cameras };
       setLayout(after);
-      setComparison({ before: inputLayout, after, score }); setShowBefore(false); setStep(3); setView('dori');
+      setComparison({ before: inputLayout, after, score }); goStep('results');
       setSolveMs(t1 - t0);
       const status = result.metTargets ? 'Đạt KPI' : 'Chưa đạt đủ KPI';
       flash(`${status} · giữ ${result.cameras.length}/${cameraProfiles.length} camera · Đỏ ${result.red}% · Vàng ${result.yellow}%`);
@@ -409,7 +576,7 @@ export default function App() {
     const controller = new AbortController();
     optimizationController.current = controller;
     setOptimizing(true);
-    setMsg('Đang tính phương án Greedy không trọng số…');
+    setMsg('Đang tính phương án không trọng số…');
     const inputLayout = layout;
     try {
       const result = await solveLocally({ layout, zones, count: layout.cameras.length, profiles: layout.cameras, mode: 'unweighted' }, controller.signal);
@@ -470,26 +637,21 @@ export default function App() {
     const mean = dts.reduce((a, b) => a + b, 0) / dts.length, p95 = [...dts].sort((a, b) => a - b)[Math.floor(dts.length * 0.95)];
     flash(`20 camera × 120 khung: ${(1000 / mean).toFixed(0)} FPS TB · p95 ${p95.toFixed(1)} ms · vẽ heatmap ${drawMsRef.current.toFixed(1)} ms`);
   };
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>, kind: 'json' | 'bg') => {
-    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
-    if (f.size > 5 * 1024 * 1024) return flash('File vượt giới hạn 5 MB.', 'error');
-    if (kind === 'bg' && !f.type.startsWith('image/')) return flash('Hãy chọn tệp ảnh hợp lệ.', 'error');
-    const rd = new FileReader();
-    rd.onerror = () => flash('Không đọc được file đã chọn.', 'error');
-    rd.onload = () => {
+  const openProject = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return flash('Tệp vượt giới hạn 5 MB.', 'error');
+    const reader = new FileReader();
+    reader.onerror = () => flash('Không đọc được tệp đã chọn.', 'error');
+    reader.onload = () => {
       try {
-        if (kind === 'json') {
-          if (loadLayout(parseBundle(String(rd.result)))) flash('Đã nạp layout');
-        }
-        else {
-          const image = new Image();
-          image.onload = () => patch({ background: { dataUrl: String(rd.result), widthM: layoutRef.current.widthM, opacity: 0.5, visible: true } });
-          image.onerror = () => flash('Ảnh bị hỏng hoặc không đọc được.', 'error');
-          image.src = String(rd.result);
-        }
-      } catch (err) { flash(`Lỗi — ${(err as Error).message}`, 'error'); }
+        if (loadLayout(parseBundle(String(reader.result)))) { goStep('plan'); flash('Đã nạp dự án'); }
+      } catch (error) {
+        flash(`Lỗi — ${(error as Error).message}`, 'error');
+      }
     };
-    kind === 'json' ? rd.readAsText(f) : rd.readAsDataURL(f);
+    reader.readAsText(file);
   };
 
   useEffect(() => {
@@ -503,10 +665,20 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (dimension === '3d' && cameraViewId && ['c', 'r', 'delete', 'backspace'].includes(k)) return;
-      if (k === 'escape') { setBrush(null); setTool('select'); setSel(null); setMeasure(null); setCameraViewId(null); } else if (k === 'b') setBom((v) => !v); else if (k === 'o') autoOptimize();
-      else if (k === 'g') setGrid((v) => !v); else if (k === 'a') setAnchors((v) => !v); else if (k === 'c') addCamera();
-      else if (k === 'r') rotate(1); else if (k === 'delete' || k === 'backspace') deleteSelected();
-      else if (/^[1-9]$/.test(k) && Number(k) <= PRESETS.length) loadLayout(withManualCams(PRESETS[+k - 1]));
+      if (k === 'escape') {
+        if (showCustomBuilder) { setShowCustomBuilder(false); return; }
+        if (pendingConfirm) { setPendingConfirm(null); return; }
+        if (pendingLayout) { setPendingLayout(null); return; }
+        if (placing) { setPlacing(null); return; }
+        setBrush(null); setTool('select'); setSel(null); setMeasure(null); setCameraViewId(null);
+      } else if (k === 'b') setBom((v) => !v); else if (k === 'o' && isPlanning) (document.getElementById(CAMERA_OPTIMIZATION_FORM) as HTMLFormElement | null)?.requestSubmit();
+      else if (k === 'g') setGrid((v) => !v); else if (k === 'a') setAnchors((v) => !v); else if (k === 'c' && isPlanning) addCamera();
+      else if (k === 'w' && isPlanning && dimension === 'plan') { setPlacing(null); setBrush(null); setMeasure(null); setTool((cur) => cur === 'wall' ? 'select' : 'wall'); }
+      else if (k === 'r') {
+        if (placing) setPlacing((cur) => cur && cur.type !== 'entrance' ? { ...cur, angle: snapAngle(cur.angle + 15) } : cur);
+        else rotate(1);
+      } else if (k === 'delete' || k === 'backspace') deleteSelected();
+      else if (/^[1-9]$/.test(k) && Number(k) <= PRESETS.length) loadLayout(withManualCams(PRESETS[+k - 1]), true);
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
@@ -524,7 +696,6 @@ export default function App() {
   }, [layout, comparison]);
   const beforeEvaluation = useMemo(() => comparison ? evaluate(comparison.before, buildZones(comparison.before)) : null, [comparison]);
   const displayedLayout = showBefore && comparison ? comparison.before : layout;
-  const displayedScore = showBefore && comparison ? comparison.score : score;
   const displayedCells = showBefore && beforeEvaluation ? beforeEvaluation.cells : cells;
   const cameraView = displayedLayout.cameras.find(camera => camera.id === cameraViewId) ?? null;
   useEffect(() => {
@@ -533,68 +704,81 @@ export default function App() {
     if (sel?.kind === 'person' && !people.some(person => person.id === sel.id)) setSel(null);
     if (cameraViewId && !displayedLayout.cameras.some(camera => camera.id === cameraViewId)) setCameraViewId(null);
   }, [people, displayedLayout.cameras, displayedLayout.obstacles, sel, cameraViewId]);
-  const openCameraView = (id: string) => { setCameraViewId(id); setSel({ kind: 'cam', id }); };
+  const goStep = (next: Step) => {
+    setStep(next); setShowBefore(false); setPlacing(null); setBrush(null); setTool('select'); setSel(null); setMeasure(null);
+    setView(next === 'results' ? 'dori' : 'off');
+  };
+  const openCameraView = (id: string) => { setCameraViewId(id); select({ kind: 'cam', id }); };
   const openPlanEditor = () => {
     setDimension('plan');
-    if (showBefore) { setShowBefore(false); setSel(null); }
-    if (sel?.kind === 'cam') setStep(2);
-    if (sel?.kind === 'obs') setStep(0);
+    if (!isPlanning) {
+      goStep('plan');
+      if (!showBefore) select(sel);
+    }
   };
-  const goStep = (next: number) => {
-    setStep(next); setShowBefore(false); setBrush(null); setTool('select'); setSel(null);
-    setView(next === 1 ? 'risk' : next >= 2 ? 'dori' : 'off');
+  const toggleGroup = (next: PlanGroup) => {
+    setGroup(group === next ? null : next);
+    if (brush !== null) setBrush(null);
   };
-  const bg = layout.background;
   const selectedPreset = PRESETS.findIndex((preset) => preset.name === layout.name);
   return (
     <div className="app">
       <header className="app-header">
-        <a className="brand-lockup" href="#" onClick={(event) => { event.preventDefault(); goStep(0); }} aria-label="OptiCam Studio, về mặt bằng">
+        <a className="brand-lockup" href="#" onClick={(event) => { event.preventDefault(); goStep('plan'); }} aria-label="OptiCam Studio, về mặt bằng">
           <span className="brand-mark"><ScanLine size={21} strokeWidth={1.5} /></span>
           <span className="wordmark">OptiCam<span>STUDIO</span></span>
         </a>
         <span className="header-divider" />
-        <label className="project-picker"><span className="eyebrow">DỰ ÁN HIỆN TẠI</span>
-          <select aria-label="Chọn mặt bằng cửa hàng" value={selectedPreset < 0 ? '' : selectedPreset} onChange={(event) => {
-            const preset = PRESETS[Number(event.target.value)];
-            if (preset && loadLayout(withManualCams(preset))) goStep(0);
-          }}>
-            {selectedPreset < 0 && <option value="">Mặt bằng tùy chỉnh</option>}
-            {PRESETS.map((preset, index) => <option key={preset.name} value={index}>{preset.name}</option>)}
-          </select>
-        </label>
+        <div className="project-bar-group" data-tour="project-bar">
+          <div className="project-picker"><span className="eyebrow">DỰ ÁN HIỆN TẠI</span>
+            <StudioSelect
+              variant="header"
+              ariaLabel="Chọn mặt bằng cửa hàng"
+              value={selectedPreset < 0 ? '' : String(selectedPreset)}
+              placeholder="Mặt bằng tùy chỉnh"
+              options={PRESETS.map((preset, index) => ({
+                value: String(index),
+                label: preset.name,
+                meta: `${preset.widthM}×${preset.heightM}m · ${floorArea(preset)} m²`,
+              }))}
+              onChange={(value) => {
+                const preset = PRESETS[Number(value)];
+                if (preset) loadLayout(withManualCams(preset), true);
+              }}
+            />
+          </div>
+          <button type="button" className="new-layout-btn" onClick={() => { setBuilderTourOnOpen(false); setShowCustomBuilder(true); }} title="Tự tạo mặt bằng mới & dựng tường bao" aria-label="Tự tạo layout mới">
+            <FilePlus2 size={15} /><span>Tạo layout</span>
+          </button>
+        </div>
+        <nav className="workflow" aria-label="Quy trình thiết kế">
+          {STEPS.map(({ id, title, icon: Icon }) => <button key={id} className={`workflow-step${step === id ? ' current' : ''}`} aria-current={step === id ? 'step' : undefined} onClick={() => { if (step !== id) goStep(id); }}>
+            <Icon size={16} aria-hidden="true" /><strong>{title}</strong>
+          </button>)}
+        </nav>
         <div className="history-actions">
           <button onClick={undo} disabled={!undoReady} title="Hoàn tác (Ctrl+Z)" aria-label="Hoàn tác"><Undo2 size={17} /></button>
           <button onClick={redo} disabled={!redoReady} title="Làm lại (Ctrl+Y)" aria-label="Làm lại"><Redo2 size={17} /></button>
         </div>
         <div className="header-actions">
-          <details className="export-menu"><summary><Download size={15} /> Xuất dự án <ChevronDown size={13} /></summary>
+          <button type="button" onClick={() => setShowTutorial(true)} title="Hướng dẫn nhanh" aria-label="Hướng dẫn nhanh"><HelpCircle size={17} /></button>
+          <details className="export-menu"><summary aria-label="Xuất dự án"><Download size={15} /><span>Xuất dự án</span><ChevronDown size={13} /></summary>
             <div className="menu-popover">
-              <button onClick={() => download('opticam_layout.json', exportBundle({ ...layout, people }, score))}>Lưu dự án JSON</button>
-              <button onClick={() => savePng().catch(() => flash('Không thể xuất ảnh PNG.', 'error'))}>Xuất bản vẽ PNG</button>
-              <button onClick={() => setBom(true)}>Vật tư & chi phí (BOM)</button>
-              <label className="btn">Mở dự án JSON<input type="file" accept=".json" hidden onChange={(e) => onFile(e, 'json')} /></label>
+              <button onClick={() => download('opticam_layout.json', exportBundle({ ...layout, people }, score))}><FileJson size={14} /> Lưu dự án JSON</button>
+              <button onClick={() => savePng().catch(() => flash('Không thể xuất ảnh PNG.', 'error'))}><ImageDown size={14} /> Xuất bản vẽ PNG</button>
+              <label className="btn"><FolderOpen size={14} /> Mở dự án JSON<input type="file" accept=".json" hidden onChange={openProject} /></label>
             </div>
           </details>
-          <button className="primary" onClick={() => autoOptimize()} disabled={optimizing}>
-            {optimizing ? <span className="spinner" /> : <ScanLine size={16} />} {optimizing ? 'Đang tối ưu…' : 'Tối ưu phương án'}
-          </button>
           {optimizing && <button onClick={() => optimizationController.current?.abort()}>Hủy</button>}
         </div>
       </header>
-      <nav className="workflow" aria-label="Quy trình thiết kế">
-        {STEPS.map(({ title, note, icon: Icon }, index) => <button key={title} className={`workflow-step${step === index ? ' current' : ''}`} aria-current={step === index ? 'step' : undefined} onClick={() => goStep(index)}>
-          <span className="step-index">0{index + 1}</span><Icon size={18} strokeWidth={1.5} /><span><strong>{title}</strong><small>{note}</small></span>
-          {index < 3 && <ArrowRight className="step-arrow" size={15} />}
-        </button>)}
-      </nav>
       <main className={`planner${dimension === '3d' ? ' planner-3d' : ''}`}>
         <section className="workspace" aria-label="Không gian thiết kế">
           <div className="workspace-heading">
-            <div><span className="eyebrow">BẢN VẼ BỐ TRÍ · {showBefore ? 'TRƯỚC TỐI ƯU' : 'PHƯƠNG ÁN HIỆN TẠI'}</span><h1>{dimension === '3d' ? 'Không gian cửa hàng.' : 'Mặt bằng cửa hàng.'}</h1></div>
-            <span className="drawing-id">PLAN / 0{Math.max(0, selectedPreset) + 1}<small>{layout.widthM} × {layout.heightM} m · {floorArea(layout)} m²</small></span>
+            <h1>{dimension === '3d' ? 'Không gian cửa hàng' : 'Mặt bằng cửa hàng'}</h1>
+            <span className="drawing-id">{displayedLayout.widthM} × {displayedLayout.heightM} m · {floorArea(displayedLayout)} m²</span>
           </div>
-          <div className="workspace-controls">
+          <div className="workspace-controls" data-tour="workspace-layers">
             <div className="layer-switch" role="group" aria-label="Lớp phân tích">
               {(['off', 'dori', 'risk'] as ViewMode[]).map((mode) => <button key={mode} className={view === mode ? 'on' : ''} aria-pressed={view === mode} onClick={() => setView(mode)}>
                 {mode === 'off' ? <Map size={14} /> : mode === 'dori' ? <Layers size={14} /> : <ShieldCheck size={14} />}
@@ -604,79 +788,275 @@ export default function App() {
             <div className="canvas-options">
               <div className="dimension-switch" role="group" aria-label="Chế độ hiển thị">
                 <button className={dimension === 'plan' ? 'on' : ''} aria-pressed={dimension === 'plan'} onClick={() => setDimension('plan')}>2.5D</button>
-                <button className={dimension === '3d' ? 'on' : ''} aria-pressed={dimension === '3d'} onClick={() => { setDimension('3d'); setBrush(null); setTool('select'); setMeasure(null); }}>3D</button>
+                <button className={dimension === '3d' ? 'on' : ''} aria-pressed={dimension === '3d'} onClick={() => { setDimension('3d'); setPlacing(null); setBrush(null); setTool('select'); setMeasure(null); }}>3D</button>
               </div>
               <button className={grid ? 'on' : ''} onClick={() => setGrid(!grid)} aria-pressed={grid} title={view === 'risk' ? 'Ranh giới mức ưu tiên' : 'Bật / tắt lưới'} aria-label="Bật tắt lưới"><Grid2X2 size={16} /></button>
               <button className={anchors ? 'on' : ''} onClick={() => setAnchors(!anchors)} aria-pressed={anchors} title="Điểm gắn camera trên tường" aria-label="Bật tắt điểm neo"><Crosshair size={16} /></button>
             </div>
           </div>
           <div className="drawing-area">
-            {dimension === 'plan' && <nav className="tool-rail" aria-label="Công cụ mặt bằng">
-              <button className={`rail-button${tool === 'select' && brush === null ? ' active' : ''}`} aria-pressed={tool === 'select' && brush === null} title="Chọn và kéo đối tượng" onClick={() => { setBrush(null); setTool('select'); }}><MousePointer2 size={19} /><small>Chọn</small></button>
-              <span className="rail-divider" />
-              <button className="rail-button" disabled={showBefore || layout.cameras.length >= MAX_CAMS} title="Thêm camera (C)" onClick={addCamera}><CameraIcon size={19} /><small>Camera</small></button>
-              <button className="rail-button" disabled={showBefore} title="Thêm kệ hàng" onClick={() => addObs('shelf')}><Columns3 size={19} /><small>Kệ</small></button>
-              <button className="rail-button" disabled={showBefore} title="Thêm quầy POS" onClick={() => addObs('pos')}><Monitor size={19} /><small>POS</small></button>
-              <button className="rail-button" disabled={showBefore} title="Thêm cửa ra vào" onClick={() => addObs('entrance')}><DoorOpen size={19} /><small>Cửa</small></button>
-              <span className="rail-divider" />
-              <button className={`rail-button${tool === 'person' ? ' active' : ''}`} disabled={showBefore} aria-pressed={tool === 'person'} title="Đặt người kiểm tra DORI" onClick={() => { setTool(tool === 'person' ? 'select' : 'person'); setBrush(null); }}><UserRound size={19} /><small>Kiểm tra</small></button>
-              <button className={`rail-button${tool === 'measure' ? ' active' : ''}`} aria-pressed={tool === 'measure'} title="Đo khoảng cách" onClick={() => { setTool(tool === 'measure' ? 'select' : 'measure'); setBrush(null); setMeasure(null); }}><Ruler size={19} /><small>Đo</small></button>
+            {dimension === 'plan' && isPlanning && <nav className="tool-rail" data-tour="tool-rail" aria-label="Công cụ mặt bằng">
+              <button className={`rail-button${tool === 'select' && brush === null && !placing ? ' active' : ''}`} aria-pressed={tool === 'select' && brush === null && !placing} title="Chọn và kéo đối tượng" onClick={() => { setPlacing(null); setBrush(null); setTool('select'); }}><MousePointer2 size={19} /><small>Chọn</small></button>
+              <button className={`rail-button${placing?.type === 'shelf' && !placing.fixture ? ' active' : ''}`} disabled={showBefore} title="Đặt kệ hàng lên mặt bằng" onClick={() => startPlacing('shelf')}><Columns3 size={19} /><small>Kệ</small></button>
+              <button className={`rail-button${placing?.type === 'pos' ? ' active' : ''}`} disabled={showBefore} title="Đặt quầy POS lên mặt bằng" onClick={() => startPlacing('pos')}><Monitor size={19} /><small>POS</small></button>
+              <button className={`rail-button${placing?.type === 'entrance' ? ' active' : ''}`} disabled={showBefore} title="Đặt cửa ra vào lên tường" onClick={() => startPlacing('entrance')}><DoorOpen size={19} /><small>Cửa</small></button>
+              <button className={`rail-button${tool === 'wall' ? ' active' : ''}`} disabled={showBefore} aria-pressed={tool === 'wall'} aria-label="Tự dựng tường vách" title="Tự dựng tường / vách ngăn (W)" onClick={() => { setPlacing(null); setBrush(null); setMeasure(null); setTool(tool === 'wall' ? 'select' : 'wall'); }}><BrickWall size={19} /><small>Dựng vách</small></button>
+              <button className={`rail-button${tool === 'measure' ? ' active' : ''}`} aria-pressed={tool === 'measure'} title="Đo khoảng cách" onClick={() => { setPlacing(null); setTool(tool === 'measure' ? 'select' : 'measure'); setBrush(null); setMeasure(null); }}><Ruler size={19} /><small>Đo</small></button>
+              <button className="rail-button" disabled={layout.cameras.length >= MAX_CAMS} title="Thêm camera (C)" aria-label="Thêm camera trên tường" onClick={addCamera}><CameraIcon size={19} /><small>Tường</small></button>
+              <button className="rail-button" disabled={layout.cameras.length >= MAX_CAMS} title="Thêm camera trên trần" onClick={addCeilingCamera}><CameraIcon size={19} /><small>Trần</small></button>
+              <button className={`rail-button${tool === 'person' ? ' active' : ''}`} disabled={showBefore} aria-pressed={tool === 'person'} title="Đặt người kiểm tra DORI" onClick={() => { setPlacing(null); setTool(tool === 'person' ? 'select' : 'person'); setBrush(null); }}><UserRound size={19} /><small>Kiểm tra</small></button>
             </nav>}
             <div className="plan-viewport" hidden={dimension !== 'plan'}>
-            <OptiCamCanvas layout={displayedLayout} cells={displayedCells} view={view} tool={tool} brush={brush} selected={sel} people={people} riskFilter={riskFilter} focusCell={focusCell} readOnly={showBefore}
-              onRiskFilter={setRiskFilter} onAddPerson={addPerson} onPerson={updatePerson} onInvalidPerson={() => flash('Không thể đặt người sát tường hoặc chồng lên vật cản')} showGrid={grid} showAnchors={anchors} measure={measure} stageRef={stageRef} drawMsRef={drawMsRef}
-              onCamera={updateCamera} onObstacle={updateObstacle} onPaint={paint} onSelect={select} onRotate={rotate} onMeasure={setMeasure} />
-            <CameraSchedule cameras={displayedLayout.cameras} selected={sel} onSelect={select} />
+              <OptiCamCanvas layout={displayedLayout} cells={displayedCells} view={view} tool={tool} brush={brush} selected={sel} people={people} riskFilter={riskFilter} focusCell={focusCell} readOnly={showBefore}
+                placing={placing} onPlaceObstacle={placeObstacleAt} onCancelPlacing={() => setPlacing(null)}
+                onAutoPlace={() => { if (placing) addObs(placing.type, placing.fixture); }}
+                onRotatePlacing={(dir) => setPlacing((cur) => cur && cur.type !== 'entrance' ? { ...cur, angle: snapAngle(cur.angle + dir * 15) } : cur)}
+                onBuildWall={buildWallSegment} onCompletePolygon={completePolygon} onExitTool={() => setTool('select')}
+                onRiskFilter={setRiskFilter} onAddPerson={addPerson} onPerson={updatePerson} onInvalidPerson={() => flash('Không thể đặt người sát tường hoặc chồng lên vật cản')} showGrid={grid} showAnchors={anchors} measure={measure} stageRef={stageRef} drawMsRef={drawMsRef}
+                onCamera={updateCamera} onObstacle={updateObstacle} onPaint={paint} onSelect={select} onRotate={rotate} onMeasure={setMeasure} />
+              {isPlanning && <CameraSchedule cameras={displayedLayout.cameras} selected={sel} onSelect={select} />}
             </div>
             {dimension === '3d' && <SceneBoundary onEditPlan={openPlanEditor}><Suspense fallback={<div className="three-loading" role="status"><span className="spinner" /> Đang dựng không gian 3D…</div>}>
               <Store3D layout={displayedLayout} cells={displayedCells} view={view} selected={sel} people={people}
                 showGrid={grid} showAnchors={anchors} riskFilter={riskFilter} focusCell={focusCell} cameraView={cameraView}
-                readOnly={showBefore} onMoveObstacle={moveObstacle3D} onMovePerson={updatePerson} onAddObstacle={addObs} onAddPerson={addPersonInFreeSpace} onAddCamera={addCameraAt} onMoveCamera={moveCamera3D}
+                readOnly={showBefore} onMoveObstacle={moveObstacle3D} onMovePerson={updatePerson} onAddObstacle={isPlanning ? addObs : undefined} onAddPerson={isPlanning ? addPersonInFreeSpace : undefined} onAddCamera={isPlanning ? addCameraAt : undefined} onMoveCamera={moveCamera3D}
                 onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected}
                 onSelect={select} onCameraView={openCameraView} onOverview={() => setCameraViewId(null)} onEditPlan={openPlanEditor} />
             </Suspense></SceneBoundary>}
-            {comparison && step === 3 && <div className="comparison-switch" role="group" aria-label="So sánh trước và sau tối ưu">
+            {comparison && !isPlanning && <div className="comparison-switch" role="group" aria-label="So sánh trước và sau tối ưu">
               <button className={showBefore ? 'on' : ''} aria-pressed={showBefore} onClick={() => { setShowBefore(true); setSel(null); setTool('select'); setBrush(null); }}>Trước tối ưu</button>
               <button className={!showBefore ? 'on' : ''} aria-pressed={!showBefore} onClick={() => setShowBefore(false)}>Sau tối ưu</button>
             </div>}
           </div>
           <div className="drawing-caption">
-            <div className="legend">{view === 'dori' ? (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((key) => <span key={key}><i style={{ background: DORI_COLOR[key] }} />{{ identification: 'Nhận dạng ≥250', recognition: 'Nhận biết ≥125', observation: 'Quan sát ≥62,5', detection: 'Phát hiện ≥25', blind: 'Dưới 25 PPM' }[key]}</span>) : <span>{view === 'risk' ? dimension === 'plan' ? 'Mức ưu tiên W · tô vùng trực tiếp trên sơ đồ' : 'Mức ưu tiên W trên sàn cửa hàng' : dimension === 'plan' ? 'Mặt bằng nhìn từ trên xuống · Kích thước theo mét' : 'Mô hình kiến trúc · Kích thước theo mét'}</span>}</div>
-            <span className="drawing-scale">1 ô = {layout.gridM} m</span>
+            <div className="legend">{view === 'dori' ? (['identification', 'recognition', 'observation', 'detection', 'blind'] as const).map((key) => <span key={key}><i style={{ background: DORI_COLOR[key] }} />{{ identification: 'Nhận dạng ≥250', recognition: 'Nhận biết ≥125', observation: 'Quan sát ≥62,5', detection: 'Phát hiện ≥25', blind: 'Dưới 25 PPM' }[key]}</span>) : null}</div>
+            <span className="drawing-scale">1 ô = {displayedLayout.gridM} m</span>
           </div>
-          <div className="canvas-footer"><span>{dimension === 'plan' ? 'Kéo nền để di chuyển · Cuộn để thu phóng' : 'Xoay để quan sát · Chọn Di chuyển để bố trí vật thể'}</span><span>{sel ? `Đang chọn ${sel.id}` : 'Chọn một đối tượng để xem thuộc tính'}</span></div>
+          <div className="canvas-footer"><span>{dimension === 'plan' ? 'Kéo nền để di chuyển · Cuộn để thu phóng' : 'Xoay để quan sát · Chọn Di chuyển để bố trí vật thể'}</span>{sel && <span>Đang chọn {sel.id}</span>}</div>
         </section>
-        <aside className="inspector-column" aria-label={`Thiết lập ${STEPS[step].title}`}>
-          <div className="context-heading"><span className="eyebrow">BƯỚC 0{step + 1} / 04</span><h2>{STEPS[step].title}</h2><p>{['Dựng mặt bằng đúng kích thước, bố trí kệ và quầy theo không gian thực.', 'Đánh dấu khu vực cần quan sát kỹ hơn để ưu tiên khi tối ưu.', 'Chọn số lượng và thông số camera, sau đó tìm vị trí phù hợp.', 'Đánh giá chất lượng quan sát và hoàn thiện phương án lắp đặt.'][step]}</p></div>
-          {step === 0 && !sel && layout.description && <section className="panel layout-brief"><h3>Bố trí cửa hàng</h3><p>{layout.description}</p><details><summary>Nguyên tắc bố trí</summary><ul>{layout.designNotes?.slice(1).map(note => <li key={note}>{note}</li>)}</ul><p className="muted">Mẫu mô phỏng theo đặc điểm cửa hàng Việt Nam; vị trí camera được đề xuất theo khu vực.</p></details></section>}
-          {step === 1 && dimension === 'plan' && <section className="panel priority-editor"><h3>Cọ vùng ưu tiên</h3><div className="brush-options">{([5, 3, 1] as Weight[]).map((weight) => <button key={weight} disabled={layout.riskStrokes.length >= 50000} className={brush === weight ? 'on' : ''} aria-pressed={brush === weight} onClick={() => { setBrush(brush === weight ? null : weight); setTool('select'); setView('risk'); }}><i className={`risk-dot risk-${weight}`} />{weight === 5 ? 'Cao' : weight === 3 ? 'Vừa' : 'Thấp'}<small>W {weight}</small></button>)}</div>
-            <p className="muted">Kéo cọ trên sàn. Chọn kệ hoặc quầy để chỉnh vùng ưu tiên xung quanh vật thể.</p>
-            <button className="text-button" disabled={!layout.riskStrokes.length && !Object.keys(layout.risk).length} onClick={() => { if (window.confirm('Xóa toàn bộ vùng ưu tiên đã tô?')) patch({ risk: {}, riskStrokes: [] }); setBrush(null); }}><Eraser size={14} /> Xóa vùng đã tô</button></section>}
-          {(step === 0 || step >= 2) && <PlanningSettings layout={displayedLayout} disabled={optimizing || showBefore || Boolean(cameraView)} showOptimization={step >= 2} onCeilingHeight={setCeilingHeight} onOptimization={optimization => patch({ optimization })} />}
-          {step >= 2 && <CameraCountOptimizer count={cameraBudget} onCountChange={setCameraBudget} onOptimize={count => autoOptimize(count)} disabled={optimizing || showBefore} />}
-          {step === 2 && dimension === 'plan' && <section className="panel camera-setup"><label className="field">Số camera tối đa cho phương án<select aria-label="Ngân sách camera" value={cameraBudget} onChange={(event) => setCameraBudget(Number(event.target.value))} disabled={optimizing}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1} camera</option>)}</select></label><p className="muted">Camera tường bắt dính tường; camera trần di chuyển trong mặt bằng. Kéo tay cầm để xoay hướng nhìn.</p><button className="text-button" onClick={addCamera} disabled={layout.cameras.length >= MAX_CAMS}><CameraIcon size={15} /> Thêm camera trên tường</button><button className="text-button" onClick={addCeilingCamera} disabled={layout.cameras.length >= MAX_CAMS}><CameraIcon size={15} /> Thêm camera trên trần</button></section>}
-          {step === 3 && <>
-            {comparison?.diagnostics && <section className="panel optimization-result" aria-label="Kết quả thuật toán">
-              <h3>{comparison.diagnostics.algorithm === 'hybrid' ? 'Greedy + Local Search' : 'Greedy'}</h3>
-              <div className="algorithm-scores"><span>Greedy<strong>{comparison.diagnostics.greedyScore.toFixed(1)}</strong></span><span>Sau tối ưu<strong>{comparison.diagnostics.finalScore.toFixed(1)}</strong></span></div>
-              <p className="muted small">Điểm DORI có trọng số · cùng tập {comparison.diagnostics.candidateCount} ứng viên · {comparison.diagnostics.iterations} lần thay camera cải thiện.</p>
-            </section>}
-
-            <Scorecard d={{ manual, live: score, unweighted, solveMs, renderMs, heatMs: drawMsRef.current, before: comparison?.score }} preview={showBefore ? comparison?.score : undefined} view="dori" riskMetrics={riskMetrics} onFocusHighUncovered={() => { if (riskMetrics.firstUncovered) { setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null); setFocusCell({ ...riskMetrics.firstUncovered }); } }} />
-            <section className="panel result-actions"><h3>Vùng ưu tiên của phương án hiện tại</h3><p>{riskMetrics.uncoveredHigh ? `${riskMetrics.uncoveredHigh} ô ưu tiên cao chưa có camera quan sát.` : riskMetrics.highTotal ? 'Toàn bộ ô ưu tiên cao đã có camera quan sát. Kiểm tra thêm mức PPM để đạt KPI.' : 'Chưa có vùng ưu tiên cao trong mặt bằng.'}</p><button disabled={!riskMetrics.firstUncovered} onClick={() => { setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null); setFocusCell(riskMetrics.firstUncovered ? { ...riskMetrics.firstUncovered } : null); }}><Crosshair size={15} /> Kiểm tra vùng chưa phủ</button><button onClick={() => setBom(true)}><Download size={15} /> Vật tư & chi phí</button></section>
-          </>}
-          {dimension === '3d' && <SceneInspector layout={displayedLayout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor} onCameraView={openCameraView}
-            readOnly={showBefore || Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} onCameraPatch={editCamera} />}
-          {step !== 3 && dimension === 'plan' && <Inspector mode={step === 0 ? 'room' : step === 1 ? 'risk' : 'camera'} onSelect={select} layout={layout} sel={sel} measure={measure} onTargetHeight={(targetHeight) => patch({ targetHeight })} onGrid={setGridSize} onObs={editObstacle} onCam={editCamera} onRoom={setRoom} onScale={(v) => patch({ pixelsPerMeter: v })} onCalibrate={calibrate} />}
-          {sel && !showBefore && dimension === 'plan' && <div className="selection-actions"><button onClick={() => rotate(1)} disabled={sel.kind === 'person'}><RotateCw size={14} /> Xoay 15°</button><button onClick={deleteSelected}><Trash2 size={14} /> Xóa</button>{step === 3 && <button onClick={() => { setStep(sel.kind === 'cam' ? 2 : 0); }}>Thuộc tính</button>}</div>}
-          {step === 0 && dimension === 'plan' && <button className="wall-shelf-add" onClick={() => addObs('shelf', 'wall-shelf')}>Thêm kệ một mặt sát tường</button>}
-          {step === 0 && dimension === 'plan' && <details className="panel reference-panel" open={Boolean(bg)}><summary>Ảnh mặt bằng tham chiếu</summary><div className="reference-actions"><label className="btn"><FileUp size={15} /> Nạp ảnh mặt bằng<input type="file" accept="image/*" hidden onChange={(e) => onFile(e, 'bg')} /></label>{bg && <><label className="field">Bề ngang ảnh · {bg.widthM.toFixed(1)} m<input type="range" min={2} max={40} step={0.5} value={bg.widthM} onChange={(e) => patch({ background: { ...bg, widthM: +e.target.value } })} /></label><label className="field">Độ mờ · {Math.round(bg.opacity * 100)}%<input type="range" min={0.1} max={1} step={0.1} value={bg.opacity} onChange={(e) => patch({ background: { ...bg, opacity: +e.target.value } })} /></label><div className="row"><button onClick={() => patch({ background: { ...bg, visible: !bg.visible } })}>{bg.visible ? 'Ẩn ảnh' : 'Hiện ảnh'}</button><button onClick={() => patch({ background: undefined })}>Gỡ ảnh</button></div></>}</div></details>}
-          {step >= 2 && dimension === 'plan' && <details className="panel advanced-panel"><summary>Tùy chọn tối ưu</summary><div className="project-actions"><label className="field">Ngân sách camera<select aria-label="Số camera tối ưu" value={cameraBudget} disabled={optimizing} onChange={(e) => setCameraBudget(+e.target.value)}>{Array.from({ length: MAX_CAMS }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></label><button onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing}>Tối ưu {layout.cameras.length} camera hiện có</button><button onClick={minimizeCameras} disabled={optimizing}>Giảm số camera theo KPI</button><button onClick={runUnweighted} disabled={optimizing}>So sánh Greedy không trọng số</button><button onClick={() => setLayout((current) => ({ ...current, cameras: manualFourCorners(current) }))}>Đặt 4 camera ở góc tường</button><button onClick={benchmark} disabled={optimizing}>Đo hiệu năng · 20 camera</button></div></details>}
-          <div className="step-navigation">{step > 0 && <button onClick={() => goStep(step - 1)} aria-label="Bước trước"><ArrowLeft size={16} /></button>}{step < 3 ? <button className="primary" onClick={() => goStep(step + 1)}>Tiếp tục · {STEPS[step + 1].title}<ArrowRight size={16} /></button> : <button onClick={() => goStep(2)}><SlidersHorizontal size={15} /> Điều chỉnh phương án</button>}</div>
+        <aside className="inspector-column" aria-labelledby="sidebar-title">
+          <div className="context-heading"><h2 id="sidebar-title">{isPlanning ? 'Thiết lập mặt bằng' : 'Kết quả'}</h2></div>
+          <div className="sidebar-body">
+            {isPlanning ? <>
+              <PlanSection id="room" title="Kích thước và nội thất" icon={Ruler} expanded={group === 'room'} onToggle={() => toggleGroup('room')}>
+                <PlanningSettings layout={layout} disabled={optimizing || (dimension === '3d' && Boolean(cameraView))}
+                  onRoom={setRoom} onSwapRoom={swapRoom90} onOpenCustomBuilder={() => setShowCustomBuilder(true)}
+                  onGrid={setGridSize} onScale={pixelsPerMeter => patch({ pixelsPerMeter })} onCeilingHeight={setCeilingHeight} />
+                {group === 'room' && (dimension === 'plan'
+                  ? <Inspector mode="room" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />
+                  : <SceneInspector mode="room" layout={layout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor}
+                      readOnly={Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} />)}
+                {dimension === 'plan' && (
+                  <details className="accordion-card fixture-catalog" data-tour="fixture-catalog" open>
+                    <summary className="accordion-summary">
+                      <span className="accordion-title-with-icon"><Box size={14} /> Thư viện nội thất</span>
+                      <span className="accordion-pill">{FURNITURE_CATALOG.length} loại</span>
+                      <ChevronRight size={14} className="accordion-chevron" aria-hidden="true" />
+                    </summary>
+                    <div className="accordion-body fixture-catalog-body">
+                      <div className="fixture-group-tabs" role="tablist" aria-label="Nhóm nội thất">
+                        <button type="button" role="tab" aria-selected={catalogGroup === 'all'} className={`fixture-group-tab${catalogGroup === 'all' ? ' active' : ''}`} onClick={() => setCatalogGroup('all')}>
+                          Tất cả
+                        </button>
+                        {(['display', 'cold', 'service', 'structure'] as FixtureGroup[]).map((groupKey) => (
+                          <button
+                            key={groupKey}
+                            type="button"
+                            role="tab"
+                            aria-selected={catalogGroup === groupKey}
+                            className={`fixture-group-tab${catalogGroup === groupKey ? ' active' : ''}`}
+                            onClick={() => setCatalogGroup(groupKey)}
+                          >
+                            {{ display: 'Kệ bày', cold: 'Lạnh/Khóa', service: 'Quầy', structure: 'Kết cấu' }[groupKey]}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="fixture-catalog-grid">
+                        {FURNITURE_CATALOG.filter((item) => catalogGroup === 'all' || item.group === catalogGroup).map((item) => {
+                          const active = placing?.type === item.type && placing?.fixture === item.fixture;
+                          const spec = item.fixture ? FIXTURE_SPECS[item.fixture] : null;
+                          const dims = spec
+                            ? `${spec.w}×${spec.h}m`
+                            : item.type === 'pos'
+                              ? '2.0×1.0m'
+                              : '1.5×0.2m';
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              className={`fixture-card-btn${active ? ' on' : ''}`}
+                              onClick={() => startPlacing(item.type, item.fixture)}
+                              title={`Nhấp để chọn đặt ${item.label} (${dims})`}
+                            >
+                              <span className="fixture-card-top">
+                                <Plus size={12} className="fixture-card-plus" />
+                                <strong>{item.label}</strong>
+                              </span>
+                              <span className="fixture-card-meta">
+                                <span>{dims}</span>
+                                {spec?.defaultRiskCategory === 'high' && <em className="fixture-badge-risk">CRAVED cao</em>}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </details>
+                )}
+              </PlanSection>
+              <PlanSection id="priority" title="Vùng ưu tiên" icon={ShieldCheck} expanded={group === 'priority'} onToggle={() => toggleGroup('priority')}>
+                <section className="panel priority-editor">
+                  <h3>Cọ vùng ưu tiên</h3>
+                  <div className="brush-options">
+                    {([5, 3, 1] as Weight[]).map(weight => <button key={weight} disabled={layout.riskStrokes.length >= 50000}
+                      className={brush === weight ? 'on' : ''} aria-pressed={brush === weight}
+                      onClick={() => { setDimension('plan'); setBrush(brush === weight ? null : weight); setTool('select'); setView('risk'); }}>
+                      <i className={`risk-dot risk-${weight}`} />{weight === 5 ? 'Cao' : weight === 3 ? 'Vừa' : 'Thấp'}
+                    </button>)}
+                  </div>
+                  <button className="text-button" disabled={!layout.riskStrokes.length && !Object.keys(layout.risk).length}
+                    onClick={() => setPendingConfirm({
+                      title: 'Xóa toàn bộ vùng ưu tiên?',
+                      body: 'Tất cả nét cọ ưu tiên bạn đã tô thủ công trên mặt bằng sẽ bị xóa.',
+                      confirmLabel: 'Xóa vùng đã tô',
+                      danger: true,
+                      onConfirm: () => { patch({ risk: {}, riskStrokes: [] }); setBrush(null); },
+                    })}>
+                    <Eraser size={14} /> Xóa vùng đã tô
+                  </button>
+                </section>
+                {group === 'priority' && <Inspector mode="risk" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />}
+              </PlanSection>
+              <PlanSection id="camera" title="Camera và tối ưu" icon={CameraIcon} expanded={group === 'camera'} onToggle={() => toggleGroup('camera')}>
+                <CameraCountOptimizer key={layout.name} count={cameraBudget} mounts={layout.optimization?.mounts ?? 'mixed'} dualHeight={Boolean(layout.optimization?.dualHeight)}
+                  onCountChange={setCameraBudget} onOptimize={autoOptimize} onInvalid={() => { setGroup('camera'); setBrush(null); }} disabled={optimizing}
+                  onMounts={mounts => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'kpi_hybrid', mounts, ...(layout.optimization?.dualHeight ? { dualHeight: true } : {}) } })}
+                  onDualHeight={dualHeight => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'kpi_hybrid', mounts: layout.optimization?.mounts ?? 'mixed', ...(dualHeight ? { dualHeight: true } : {}) } })} />
+                {group === 'camera' && (dimension === 'plan'
+                  ? <Inspector mode="camera" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />
+                  : <SceneInspector mode="camera" layout={layout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor}
+                      readOnly={Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} onCameraPatch={editCamera} />)}
+                {dimension === 'plan' && <details className="accordion-card advanced-panel">
+                  <summary className="accordion-summary">
+                    <span className="accordion-title-with-icon"><SlidersHorizontal size={14} /> Tùy chọn tối ưu</span>
+                    <span className="accordion-pill">4 lệnh</span>
+                    <ChevronRight size={14} className="accordion-chevron" aria-hidden="true" />
+                  </summary>
+                  <div className="accordion-body project-actions">
+                    <button type="button" className="action-tile-btn" onClick={() => autoOptimize(layout.cameras.length)} disabled={optimizing}>
+                      <Wand2 size={14} />
+                      <span><strong>Tối ưu {layout.cameras.length} camera hiện có</strong><small>Giữ nguyên số camera đang đặt</small></span>
+                    </button>
+                    <button type="button" className="action-tile-btn" onClick={minimizeCameras} disabled={optimizing}>
+                      <ScanLine size={14} />
+                      <span><strong>Giảm số camera theo KPI</strong><small>Tìm số camera ít nhất đạt Đỏ ≥ 95%, Vàng ≥ 80%</small></span>
+                    </button>
+                    <button type="button" className="action-tile-btn" onClick={() => setLayout((current) => ({ ...current, cameras: manualFourCorners(current) }))}>
+                      <Grid2X2 size={14} />
+                      <span><strong>Đặt 4 camera ở góc tường</strong><small>Tạo cấu hình 4 góc đối chứng nhanh</small></span>
+                    </button>
+                    <button type="button" className="action-tile-btn" onClick={benchmark} disabled={optimizing}>
+                      <Gauge size={14} />
+                      <span><strong>Đo hiệu năng · 20 camera</strong><small>Kiểm tra FPS &amp; thời gian vẽ heatmap</small></span>
+                    </button>
+                  </div>
+                </details>}
+              </PlanSection>
+              {dimension === 'plan' && sel && group !== 'priority' && <div className="selection-actions">
+                <button onClick={() => rotate(1)} disabled={sel.kind === 'person'}><RotateCw size={14} /> Xoay 15°</button>
+                <button onClick={deleteSelected}><Trash2 size={14} /> Xóa</button>
+              </div>}
+            </> : <>
+              <Scorecard d={{ manual, live: score, unweighted, solveMs, renderMs, heatMs: drawMsRef.current, before: comparison?.score }} preview={showBefore ? comparison?.score : undefined} view="dori" riskMetrics={riskMetrics} onFocusHighUncovered={() => { if (riskMetrics.firstUncovered) { setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null); setFocusCell({ ...riskMetrics.firstUncovered }); } }} />
+              <section className="panel result-actions">
+                <h3>Độ phủ vùng ưu tiên cao</h3>
+                <p>{riskMetrics.uncoveredHigh
+                  ? `${riskMetrics.uncoveredHigh} ô chưa có camera quan sát.`
+                  : riskMetrics.highTotal ? 'Camera đã phủ toàn bộ vùng ưu tiên cao.' : 'Chưa có vùng ưu tiên cao trên mặt bằng.'}</p>
+                {riskMetrics.firstUncovered && <button onClick={() => {
+                  setShowBefore(false); setView('risk'); setRiskFilter('high'); setCameraViewId(null);
+                  setFocusCell(riskMetrics.firstUncovered ? { ...riskMetrics.firstUncovered } : null);
+                }}><Crosshair size={15} /> Xem vùng chưa phủ</button>}
+                <button onClick={runUnweighted} disabled={optimizing}>So sánh không trọng số</button>
+                <button onClick={() => setBom(true)}><Download size={15} /> Vật tư & chi phí</button>
+              </section>
+            </>}
+          </div>
+          <div className="sidebar-footer">
+            {isPlanning
+              ? <button type="submit" form={CAMERA_OPTIMIZATION_FORM} className="primary" disabled={optimizing}>
+                  {optimizing ? <span className="spinner" /> : <ScanLine size={16} />} {optimizing ? 'Đang tối ưu…' : 'Tối ưu phương án'}
+                </button>
+              : <button onClick={() => goStep('plan')}><ArrowLeft size={16} /> Chỉnh sửa mặt bằng</button>}
+          </div>
         </aside>
       </main>
-      <footer className="studio-status"><span><i className="status-dot" /> {showBefore ? 'Trước tối ưu' : 'Phân tích trực tiếp'}</span><span><strong>{displayedLayout.cameras.length}</strong> camera</span><span>Vùng đỏ <strong className={displayedScore.red >= 95 ? 'pass' : 'fail'}>{displayedScore.redCells === 0 ? '—' : `${displayedScore.red}%`}</strong><small> / ≥95%</small></span><span>Vùng vàng <strong className={displayedScore.yellow >= 80 ? 'pass' : 'fail'}>{displayedScore.yellowCells === 0 ? '—' : `${displayedScore.yellow}%`}</strong><small> / ≥80%</small></span><span className="status-shortcuts"><kbd>O</kbd> tối ưu <kbd>G</kbd> lưới <kbd>Esc</kbd> bỏ chọn</span></footer>
+      <footer className="studio-status">
+        <span><i className="status-dot" /> {showBefore ? 'Trước tối ưu' : 'Phân tích trực tiếp'}</span>
+        <span className="status-shortcuts">{isPlanning && <><kbd>O</kbd> tối ưu </>}<kbd>G</kbd> lưới <kbd>Esc</kbd> bỏ chọn</span>
+      </footer>
       {bom && <BomModal layout={layout} onClose={closeBom} />}
+      {showTutorial && (
+        <TutorialModal
+          onClose={closeTutorial}
+          onFocusStep={handleTutorialFocus}
+          onOpenCustomBuilder={(dontShow) => {
+            closeTutorial(dontShow);
+            setBuilderTourOnOpen(true);
+            setShowCustomBuilder(true);
+          }}
+          onActivateWallTool={(dontShow) => {
+            closeTutorial(dontShow);
+            setDimension('plan');
+            setPlacing(null);
+            setBrush(null);
+            setTool('wall');
+            flash('Đã bật công cụ Dựng vách (W). Chấm 2 điểm trên sơ đồ để dựng tường.');
+          }}
+        />
+      )}
+      {showCustomBuilder && (
+        <CustomLayoutModal
+          initialShowTour={builderTourOnOpen}
+          onCancel={() => { setShowCustomBuilder(false); setBuilderTourOnOpen(false); }}
+          onStartPolygonDraw={(seed) => { setBuilderTourOnOpen(false); startPolygonDraw(seed); }}
+          onCreate={(built) => {
+            setShowCustomBuilder(false);
+            setBuilderTourOnOpen(false);
+            loadLayout({ ...built.layout, people: built.people }, true);
+          }}
+        />
+      )}
+      {pendingLayout && (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="layout-confirm-title" onClick={(event) => { if (event.target === event.currentTarget) setPendingLayout(null); }}>
+          <div className="modal-box confirm-modal">
+            <h2 id="layout-confirm-title">Thay đổi mặt bằng cửa hàng?</h2>
+            <p className="confirm-body">Các thay đổi chưa xuất trên mặt bằng <strong>{layout.name}</strong> sẽ bị mất khi chuyển sang <strong>{pendingLayout.layout.name}</strong>.</p>
+            <div className="confirm-actions">
+              <button type="button" onClick={() => setPendingLayout(null)}>Hủy</button>
+              <button type="button" className="primary" onClick={() => { const next = pendingLayout; setPendingLayout(null); applyLayout(next.layout, next.goPlan); }}>Đổi mặt bằng</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingConfirm && (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="action-confirm-title" onClick={(event) => { if (event.target === event.currentTarget) setPendingConfirm(null); }}>
+          <div className="modal-box confirm-modal">
+            <h2 id="action-confirm-title">{pendingConfirm.title}</h2>
+            <p className="confirm-body">{pendingConfirm.body}</p>
+            <div className="confirm-actions">
+              <button type="button" onClick={() => setPendingConfirm(null)}>Hủy</button>
+              <button
+                type="button"
+                className={pendingConfirm.danger ? 'danger-btn' : 'primary'}
+                onClick={() => { const action = pendingConfirm; setPendingConfirm(null); action.onConfirm(); }}
+              >
+                {pendingConfirm.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {msg && <div className={`toast${optimizing ? ' toast-busy' : messageTone === 'error' ? ' toast-error' : ''}`} role="status" aria-live="polite">{optimizing && <span className="spinner" />} {msg}</div>}
     </div>
   );

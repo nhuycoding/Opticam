@@ -1,9 +1,10 @@
-import { FixtureArt } from './FixtureArt';
+import { FixtureArt, ShelfItemGlyph } from './FixtureArt';
 import { memo, useRef, useState } from 'react';
 import { Circle, Group, Line, Rect, Shape, Text } from 'react-konva';
 import type { Obstacle } from '../../types';
-import { obsPoly } from '../../core/geometry';
-import { placeMovedObstacle } from '../../core/editor';
+import { clamp, obsPoly, snap } from '../../core/geometry';
+import { placeMovedObstacle, resizeObstacle } from '../../core/editor';
+import { analyzeObstacleCraved } from '../../core/craved';
 import { OBS_FILL, type Selection } from './shared';
 
 interface Props {
@@ -38,9 +39,26 @@ export const ObstacleNode = memo(function ObstacleNode({ floorPolygon, labelScal
   const labelFontSize = Math.min(10, Math.max(7, Math.min(wPx / 5.4, labelHeight / 2.4)));
   const verticalLabel = hPx > wPx * 1.7 && wPx >= 18 && hPx >= 64;
   const showLabel = !isEntrance && !verticalLabel && wPx >= 54 && labelHeight >= (isPos ? 16 : 22);
+  const normAngle = ((o.angle % 360) + 360) % 360;
+  const flipText = normAngle > 90 && normAngle <= 270;
+  const labelW = wPx - (isPos ? 4 : 0);
+  const labelX = isPos ? 2 : 0;
   const polygon = obsPoly(o);
   const rotateX = Math.max(...polygon.map(point => point[0])) * ppm + 18 * labelScale;
   const rotateY = Math.min(...polygon.map(point => point[1])) * ppm + 13 * labelScale;
+  const cravedGoods = isShelf ? analyzeObstacleCraved(o).tierAnalyses.flatMap(t => t.goods) : [];
+  const shelfStockColors = cravedGoods.length ? cravedGoods.map(g => g.colors[0]) : ['#c6cdb8', '#d5cbb4', '#b9c2a5'];
+  const shelfStockAccents = cravedGoods.length ? cravedGoods.map(g => g.colors[1]) : ['#e2e5d4', '#ede4cb', '#d8e0c9'];
+  const shelfStockShapes = cravedGoods.length ? cravedGoods.map(g => g.shape) : (['pouch'] as const);
+  const resizeStep = Math.max(0.05, Math.min(0.1, grid));
+  const testResize = (rawW: number, rawH: number): Obstacle | null => {
+    const nextW = Math.max(0.2, Math.round(clamp(rawW, 0.2, roomW) / resizeStep) * resizeStep);
+    const nextH = Math.max(0.2, Math.round(clamp(rawH, 0.2, roomH) / resizeStep) * resizeStep);
+    const dummyLayout = { widthM: roomW, heightM: roomH, gridM: grid, floorPolygon, obstacles: all, version: '1.0', name: '', pixelsPerMeter: ppm, targetHeight: 1.6 as const, risk: {}, riskStrokes: [], cameras: [] };
+    const resized = resizeObstacle(dummyLayout, o.id, snap(nextW, 0.05), snap(nextH, 0.05), { anchorTopLeft: true });
+    const found = resized.obstacles.find(item => item.id === o.id);
+    return found && (Math.abs(found.w - o.w) > 1e-4 || Math.abs(found.h - o.h) > 1e-4) ? found : null;
+  };
   return (
     <>
     <Group x={(o.x + o.w / 2) * ppm} y={(o.y + o.h / 2) * ppm} offsetX={wPx / 2} offsetY={hPx / 2} rotation={o.angle} draggable
@@ -64,12 +82,18 @@ export const ObstacleNode = memo(function ObstacleNode({ floorPolygon, labelScal
           const across = Math.max(0, (shelfAlongY ? wPx : hPx) / 2 - 11);
           return <Group key={`stock-${i}`} listening={false}>
             {[0,1].map(side => <Group key={side}>
-              {[0,1,2].map(slot => <Rect key={slot}
-                x={shelfAlongY ? 7 + side * (wPx/2-1) : start + slot * span/3}
-                y={shelfAlongY ? start + slot * span/3 : 7 + side * (hPx/2-1)}
-                width={shelfAlongY ? across : Math.max(0, span/3-3)}
-                height={shelfAlongY ? Math.max(0, span/3-3) : across}
-                cornerRadius={1} fill={['#c6cdb8','#d5cbb4','#b9c2a5'][(i+side+slot)%3]} stroke="#a9b298" strokeWidth={.4} />)}
+              {[0,1,2].map(slot => {
+                const idx = (i + side + slot) % shelfStockColors.length;
+                return <ShelfItemGlyph key={slot}
+                  x={shelfAlongY ? 7 + side * (wPx/2-1) : start + slot * span/3}
+                  y={shelfAlongY ? start + slot * span/3 : 7 + side * (hPx/2-1)}
+                  width={shelfAlongY ? across : Math.max(0, span/3-3)}
+                  height={shelfAlongY ? Math.max(0, span/3-3) : across}
+                  shape={shelfStockShapes[idx % shelfStockShapes.length]}
+                  color={shelfStockColors[idx]}
+                  accent={shelfStockAccents[idx % shelfStockAccents.length]}
+                />;
+              })}
             </Group>)}
           </Group>;
         })}
@@ -124,16 +148,48 @@ export const ObstacleNode = memo(function ObstacleNode({ floorPolygon, labelScal
       </>}
       {selected && <>
         <Rect x={-5} y={-5} width={wPx+10} height={hPx+10} stroke="#92704b" strokeWidth={.7} dash={[3,3]} listening={false} />
-        {[[0,0],[wPx,0],[0,hPx],[wPx,hPx]].map(([x,y],i) => <Rect key={i} x={x-2} y={y-2} width={4} height={4} fill="#fffef8" stroke="#92704b" strokeWidth={.8} listening={false} />)}
-        <Text x={0} y={-19} width={wPx} text={`${o.w.toFixed(2)} m`} align="center" fontSize={9} fill="#765d42" listening={false} />
+        {[[0,0],[wPx,0],[0,hPx]].map(([x,y],i) => <Rect key={i} x={x-2} y={y-2} width={4} height={4} fill="#fffef8" stroke="#92704b" strokeWidth={.8} listening={false} />)}
+        <Circle
+          name="obstacle-resize-handle"
+          x={wPx}
+          y={hPx}
+          radius={5.5 * labelScale}
+          fill="#fffef8"
+          stroke={conflict ? '#c74747' : '#765d42'}
+          strokeWidth={1.6}
+          draggable
+          onPointerDown={(e) => { e.cancelBubble = true; }}
+          onDragStart={(e) => { e.cancelBubble = true; }}
+          onDragMove={(e) => {
+            e.cancelBubble = true;
+            const rawW = e.target.x() / ppm;
+            const rawH = e.target.y() / ppm;
+            const updated = testResize(rawW, rawH);
+            if (updated) {
+              setConflict(false);
+              onObstacle(updated);
+              e.target.position({ x: updated.w * ppm, y: updated.h * ppm });
+              return;
+            }
+            const snappedW = Math.round(clamp(rawW, 0.2, roomW) / resizeStep) * resizeStep;
+            const snappedH = Math.round(clamp(rawH, 0.2, roomH) / resizeStep) * resizeStep;
+            setConflict(Math.abs(snappedW - o.w) > 1e-4 || Math.abs(snappedH - o.h) > 1e-4);
+            e.target.position({ x: wPx, y: hPx });
+          }}
+          onDragEnd={(e) => {
+            e.cancelBubble = true;
+            setConflict(false);
+            e.target.position({ x: wPx, y: hPx });
+          }}
+        />
       </>}
       {verticalLabel && !isEntrance && <Group x={wPx/2} y={hPx/2} rotation={-90} listening={false}>
         <Rect x={-Math.min(150,hPx-8)/2} y={-11} width={Math.min(150,hPx-8)} height={22} fill="#f7f6ee" opacity={.94} cornerRadius={2}/>
-        <Text x={-Math.min(150,hPx-8)/2} y={-8} width={Math.min(150,hPx-8)} height={18} text={`${o.label} · ${o.elev} m`} fontSize={9} fill="#536047" align="center" verticalAlign="middle"/>
+        <Text x={-Math.min(150,hPx-8)/2} y={-8} width={Math.min(150,hPx-8)} height={18} text={o.label} fontSize={9} fill="#536047" align="center" verticalAlign="middle"/>
       </Group>}
       {showLabel && <Rect x={Math.max(1,wPx*.08)} y={labelY} width={wPx*.84} height={labelHeight} fill={isPos ? '#d6c4a5' : '#f7f6ed'} opacity={.96} cornerRadius={2} listening={false} />}
-      {showLabel && <Text x={isPos ? 2 : 0} y={labelY} width={wPx - (isPos ? 4 : 0)} height={labelHeight}
-        text={`${o.label}\nH ${o.elev} m`} align="center" verticalAlign="middle" fill="#536047" fontSize={labelFontSize} fontStyle="bold" listening={false} />}
+      {showLabel && <Text x={labelX + (flipText ? labelW / 2 : 0)} y={labelY + (flipText ? labelHeight / 2 : 0)} offsetX={flipText ? labelW / 2 : 0} offsetY={flipText ? labelHeight / 2 : 0} rotation={flipText ? 180 : 0} width={labelW} height={labelHeight}
+        text={o.label} align="center" verticalAlign="middle" fill="#536047" fontSize={labelFontSize} fontStyle="bold" listening={false} />}
     </Group>
     {selected && !isEntrance && onRotate && <Group name="obstacle-rotate-control" x={rotateX} y={rotateY} scaleX={labelScale} scaleY={labelScale}
       onPointerDown={event => { event.cancelBubble = true; }}

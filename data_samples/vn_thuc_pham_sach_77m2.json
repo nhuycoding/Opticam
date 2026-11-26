@@ -1,0 +1,257 @@
+{
+  "version": "1.1",
+  "name": "VN 12 · Cửa hàng trạm dừng 15×6m (90 m²)",
+  "widthM": 15,
+  "heightM": 6,
+  "gridM": 0.5,
+  "pixelsPerMeter": 50,
+  "targetHeight": 1.6,
+  "ceilingHeight": 3.4,
+  "description": "Mặt tiền trải dài 15 m với 2 cửa bãi xe, đảo thu ngân trung tâm, quầy thức ăn nhanh và 3 dãy kệ 1.45 m thông thoáng.",
+  "obstacles": [
+    {
+      "id": "entry-1",
+      "type": "entrance",
+      "label": "Cửa bãi xe 1",
+      "x": 3.0,
+      "y": 0,
+      "w": 1.8,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.8,
+      "riskR": 2.0
+    },
+    {
+      "id": "entry-2",
+      "type": "entrance",
+      "label": "Cửa bãi xe 2",
+      "x": 10.6,
+      "y": 0,
+      "w": 1.8,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.8,
+      "riskR": 2.0
+    },
+    {
+      "id": "pos-1",
+      "type": "pos",
+      "label": "Đảo thu ngân trung tâm",
+      "x": 6.4,
+      "y": 1.0,
+      "w": 2.4,
+      "h": 0.8,
+      "elev": 1.1,
+      "angle": 0,
+      "fixture": "food-counter",
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "hot-1",
+      "type": "pos",
+      "label": "Quầy thức ăn nhanh",
+      "x": 0.8,
+      "y": 0.9,
+      "w": 1.8,
+      "h": 0.75,
+      "elev": 1.1,
+      "angle": 0,
+      "fixture": "food-counter",
+      "riskCategory": "high"
+    },
+    {
+      "id": "gond-1",
+      "type": "shelf",
+      "label": "Kệ A · Nước & Snack",
+      "x": 2.2,
+      "y": 2.6,
+      "w": 2.8,
+      "h": 0.75,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "gond-2",
+      "type": "shelf",
+      "label": "Kệ B · Phụ tùng nhẹ",
+      "x": 6.2,
+      "y": 2.8,
+      "w": 2.8,
+      "h": 0.75,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "high"
+    },
+    {
+      "id": "gond-3",
+      "type": "shelf",
+      "label": "Kệ C · Bánh kẹo",
+      "x": 10.2,
+      "y": 2.6,
+      "w": 2.8,
+      "h": 0.75,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "fridge-1",
+      "type": "shelf",
+      "label": "Dãy tủ mát dài",
+      "x": 3.5,
+      "y": 5.3,
+      "w": 6.0,
+      "h": 0.7,
+      "elev": 2.0,
+      "angle": 0,
+      "fixture": "fridge",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "freezer-1",
+      "type": "shelf",
+      "label": "Tủ kem",
+      "x": 10.4,
+      "y": 5.2,
+      "w": 2.4,
+      "h": 0.8,
+      "elev": 1.0,
+      "angle": 0,
+      "fixture": "freezer",
+      "riskCategory": "bulky"
+    },
+    {
+      "id": "wall-1",
+      "type": "shelf",
+      "label": "Nhớt & Nước thùng",
+      "x": 14.58,
+      "y": 1.6,
+      "w": 0.42,
+      "h": 3.2,
+      "elev": 1.8,
+      "angle": 0,
+      "fixture": "wall-shelf",
+      "riskCategory": "bulky"
+    }
+  ],
+  "optimization": {
+    "algorithm": "kpi_hybrid",
+    "mounts": "mixed"
+  },
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "x": 0.1,
+      "y": 0.1,
+      "pan": 45,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-02",
+      "x": 14.9,
+      "y": 0.1,
+      "pan": 135,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-03",
+      "x": 14.9,
+      "y": 5.9,
+      "pan": 225,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-04",
+      "x": 0.1,
+      "y": 5.9,
+      "pan": 315,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    }
+  ],
+  "people": [
+    {
+      "id": "PERSON-01",
+      "x": 7.5,
+      "y": 0.45
+    },
+    {
+      "id": "PERSON-02",
+      "x": 7.6,
+      "y": 2.15
+    },
+    {
+      "id": "PERSON-03",
+      "x": 3.8,
+      "y": 1.2
+    },
+    {
+      "id": "PERSON-04",
+      "x": 11.4,
+      "y": 1.2
+    },
+    {
+      "id": "PERSON-05",
+      "x": 3.5,
+      "y": 4.0
+    },
+    {
+      "id": "PERSON-06",
+      "x": 7.5,
+      "y": 4.2
+    },
+    {
+      "id": "PERSON-07",
+      "x": 11.5,
+      "y": 4.1
+    },
+    {
+      "id": "PERSON-08",
+      "x": 1.6,
+      "y": 2.0
+    },
+    {
+      "id": "PERSON-09",
+      "x": 5.4,
+      "y": 4.8
+    },
+    {
+      "id": "PERSON-10",
+      "x": 13.4,
+      "y": 3.2
+    }
+  ]
+}

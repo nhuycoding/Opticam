@@ -1,5 +1,5 @@
 export type ViewMode = 'dori' | 'risk' | 'off';
-export type Tool = 'select' | 'measure' | 'person';
+export type Tool = 'select' | 'measure' | 'person' | 'wall' | 'polygon';
 export type Selection = { kind: 'cam' | 'obs' | 'person'; id: string } | null;
 export type Segment = { a: [number, number]; b: [number, number] } | null; // mét
 export type PriorityBand = 'low' | 'medium' | 'high';

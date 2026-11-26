@@ -1,7 +1,9 @@
 .three-edit-toolbar,.camera-image-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding: 7px 12px; border-bottom: 1px solid #dedfd3; background: #faf9f2; }
 .three-interaction-mode,.three-add-furniture { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .three-edit-toolbar button { min-height: 29px; padding: 5px 8px; font-size: 9px; white-space: nowrap; }
-.three-edit-toolbar select { min-height: 29px; width: 116px; padding: 4px 6px; font-size: 9px; }
+.three-edit-toolbar select { min-height: 29px; width: 152px; padding: 4px 8px; font-size: 9.5px; }
+.three-camera-picker { display: inline-flex; align-items: center; gap: 6px; padding-left: 6px; }
+.three-camera-picker svg { flex: 0 0 auto; color: #6c7263; }
 .three-interaction-mode button { background: transparent; border-color: transparent; }
 .three-interaction-mode button.on { background: #e6e6da; color: #565c43; }
 .camera-image-status { color: #626c5c; font-size: 9px; }

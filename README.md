@@ -66,44 +66,48 @@ npm.cmd run experiments
 
 ## Tài liệu
 
-- [Hướng dẫn người dùng](docs/USER_GUIDE.md) — công cụ trên Canvas, chỉnh camera, xuất dữ liệu.
-- [Kiến trúc dự án](docs/ARCHITECTURE.md) — cấu trúc file và luồng frontend/backend.
-- [Mô hình và công thức](docs/FORMULAS.md) — PPM, DORI, vùng rủi ro, mục tiêu Greedy và BOM.
-- [Hợp đồng API](docs/API_CONTRACT.md) — endpoint, schema, giới hạn và trạng thái tích hợp.
-- [Nghiên cứu và kết quả](docs/RESEARCH.md) — thiết kế thí nghiệm, số liệu và giới hạn nghiên cứu.
+- [Tổng quan toàn dự án (Project Overview)](PROJECT_OVERVIEW.md) — kiến trúc, thuật toán `kpi_hybrid` + chấm điểm phân bậc 2 cao độ `1.6 m / 1.0 m`, 13 loại nội thất CRAVED theo tầng, 18 mặt bằng và bằng chứng thực nghiệm.
+- [Tài liệu trích dẫn (References)](REFERENCES.md) — chuẩn IEC 62676-4 và danh mục bài báo khoa học đối chứng.
+- [Hướng dẫn người dùng](docs/USER_GUIDE.md) — hướng dẫn tương tác 6 bước (`?`), tự tạo layout (`CustomLayoutModal`), tự dựng tường vách (`W`), đặt nội thất ghost, tủ kệ CRAVED, 18 mẫu cửa hàng và cảnh báo khuất 1.0 m.
+- [Kiến trúc dự án](docs/ARCHITECTURE.md) — cấu trúc file (`fixtures`, `craved`, `ShelfTierFolders`, `SpotlightOverlay`, `TutorialModal`, `CustomLayoutModal`, `StudioSelect`, `CameraSchedule`) và luồng frontend/backend.
+- [Mô hình và công thức](docs/FORMULAS.md) — PPM, DORI, cơ chế 2 cao độ phân bậc (`DUAL_HEIGHT_SCORING`), vùng rủi ro CRAVED theo tầng, `kpi_hybrid` và BOM.
+- [Hợp đồng API](docs/API_CONTRACT.md) — endpoint, schema (`algorithm`, `dualHeight`, `tiers`), giới hạn và trạng thái tích hợp.
+- [Nghiên cứu & Đánh giá khoa học (2026-11-26)](paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md) — thí nghiệm Phase 1–4, MILP bounds, đối chứng `N = 50` cửa hàng và hiệu chỉnh 2 cao độ trên 18 cửa hàng.
+- [Tóm tắt trình bày (Khách hàng / Giảng viên)](paper_evaluation_2026-11-26/PRESENTATION_ABSTRACT.md) — bản giải thích [cho khách hàng](paper_evaluation_2026-11-26/ABSTRACT_CUSTOMER.md) và [cho giảng viên hướng dẫn](paper_evaluation_2026-11-26/ABSTRACT_PROFESSOR.md).
 
 ## Cấu trúc cấp cao
 
 ```text
-backend/       FastAPI, optimizer, API tests, cấu hình dependencies
-data_samples/  Tám layout JSON mẫu, gồm cửa hàng Việt Nam và mẫu có người
-docs/          Tài liệu người dùng, kiến trúc, công thức, API, nghiên cứu
-frontend/      React/Konva, Three.js, thuật toán client, unit tests, experiments
-legacy_pygame/ Prototype Pygame cũ, chỉ để tham khảo
-results/       CSV và báo cáo do experiments sinh ra
-scripts/       Công cụ tạo lại layout mẫu
+backend/                    FastAPI, Two-Stage kpi_hybrid optimizer (Dual-Height phân bậc), 62 pytest tests
+data_samples/               18 layout JSON mẫu (3 quốc tế + VN 01..VN 15 có người tĩnh)
+docs/                       Tài liệu người dùng, kiến trúc, công thức, API, nghiên cứu
+frontend/                   React/Konva 2.5D, Three.js 3D/POV, 24 file / 270 unit & UI tests, experiments
+legacy_pygame/              Prototype Pygame cũ, chỉ để tham khảo
+paper_evaluation_2026-11-26/ Bộ thí nghiệm đánh giá khoa học Phase 1–4, MILP, Dual-Height tuning và báo cáo
+results/                    CSV và báo cáo do experiments sinh ra
+scripts/                    Công cụ tạo lại layout mẫu
 ```
 
 ## Trạng thái và giới hạn
 
-- Frontend có Canvas 2.5D, mô hình 3D/POV, camera gắn tường hoặc trần, heatmap DORI/rủi ro,
-  Greedy và Greedy + Local Search chạy trên Web Worker, BOM CSV và dự án JSON.
-- Backend có API tối ưu Greedy/Hybrid, lưu/nạp layout, xuất BOM JSON/CSV/XLSX và project bundle.
-  Các endpoint lưu/nạp và xuất báo cáo backend hiện chưa có nút gọi trực tiếp trên UI.
-- Phân tích lấy mẫu trên mặt phẳng tại độ cao mục tiêu, dùng góc nhìn và đường ngắm 3D
-  có xét pan, tilt, FOV ngang/dọc, tầm xa và chiều cao vật cản. Chưa tính méo ống kính,
-  ánh sáng, nén video, hướng mặt hoặc chuyển động. Người tĩnh che khuất trong hình 3D;
-  chưa tham gia phép tính heatmap/KPI và hàm mục tiêu tối ưu.
-- Kết quả nghiên cứu và các giả định định lượng được ghi trong [docs/RESEARCH.md](docs/RESEARCH.md);
-  không xem tỷ lệ phủ mô phỏng là bảo đảm nhận diện thực tế.
+- **Quy trình 2 bước (`Mặt bằng` → `Kết quả`) & Trải nghiệm Studio mới:**
+  - **Hướng dẫn tương tác 6 bước + Trình tạo layout (`SpotlightOverlay` + `TutorialModal` + `CustomLayoutModal`):** Tự mở lần đầu và mở lại bất kỳ lúc nào qua nút `?`; phủ lớp tối spotlight tương tác trực tiếp vào từng khu vực (`01`–`06`), kèm **hướng dẫn 3 bước riêng (`Hướng dẫn 3 bước`)** bên trong hộp thoại **Tạo layout**.
+  - **Tự tạo layout, tự vẽ tường bao & dựng vách ngăn (`CustomLayoutModal`, `rotateLayout90()`, `buildWallObstacle()`):** Tạo mặt bằng mới theo 4 dáng (`Chữ nhật`, `Chữ L`, `Vát góc`, `Hình thang`) hoặc **tự chấm đỉnh vẽ tường bao đa giác**, xoay khung 90° (`Xoay 90° (R↔D)`) tự xoay toàn bộ nội thất/camera/người khớp theo chiều mới, và dùng công cụ **Dựng vách (`W`)** trên thanh trái để chấm 2 điểm bất kỳ dựng vách ngăn kho/quầy.
+  - **Điều khiển Studio tùy biến (`StudioSelect`, `PlanningSettings`, `NumberField`):** Thay toàn bộ dropdown OS bằng popover `StudioSelect` và thanh viên thuốc (`segmented-pills`), bổ sung nút stepper `−/+`, preset diện tích nhanh (`5×12`, `8×8`, `10×6`, `12×8`), thanh trượt trần và thẻ accordion có badge trạng thái.
+  - **Thư viện 13 loại nội thất chuyên dụng (15 mục gồm POS & Cửa):** gồm kệ sát tường, kệ đôi giữa lối, kệ đầu dãy (`endcap`), đảo khuyến mãi (`promo-island`), kệ trước thu ngân (`checkout-rack`), tủ kính khóa (`locked-cabinet`), tủ gửi đồ (`locker`), tủ mát, tủ đông, quầy đồ nóng/F&B, bàn ngồi, vách ngăn và cột — kèm **chế độ đặt theo vị trí chuột (ghost preview, `R` xoay, `Esc` hủy)** hoặc **Đặt tự động**, preset kích thước **S / M / L**, thanh trượt + stepper `−/+` cập nhật trực tiếp và tay kéo góc trên bản vẽ 2.5D.
+  - **Phân tích tầng kệ CRAVED xếp lớp (`ShelfTierFolders`):** Quản lý từng tầng `zMin–zMax`, gán từ **16 nhóm hàng CRAVED** tự động suy ra rủi ro lớn nhất của kệ (`riskCategory` / `riskWmax`), cảnh báo tầng thấp `≤ 1.0 m` dễ bị che khuất và dựng hình khối hàng hóa đặc trưng (`box`, `bottle`, `snack`, `cosmetics`, `wine`, `medicine`, `frozen`, `warmfood`, v.v.) cùng mô hình người 2.5D/3D chi tiết hơn.
+  - **Bố cục công thái học & Hộp thoại trong ứng dụng:** Bảng thiết lập rộng rãi (`396 px`), cột danh sách camera thu gọn thành thanh mini (`190 px` ↔ `46 px`), mọi xác nhận dùng modal đồng bộ ứng dụng thay cho popup trình duyệt.
+- **Thuật toán `kpi_hybrid` + Kiểm tra 2 cao độ phân bậc (`DUAL_HEIGHT_SCORING`, `1.6 m + 1.0 m`):**
+  - Chạy đồng nhất (`0.00e+00` parity) trên Web Worker TypeScript (`Float32Array`) và FastAPI Python (`dualHeight` mặc định bật).
+  - Thay thế ngưỡng cắt nhị phân cũ bằng **hệ số nhân phân bậc tại 1.0 m** (`>= 125 PPM: 1.00`, `>= 62.5 PPM: 0.85`, `>= 25 PPM: 0.50`, `< 25 PPM: 0.00`) kết hợp chia sẻ trọng số tối thiểu `65%` mặt / `35%` tay (Đỏ), `80%` mặt / `20%` tay (Vàng) chỉ áp dụng ở ô trọng số `W >= 3.0`, cùng penalty mềm `lambdaHand = 0.50` hướng tới `80%` phủ tầm tay `>= 62.5 PPM` (`score.handCoverage`).
+  - Thực nghiệm tinh chỉnh trên toàn bộ **18 mặt bằng mẫu** nâng tỷ lệ đạt KPI Đỏ/Vàng từ **`8/18` (`44.4%`, mô hình nhị phân cũ)** lên **`17/18` (`94.4%`)**, đạt **`98.7%` độ phủ tay tại vùng Đỏ** và giảm **`44%` điểm mù chỉ thấy đầu** (`11.8% → 6.6%`).
+- **Giới hạn quang học:** chưa mô phỏng méo ống kính, ánh sáng yếu/ngược sáng, nén video, hướng mặt hay người di chuyển; người tĩnh che khuất trong atlas 3D nhưng chưa làm vật cản trong hàm mục tiêu 2D.
+- Kết quả nghiên cứu và giới hạn được ghi trong [docs/RESEARCH.md](docs/RESEARCH.md) và [paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md](paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md).
 
 ## Chế độ 2.5D và 3D
 
 Nút **2.5D / 3D** nằm phía trên sơ đồ. Hai chế độ dùng chung dữ liệu và lịch sử hoàn tác.
-Trong 3D, chọn **Di chuyển vật thể** để kéo nội thất hoặc người trên sàn. Danh sách
-nội thất cho phép thêm kệ, tủ mát, tủ đông, quầy thu ngân, quầy đồ ăn và bàn. Chọn vật
-thể rồi dùng **Xoay 15°** hoặc **Xóa** trong bảng thông tin. Ở 2.5D, nút ↻ nằm cạnh vật
-thể đang chọn cho phép xoay qua các vật thể khác để sắp xếp lại, giữ trong tường bao.
+Trong 3D, chọn **Di chuyển vật thể** để kéo nội thất hoặc người trên sàn. Thư viện nội thất hỗ trợ 13 loại tủ/kệ/quầy và đặt theo vị trí con trỏ trong 2.5D. Chọn vật thể để chỉnh kích thước **S / M / L**, trượt thông số Dài/Rộng/Cao trực tiếp, xoay **15°** hoặc cấu hình tầng kệ **CRAVED**. Ở 2.5D, tay cầm góc cho phép kéo giãn kích thước theo thời gian thực trong phạm vi tường bao và nút ↻ xoay mượt mà.
 
 Kéo chuột trái ở chế độ **Xoay góc nhìn**, chuột phải để di chuyển và cuộn để thu phóng.
 **Tường tự ẩn** mở góc nhìn vào cửa hàng, **Đặt lại

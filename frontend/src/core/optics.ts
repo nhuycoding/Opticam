@@ -10,6 +10,53 @@ export const RISK_RED_THRESHOLD = 4;
 export const RISK_YELLOW_THRESHOLD = 2;
 export const REQUIRED_PPM = { red: DORI_MIN.identification, yellow: DORI_MIN.recognition, green: DORI_MIN.observation } as const;
 export const FACE_Z = 1.6;            // mặt phẳng khuôn mặt (m)
+export const HAND_Z = 1.0;            // mặt phẳng tầm tay / hàng hóa (m)
+
+export interface DualHeightConfig {
+  handMinPpm: number;
+  handFullPpm: number;
+  handDetectPpm: number;
+  handTierMultipliers: readonly [number, number, number, number];
+  redFaceShare: number;
+  yellowFaceShare: number;
+  minWeightForHandCheck: number;
+  handTargetPct: number;
+  lambdaHand: number;
+}
+
+/** Explicit, fine-tunable parameters for graded dual-height (1.6 m + 1.0 m) scoring. */
+export const DUAL_HEIGHT_SCORING: DualHeightConfig = {
+  handMinPpm: DORI_MIN.observation,       // 62.5 PPM Observation threshold at 1.0 m
+  handFullPpm: DORI_MIN.recognition,      // 125 PPM Recognition threshold for full hand credit
+  handDetectPpm: DORI_MIN.detection,      // 25 PPM Detection floor (below => head-only occluded)
+  handTierMultipliers: [0, 0.5, 0.85, 1.0] as const,
+  redFaceShare: 0.65,                     // tuned: credit kept from 1.6 m face on Red (W >= 4) when hand is blind
+  yellowFaceShare: 0.80,                  // tuned: credit kept from 1.6 m face on Yellow (3 <= W < 4) when hand is blind
+  minWeightForHandCheck: 3.0,             // tuned: covers Red + standard/high shelf cores (skips outer <3 tails & bulky)
+  handTargetPct: 80,                      // tuned: soft KPI target (%) at 1.0 m for priority cells
+  lambdaHand: 0.50,                       // tuned: hinge weight balancing 1.0 m protection with 1.6 m KPI preservation
+};
+
+export function handVisibilityMultiplier(handPpm: number, cfg: DualHeightConfig = DUAL_HEIGHT_SCORING): number {
+  const [blindM, detectM, obsM, recM] = cfg.handTierMultipliers;
+  if (handPpm >= cfg.handFullPpm) return recM;
+  if (handPpm >= cfg.handMinPpm) return obsM;
+  if (handPpm >= cfg.handDetectPpm) return detectM;
+  return blindM;
+}
+
+export function dualEffectiveFactor(
+  weight: number,
+  facePpm: number,
+  handPpm: number,
+  enforceDual: boolean,
+  cfg: DualHeightConfig = DUAL_HEIGHT_SCORING
+): number {
+  const faceFactor = DORI_FACTOR[doriOf(facePpm)];
+  if (!enforceDual || faceFactor <= 0 || weight < cfg.minWeightForHandCheck) return faceFactor;
+  const faceShare = weight >= RISK_RED_THRESHOLD ? cfg.redFaceShare : cfg.yellowFaceShare;
+  return faceFactor * (faceShare + (1 - faceShare) * handVisibilityMultiplier(handPpm, cfg));
+}
 export const RISK_DEFAULTS = {
   pos: { wmax: 5, r0: 1, radius: 2.5 },
   entrance: { wmax: 5, r0: 1, radius: 2.5 },
@@ -49,30 +96,51 @@ export function pixelsPerMeterAtDistance(resolution: number, horizontalFov: numb
   return resolution / (2 * Math.max(0.001, distance) * Math.tan(rad(horizontalFov / 2)));
 }
 
+/** Dual-height 3D PPM sharing one 2D floor & XY ray-AABB intersection pass for face (1.6 m) and hand (1.0 m). */
+export function dualPpmAt(
+  cam: Camera, x: number, y: number, obstacles: Obstacle[],
+  faceHeight = FACE_Z, handHeight = HAND_Z, floorPolygon?: Pt[]
+): [number, number] {
+  if (floorPolygon && !segmentInFloor([cam.x, cam.y], [x, y], floorPolygon)) return [0, 0];
+  const dx = x - cam.x, dy = y - cam.y, dXY2 = dx * dx + dy * dy;
+  const dzF = faceHeight - cam.height, dzH = handHeight - cam.height;
+  const rF = Math.hypot(dx, dy, dzF), rH = handHeight === faceHeight ? rF : Math.sqrt(dXY2 + dzH * dzH);
+  const fInRange = rF >= 0.03 && rF <= cam.range;
+  const hInRange = handHeight !== faceHeight && rH >= 0.03 && rH <= cam.range;
+  if (!fInRange && !hInRange) return [0, 0];
+
+  const { tilt, vfov } = cameraProjection(cam), pan = rad(cam.pan), pitch = rad(tilt);
+  const cosP = Math.cos(pan), sinP = Math.sin(pan), cosT = Math.cos(pitch), sinT = Math.sin(pitch);
+  const tanH = Math.tan(rad(cam.fov / 2)), tanV = Math.tan(rad(vfov / 2));
+  const along = dx * cosP + dy * sinP, right = -dx * sinP + dy * cosP;
+
+  const checkFrustum = (dz: number) => {
+    const depth = along * cosT - dz * sinT;
+    const up = along * sinT + dz * cosT;
+    return depth > 0 && Math.abs(right) <= depth * tanH + 1e-9 && Math.abs(up) <= depth * tanV + 1e-9;
+  };
+  let okF = fInRange && checkFrustum(dzF);
+  let okH = hInRange && checkFrustum(dzH);
+  if (!okF && !okH) return [0, 0];
+
+  const start: Pt = [cam.x, cam.y], end: Pt = [x, y];
+  for (const o of obstacles) {
+    if (o.elev <= 0) continue;
+    const interval = segmentRectInterval(start, end, o);
+    if (!interval) continue;
+    const [t0, t1] = interval;
+    if (okF && Math.min(cam.height + dzF * t0, cam.height + dzF * t1) <= o.elev + 1e-9) okF = false;
+    if (okH && Math.min(cam.height + dzH * t0, cam.height + dzH * t1) <= o.elev + 1e-9) okH = false;
+    if (!okF && !okH) return [0, 0];
+  }
+  const fPpm = okF ? pixelsPerMeterAtDistance(cam.res, cam.fov, rF) : 0;
+  const hPpm = handHeight === faceHeight ? fPpm : (okH ? pixelsPerMeterAtDistance(cam.res, cam.fov, rH) : 0);
+  return [fPpm, hPpm];
+}
+
 /** PPM uses the selected person height and blocks sightlines intersecting an obstacle volume. */
 export function ppmAt(cam: Camera, x: number, y: number, obstacles: Obstacle[], targetHeight = FACE_Z, floorPolygon?: Pt[]): number {
-  if (floorPolygon && !segmentInFloor([cam.x, cam.y], [x, y], floorPolygon)) return 0;
-  const dx = x - cam.x, dy = y - cam.y, dz = targetHeight - cam.height;
-  const r = Math.hypot(dx, dy, dz);
-  if (r < 0.03 || r > cam.range) return 0;
-  const { tilt, vfov } = cameraProjection(cam), pan = rad(cam.pan), pitch = rad(tilt);
-  const along = dx * Math.cos(pan) + dy * Math.sin(pan);
-  const depth = along * Math.cos(pitch) - dz * Math.sin(pitch);
-  const right = -dx * Math.sin(pan) + dy * Math.cos(pan);
-  const up = along * Math.sin(pitch) + dz * Math.cos(pitch);
-  // Project in the camera's own frame, rather than testing a flat fan. This
-  // remains well-defined for a lens pointing vertically down from the ceiling.
-  if (depth <= 0 || Math.abs(right) > depth * Math.tan(rad(cam.fov / 2)) + 1e-9 ||
-      Math.abs(up) > depth * Math.tan(rad(vfov / 2)) + 1e-9) return 0;
-  const start: Pt = [cam.x, cam.y], end: Pt = [x, y];
-  if (obstacles.some((o) => {
-    if (o.elev <= 0) return false;
-    const interval = segmentRectInterval(start, end, o);
-    if (!interval) return false;
-    const heightAt = (t: number) => cam.height + (targetHeight - cam.height) * t;
-    return Math.min(heightAt(interval[0]), heightAt(interval[1])) <= o.elev + 1e-9;
-  })) return 0;
-  return pixelsPerMeterAtDistance(cam.res, cam.fov, r);
+  return dualPpmAt(cam, x, y, obstacles, targetHeight, targetHeight, floorPolygon)[0];
 }
 
 export function assessPersonAt(l: Layout, x: number, y: number): Array<PersonRegion & { ppm: number; dori: Dori }> {
@@ -121,24 +189,48 @@ export function buildZones(l: Layout): Zone[] {
   return zones;
 }
 
-export function evaluate(l: Layout, zones: Zone[]): { cells: Cell[]; score: Score } {
+export function evaluate(l: Layout, zones: Zone[], dualOverride?: Partial<DualHeightConfig>): { cells: Cell[]; score: Score } {
   const t0 = performance.now();
   const obstacles = blockerObstacles(l);
+  const cfg: DualHeightConfig = dualOverride ? { ...DUAL_HEIGHT_SCORING, ...dualOverride } : DUAL_HEIGHT_SCORING;
+  const faceH = l.targetHeight ?? FACE_Z, handH = Math.min(faceH, HAND_Z), checkDual = faceH > HAND_Z + 1e-6;
+  const enforceDual = Boolean(l.optimization?.dualHeight && checkDual);
   let redN = 0, redOk = 0, yelN = 0, yelOk = 0, weighted = 0, redMinPpm = Number.POSITIVE_INFINITY;
+  let visibleCells = 0, headOnlyCells = 0, handPriorityN = 0, handPriorityOk = 0;
   const cells: Cell[] = zones.map((z) => {
-    if (z.solid) return { ...z, ppm: 0, dori: 'blind' as Dori };
-    let ppm = 0;
-    for (const cam of l.cameras) ppm = Math.max(ppm, ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight, l.floorPolygon));
-    const dori = doriOf(ppm);
+    if (z.solid) return { ...z, ppm: 0, handPpm: 0, headOnly: false, dori: 'blind' as Dori };
+    let facePpm = 0, handPpm = 0;
+    for (const cam of l.cameras) {
+      const [fp, hp] = dualPpmAt(cam, z.cx, z.cy, obstacles, faceH, checkDual ? handH : faceH, l.floorPolygon);
+      if (fp > facePpm) facePpm = fp;
+      if (hp > handPpm) handPpm = hp;
+    }
+    if (!checkDual) handPpm = facePpm;
     const band = riskBand(z.w);
+    const ppm = facePpm;
+    const dori = doriOf(ppm);
+    const headOnly = checkDual && facePpm >= cfg.handDetectPpm && handPpm < cfg.handDetectPpm;
+    if (facePpm >= DORI_MIN.detection) visibleCells++;
+    if (headOnly) headOnlyCells++;
+    if (z.w >= cfg.minWeightForHandCheck) {
+      handPriorityN++;
+      if (handPpm >= cfg.handMinPpm) handPriorityOk++;
+    }
     if (band === 'red') { redN++; redMinPpm = Math.min(redMinPpm, ppm); if (ppm >= DORI_MIN.identification) redOk++; }
     else if (band === 'yellow') { yelN++; if (ppm >= DORI_MIN.recognition) yelOk++; }
-    weighted += z.w * DORI_FACTOR[dori];
-    return { ...z, ppm, dori };
+    weighted += z.w * dualEffectiveFactor(z.w, facePpm, handPpm, enforceDual, cfg);
+    return { ...z, ppm, handPpm, headOnly, dori };
   });
   const pct = (a: number, n: number) => (n ? Math.round((a / n) * 1000) / 10 : 100);
   return {
     cells,
-    score: { red: pct(redOk, redN), yellow: pct(yelOk, yelN), redCells: redN, yellowCells: yelN, redMinPpm: Number.isFinite(redMinPpm) ? Math.round(redMinPpm) : 0, weighted: Math.round(weighted * 10) / 10, cams: l.cameras.length, ms: Math.round((performance.now() - t0) * 100) / 100 }
+    score: {
+      red: pct(redOk, redN), yellow: pct(yelOk, yelN), redCells: redN, yellowCells: yelN,
+      redMinPpm: Number.isFinite(redMinPpm) ? Math.round(redMinPpm) : 0,
+      weighted: Math.round(weighted * 10) / 10,
+      handCoverage: checkDual ? pct(handPriorityOk, handPriorityN) : undefined,
+      headOnlyCells, headOnlyPct: visibleCells ? Math.round((headOnlyCells / visibleCells) * 1000) / 10 : 0,
+      cams: l.cameras.length, ms: Math.round((performance.now() - t0) * 100) / 100
+    }
   };
 }

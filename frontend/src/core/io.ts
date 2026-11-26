@@ -1,7 +1,9 @@
 import { floorOutline, footprintFits, pointInFloor, validateFloorPolygon } from './footprint';
-import type { Fixture } from '../types';
+import type { Fixture, ShelfTier } from '../types';
 import { PERSON_TARGETS, type Camera, type Layout, type Obstacle, type Person, type RiskStroke, type Score, type ShelfRiskCategory } from '../types';
 import { buildBom } from './bom';
+import { isFixtureName } from './fixtures';
+import { GOODS_BY_ID } from './craved';
 import { clamp, distToObs, norm360, obstacleFitsRoom } from './geometry';
 import { SHELF_RISK_PROFILES } from './optics';
 import { canPlacePerson, MAX_PEOPLE } from './person';
@@ -70,12 +72,27 @@ export function normalizeLayout(raw: any): Layout {
     const id = String(o.id || `obs_${i}`);
     if (obstacleIds.has(id)) throw new Error(`Mã vật cản bị trùng ${id}.`);
     obstacleIds.add(id);
+    const tiers: ShelfTier[] | undefined = Array.isArray(o.tiers)
+      ? o.tiers
+          .filter((tier: any) => tier && typeof tier === 'object' && Number.isFinite(tier.zMin) && Number.isFinite(tier.zMax))
+          .slice(0, 8)
+          .map((tier: any, tierIdx: number): ShelfTier => ({
+            id: String(tier.id || `t${tierIdx + 1}`),
+            name: String(tier.name || `Tầng ${tierIdx + 1}`),
+            zMin: Math.max(0, num(tier.zMin, 0)),
+            zMax: Math.max(0.1, num(tier.zMax, 0.5)),
+            goodsIds: Array.isArray(tier.goodsIds)
+              ? tier.goodsIds.filter((gid: unknown): gid is string => typeof gid === 'string' && GOODS_BY_ID.has(gid)).slice(0, 8)
+              : [],
+          }))
+      : undefined;
     const obstacle: Obstacle = {
-      ...( ['wall-shelf', 'gondola', 'fridge', 'freezer', 'food-counter', 'seating', 'partition', 'column'].includes(o.fixture) ? { fixture: o.fixture as Fixture } : {}),
+      ...(isFixtureName(o.fixture) ? { fixture: o.fixture as Fixture } : {}),
       id, type: o.type, label: String(o.label ?? o.name ?? o.type),
       x: num(o.x, 0), y: num(o.y, 0), w: num(o.w ?? o.width, 1), h: num(o.h ?? o.height, 1),
       elev: num(o.elev ?? o.elevation, o.type === 'shelf' ? 1.8 : 1.1), angle: num(o.angle, 0),
       ...(riskCategory ? { riskCategory } : {}),
+      ...(tiers?.length ? { tiers } : {}),
       riskWmax: Math.min(5, Math.max(1, num(o.riskWmax, defaultWmax))),
       riskR0,
       riskR: Math.max(riskR0 + 0.1, num(o.riskR, defaults.radius))
@@ -131,8 +148,9 @@ export function normalizeLayout(raw: any): Layout {
     floorPolygon,
     ceilingHeight,
     optimization: {
-      algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : 'hybrid',
-      mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed'
+      algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : L.optimization?.algorithm === 'hybrid' ? 'hybrid' : 'kpi_hybrid',
+      mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed',
+      ...(L.optimization?.dualHeight ? { dualHeight: true } : {})
     },
     ...(people.length ? { people } : {}),
     description: typeof L.description === 'string' ? L.description : undefined,

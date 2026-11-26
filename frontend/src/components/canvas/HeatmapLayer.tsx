@@ -25,6 +25,19 @@ export const HeatmapLayer = memo(function HeatmapLayer({ layout, cells, cellPx, 
           ctx.setAttr('globalAlpha', view === 'risk' && riskFilter && band !== riskFilter ? 0.12 : 1);
           ctx.setAttr('fillStyle', view === 'dori' ? DORI_COLOR[c.dori] : riskColor(c.w));
           ctx.fillRect(c.c * cellPx, c.r * cellPx, cellPx, cellPx);
+          if (view === 'dori' && c.headOnly) {
+            const x0 = c.c * cellPx, y0 = c.r * cellPx;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0 + cellPx);
+            ctx.lineTo(x0 + cellPx, y0);
+            ctx.moveTo(x0, y0 + cellPx * 0.5);
+            ctx.lineTo(x0 + cellPx * 0.5, y0);
+            ctx.moveTo(x0 + cellPx * 0.5, y0 + cellPx);
+            ctx.lineTo(x0 + cellPx, y0 + cellPx * 0.5);
+            ctx.setAttr('strokeStyle', 'rgba(217,119,6,.55)');
+            ctx.setAttr('lineWidth', 1);
+            ctx.stroke();
+          }
           const labelBox = { x: c.c * cellPx, y: c.r * cellPx, width: cellPx, height: cellPx };
           const labelBlocked = numberMasks.some((mask) =>
             labelBox.x < mask.x + mask.width && labelBox.x + labelBox.width > mask.x &&

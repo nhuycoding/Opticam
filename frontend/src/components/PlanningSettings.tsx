@@ -1,7 +1,5 @@
 import type { Layout } from '../types';
 import { ceilingHeightFor } from '../core/camera';
-import { AREA_MAX, AREA_MIN } from '../core/editor';
-import { floorArea } from '../core/footprint';
 import { NumberField } from './NumberField';
 
 export function PlanningSettings({ layout, disabled, onRoom, onGrid, onScale, onCeilingHeight }: {
@@ -11,7 +9,6 @@ export function PlanningSettings({ layout, disabled, onRoom, onGrid, onScale, on
   onScale: (pixelsPerMeter: number) => void;
   onCeilingHeight: (height: number) => void;
 }) {
-  const area = floorArea(layout);
   return <section className="panel planning-settings">
     <h3>Tùy chỉnh kích thước</h3>
     <fieldset className="dimension-fields" disabled={disabled}>
@@ -24,7 +21,6 @@ export function PlanningSettings({ layout, disabled, onRoom, onGrid, onScale, on
         <NumberField label="Tỷ lệ (px/m)" value={layout.pixelsPerMeter} min={30} max={120} step={5} onChange={onScale} />
       </div>
       <NumberField label="Chiều cao trần (m)" value={ceilingHeightFor(layout)} min={2.4} max={6} step={0.1} onChange={onCeilingHeight} />
-      {(area < AREA_MIN || area > AREA_MAX) && <p className="fail small">{area} m² nằm ngoài phạm vi {AREA_MIN}–{AREA_MAX} m².</p>}
     </fieldset>
   </section>;
 }

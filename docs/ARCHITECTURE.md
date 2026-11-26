@@ -10,7 +10,7 @@ opticam/
 │   ├── requirements.txt        # Runtime dependencies
 │   ├── requirements-dev.txt    # Test dependencies
 │   └── tests/test_api.py       # API và optimizer tests
-├── data_samples/               # Tám layout mẫu, gồm polygon và người tĩnh
+├── data_samples/               # 18 layout mẫu (3 chuẩn + VN 01..VN 15 có polygon và người tĩnh)
 ├── docs/                       # User guide, architecture, formula, API, research
 ├── frontend/
 │   ├── experiments/run.ts       # E1/E2/E3 thực nghiệm tái lập
@@ -35,21 +35,12 @@ opticam/
 
 ### Frontend
 
-- `App.tsx`: giữ layout đang mở, selection, công cụ, camera, lớp phủ và điều phối hành động.
-- `components/canvas/`: ghép các Konva layer; render lưới/ảnh nền, heatmap, vật cản,
-  camera/FOV, đo khoảng cách và tooltip PPM.
-- `core/geometry.ts`: góc, snap, phép chiếu hình chữ nhật, SAT, kiểm tra tia và điểm neo.
-- `core/camera.ts`: cấu hình quang học, mặc định kiểu lắp, chiều cao trần/khoảng hạ và
-  chuẩn hóa cao độ camera; `core/cameraEditing.ts`: kiểm tra vị trí/di chuyển camera trần.
-- `core/optics.ts`: phân vùng rủi ro, PPM/DORI với frustum 3D và tia qua vật cản có chiều
-  cao, đánh giá lưới tại độ cao mục tiêu và Scorecard.
-- `core/optimizer.ts`: sinh tập ứng viên tường/trần có giới hạn, cache PPM theo profile,
-  Greedy và tối đa ba lượt thay từng camera để tăng điểm DORI trong chế độ Hybrid;
-  baseline bốn góc và vét cạn vẫn phục vụ thí nghiệm.
-- `core/localSolver.ts` và `core/optimizer.worker.ts`: chạy thuật toán đã chọn, giảm camera
-  và đối chứng trên Web Worker, giải phóng worker khi hoàn tất hoặc hủy.
-- `components/PlanningSettings.tsx`: chỉnh chiều cao trần, phạm vi lắp và thuật toán;
-  App lưu thiết lập trong layout, hiển thị diagnostics và so sánh trước/sau.
+- `App.tsx`: điều phối quy trình 2 bước (`Mặt bằng` → `Kết quả`), hộp thoại xác nhận đổi layout trong ứng dụng (`pendingLayout`), trạng thái selection/công cụ/3D và so sánh trước/sau.
+- `components/canvas/`: ghép các Konva layer; render lưới/ảnh nền, heatmap DORI/rủi ro kèm gạch chéo cảnh báo ô khuất tầm tay (`1.0 m`), vật cản, camera/FOV, đo khoảng cách và tooltip PPM.
+- `core/optics.ts`: phân vùng rủi ro, `dualPpmAt()` chia sẻ chung phép cắt 2D cho mặt (`1.6 m`) và tầm tay (`1.0 m`), tính `headOnlyCells`/`headOnlyPct`, DORI và Scorecard.
+- `core/optimizer.ts`: sinh tập ứng viên tường/trần có giới hạn, cache PPM theo profile (`prepareCandidateGroups`), mặc định **`kpi_hybrid`** (Two-Stage KPI-Aware Greedy + Hinge Local Search), chế độ `dualHeight`, và `minimumCamerasForTargets()` giải độc lập theo từng `K`; `greedy`/`hybrid`/vét cạn phục vụ đối chứng.
+- `core/localSolver.ts` và `core/optimizer.worker.ts`: chạy thuật toán đã chọn, giảm camera và đối chứng trên Web Worker.
+- `components/PlanningSettings.tsx`, `NumberField.tsx` & `CameraCountOptimizer.tsx`: chỉnh kích thước phòng/lưới/chiều cao trần, phạm vi lắp (`Tường + trần` / `Chỉ tường` / `Chỉ trần`), bật/tắt **`Chống khuất tầm tay (1.0 m)`** và ngân sách camera `1–20`.
 - `components/three/`: mô hình/POV, nội thất instancing, camera gắn tường/trần, lưới trần
   để nhấp lắp, kéo camera trên mặt phẳng cao độ và bảng thuộc tính 3D.
 - `three/CameraImageEffect.tsx`, `ObservationMaterials.ts` và `cameraVisibility.ts`:
@@ -64,11 +55,9 @@ opticam/
 
 ### Backend
 
-- `main.py`: FastAPI app, validation Pydantic, route, lưu file, xuất BOM/bundle.
-- `greedy_optimizer.py`: phân tích lưới/PPM/frustum 3D, chọn camera Greedy và tìm kiếm
-  thay một camera trong cùng tập ứng viên. `main.py` sinh ứng viên theo phạm vi tường/trần,
-  kiểm tra schema vị trí, kiểu lắp, cao độ và trả diagnostics.
-- `tests/test_api.py`: kiểm tra response API, ma trận, optimizer, BOM và bundle.
+- `main.py`: FastAPI app, validation Pydantic (`algorithm` mặc định `kpi_hybrid`, `dualHeight: bool = False`), route, lưu file, xuất BOM/bundle.
+- `greedy_optimizer.py`: biên dịch trước vật cản/lượng giác, lối tắt đa giác lồi, đánh giá thưa theo ô nhìn thấy, hỗ trợ `greedy`/`hybrid`/`kpi_hybrid` và `dual_height`.
+- `tests/test_api.py`, `test_ceiling_optimizer.py`, `test_retail_layouts.py`: 62 tests kiểm tra API, đối chứng parity TS–Python, trần nhà và 15 mẫu bán lẻ Việt Nam.
 - `storage/layouts/`: mặc định lưu layout qua API; thư mục được tạo khi có request Save.
 
 ## Luồng dữ liệu chính

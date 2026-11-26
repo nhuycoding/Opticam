@@ -17,7 +17,7 @@ describe('populated store layouts', () => {
     expect(normalizeLayout({ ...populated, people: undefined }).people).toBeUndefined();
   });
   it('rejects malformed, duplicate, exterior, and excessive people on import', () => {
-    for (const people of [[null], [{ id: 'P', x: Number.NaN, y: 1 }], [{ id: 'P', x: 11, y: 4 }], [populated.people![0], populated.people![0]], Array.from({ length: 51 }, (_, i) => ({ id: String(i), x: 1, y: 1 }))]) {
+    for (const people of [[null], [{ id: 'P', x: Number.NaN, y: 1 }], [{ id: 'P', x: populated.widthM + 1, y: 4 }], [populated.people![0], populated.people![0]], Array.from({ length: 51 }, (_, i) => ({ id: String(i), x: 1, y: 1 }))]) {
       expect(() => normalizeLayout({ ...populated, people })).toThrow();
     }
   });

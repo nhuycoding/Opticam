@@ -207,18 +207,20 @@ lớn nhất khoảng 2,03%. Thời gian trong CSV là của lần chạy tại 
 phải cam kết trên thiết bị khác. VN 02 và VN 05 có cùng bài toán phân tích vì người chưa
 tham gia hàm mục tiêu. Kết quả không suy rộng thành mức cải thiện cho mọi mặt bằng.
 
-### Giảm số camera theo KPI vùng rủi ro
+### Thuật toán mặc định `kpi_hybrid` & Đánh giá 2 cao độ (`1.6 m` + `1.0 m`)
 
-Lệnh giảm camera tối ưu với ngân sách camera hiện có theo thuật toán/phạm vi đã chọn,
-rồi đánh giá các tiền tố và chọn tiền tố ngắn nhất đạt đồng thời:
+1. **Two-Stage KPI + Local Search (`kpi_hybrid`):** Giai đoạn 1 (`slot < max(1, ceil(0.67 * K))` khi `Red% < 95%`) tối đa hóa số ô Đỏ đạt `>= 250 PPM`; Giai đoạn 2 và tối đa 3 vòng Local Search 1-swap tối ưu `ΔWeighted + ΔHinge` với `λ_Red = 1.5, λ_Yel = 0.75`.
+2. **Đánh giá 2 cao độ (`1.6 m` + `1.0 m`):** `evaluate()` luôn tính thêm `handPpm` tại `min(targetHeight, 1.0 m)` bằng cùng phép cắt XY và đếm ô `headOnly` (`ppm >= 25` ở `1.6 m` nhưng `< 25` ở `1.0 m`). Khi bật `optimization.dualHeight = true`, ô Đỏ cần thêm `handPpm >= 125 PPM`, còn ô Vàng lấy `min(facePpm, handPpm)`.
+3. **Giảm số camera theo KPI vùng rủi ro (`minimumCamerasForTargets`):**
+
+Tái sử dụng một lượt raycast ứng viên duy nhất rồi giải độc lập từng mức `count = 1..M` cho tới khi đạt đồng thời:
 
 ```text
 Đỏ:   tỷ lệ ô có PPM ≥ 250 ≥ 95%
 Vàng: tỷ lệ ô có PPM ≥ 125 ≥ 80%
 ```
 
-Đây là số camera ít nhất trong các tiền tố đã xét, không phải nghiệm tối thiểu toàn cục.
-Nếu phương án đủ ngân sách chưa đạt KPI, giữ phương án đó và báo tỷ lệ thực tế. Cờ
+Nếu phương án đủ ngân sách vẫn chưa đạt KPI, giữ phương án đó và báo tỷ lệ thực tế. Cờ
 `target_coverage_reached` của API tối ưu vị trí lại dùng ngưỡng 95% ô trống đạt Detection;
 không đồng nghĩa đạt KPI Đỏ/Vàng của giao diện.
 

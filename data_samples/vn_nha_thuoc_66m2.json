@@ -1,0 +1,220 @@
+{
+  "version": "1.1",
+  "name": "VN 08 · Nhà thuốc & Dược mỹ phẩm (64 m²)",
+  "widthM": 8,
+  "heightM": 8,
+  "gridM": 0.5,
+  "pixelsPerMeter": 62,
+  "targetHeight": 1.6,
+  "ceilingHeight": 3.0,
+  "description": "Mô hình nhà thuốc hiện đại với quầy tư vấn dài, tủ thuốc kê đơn sát tường, 2 kệ mỹ phẩm 1.45 m và ghế chờ.",
+  "obstacles": [
+    {
+      "id": "entry-1",
+      "type": "entrance",
+      "label": "Cửa kính tự động",
+      "x": 5.2,
+      "y": 0,
+      "w": 1.6,
+      "h": 0.12,
+      "elev": 2.4,
+      "angle": 0,
+      "riskWmax": 5,
+      "riskR0": 0.8,
+      "riskR": 2.0
+    },
+    {
+      "id": "pos-1",
+      "type": "pos",
+      "label": "Quầy dược sĩ & Thu ngân",
+      "x": 0.8,
+      "y": 0.9,
+      "w": 3.2,
+      "h": 0.75,
+      "elev": 1.1,
+      "angle": 0,
+      "fixture": "food-counter",
+      "riskWmax": 5,
+      "riskR0": 0.6,
+      "riskR": 1.8
+    },
+    {
+      "id": "high-1",
+      "type": "shelf",
+      "label": "Tủ thuốc kê đơn",
+      "x": 0.0,
+      "y": 2.2,
+      "w": 0.45,
+      "h": 3.6,
+      "elev": 2.0,
+      "angle": 0,
+      "fixture": "wall-shelf",
+      "riskCategory": "high"
+    },
+    {
+      "id": "high-2",
+      "type": "shelf",
+      "label": "Dược mỹ phẩm",
+      "x": 2.2,
+      "y": 2.8,
+      "w": 0.75,
+      "h": 2.6,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "high"
+    },
+    {
+      "id": "gond-1",
+      "type": "shelf",
+      "label": "Thực phẩm chức năng",
+      "x": 4.6,
+      "y": 2.8,
+      "w": 0.75,
+      "h": 2.6,
+      "elev": 1.45,
+      "angle": 0,
+      "fixture": "gondola",
+      "riskCategory": "standard"
+    },
+    {
+      "id": "wall-1",
+      "type": "shelf",
+      "label": "Tã sữa & Chăm sóc",
+      "x": 7.55,
+      "y": 2.0,
+      "w": 0.45,
+      "h": 4.0,
+      "elev": 1.8,
+      "angle": 0,
+      "fixture": "wall-shelf",
+      "riskCategory": "bulky"
+    },
+    {
+      "id": "fridge-1",
+      "type": "shelf",
+      "label": "Tủ lạnh bảo quản thuốc",
+      "x": 0.8,
+      "y": 7.3,
+      "w": 2.2,
+      "h": 0.7,
+      "elev": 2.0,
+      "angle": 0,
+      "fixture": "fridge",
+      "riskCategory": "high"
+    },
+    {
+      "id": "seat-1",
+      "type": "shelf",
+      "label": "Ghế chờ khách",
+      "x": 4.4,
+      "y": 7.3,
+      "w": 2.4,
+      "h": 0.55,
+      "elev": 0.5,
+      "angle": 0,
+      "fixture": "seating",
+      "riskCategory": "bulky"
+    }
+  ],
+  "optimization": {
+    "algorithm": "kpi_hybrid",
+    "mounts": "mixed"
+  },
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "x": 0.1,
+      "y": 0.1,
+      "pan": 45,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-02",
+      "x": 7.9,
+      "y": 0.1,
+      "pan": 135,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-03",
+      "x": 7.9,
+      "y": 7.9,
+      "pan": 225,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    },
+    {
+      "id": "CAM-04",
+      "x": 0.1,
+      "y": 7.9,
+      "pan": 315,
+      "fov": 85,
+      "res": 2560,
+      "range": 10,
+      "height": 2.4,
+      "tilt": 20,
+      "mount": "wall",
+      "model": "Dome IP 4MP (2560px, ống kính 2.8mm)"
+    }
+  ],
+  "people": [
+    {
+      "id": "PERSON-01",
+      "x": 2.0,
+      "y": 0.45
+    },
+    {
+      "id": "PERSON-02",
+      "x": 2.4,
+      "y": 2.0
+    },
+    {
+      "id": "PERSON-03",
+      "x": 3.8,
+      "y": 4.0
+    },
+    {
+      "id": "PERSON-04",
+      "x": 6.3,
+      "y": 3.6
+    },
+    {
+      "id": "PERSON-05",
+      "x": 5.5,
+      "y": 6.7
+    },
+    {
+      "id": "PERSON-06",
+      "x": 1.4,
+      "y": 4.5
+    },
+    {
+      "id": "PERSON-07",
+      "x": 6.0,
+      "y": 1.3
+    },
+    {
+      "id": "PERSON-08",
+      "x": 1.8,
+      "y": 6.5
+    }
+  ]
+}

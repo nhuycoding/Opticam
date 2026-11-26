@@ -71,6 +71,11 @@ export function Scorecard({ d, preview, view, riskMetrics, onFocusHighUncovered 
               </div>
             ))}
           </div>
+          {(shown.headOnlyCells ?? 0) > 0 && (
+            <p className="head-only-note">
+              Khuất dưới 1.6 m (chỉ thấy đầu): <strong>{shown.headOnlyPct ?? 0}%</strong> vùng nhìn thấy ({shown.headOnlyCells} ô bị che ở tầm tay 1.0 m).
+            </p>
+          )}
           <details className="score-details" open={Boolean(d.before)}><summary>So sánh phương án</summary><div className="scroll-x"><table aria-label="So sánh các chỉ số hiệu quả phương án">
             <thead><tr><th scope="col" aria-label="Chỉ số"></th>{cols.map(([k]) => <th key={k} scope="col">{k}</th>)}</tr></thead>
             <tbody>

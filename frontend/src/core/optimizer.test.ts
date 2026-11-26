@@ -76,4 +76,19 @@ describe('Wall and ceiling placement search', () => {
     expect(minSol.red).toBeGreaterThanOrEqual(95);
     expect(minSol.yellow).toBeGreaterThanOrEqual(80);
   });
+
+  it('flags head-only occlusion behind 1.45m shelves and enforces 1.0m hand visibility in dualHeight mode', () => {
+    const l = withManualCams(PRESETS[0]);
+    const shelf = { id: 'mid-shelf', type: 'shelf' as const, label: 'Kệ 1.45m', x: 3.0, y: 1.5, w: 0.8, h: 3.0, elev: 1.45, angle: 0 };
+    const single = { ...l, obstacles: [l.obstacles[0], shelf], cameras: [{ ...l.cameras[0], x: 0.2, y: 3.0, pan: 0, height: 2.6, tilt: 20 }] };
+    const zones = buildZones(single);
+    const stdEval = evaluate(single, zones);
+    expect(stdEval.score.headOnlyCells).toBeGreaterThan(0);
+    const dualLayout = { ...single, optimization: { algorithm: 'kpi_hybrid' as const, mounts: 'mixed' as const, dualHeight: true } };
+    const dualEval = evaluate(dualLayout, zones);
+    expect(dualEval.score.weighted).toBeLessThan(stdEval.score.weighted);
+    const opt = optimizeCameras(dualLayout, zones, 3, true);
+    expect(opt.cameras).toHaveLength(3);
+    expect(evaluate({ ...dualLayout, cameras: opt.cameras }, zones).score.headOnlyCells).toBeLessThan(stdEval.score.headOnlyCells!);
+  });
 });

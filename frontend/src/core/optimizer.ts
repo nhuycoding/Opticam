@@ -5,7 +5,7 @@ import { snapToWall, distToObs } from './geometry';
 import type { Camera, Layout, OptimizationAlgorithm, Weight, Zone } from '../types';
 import { snapAngle, wallAnchors } from './geometry';
 import {
-  blockerObstacles, DORI_FACTOR, DORI_MIN, doriOf, evaluate, ppmAt,
+  blockerObstacles, DORI_FACTOR, DORI_MIN, doriOf, dualPpmAt, evaluate, FACE_Z, HAND_Z,
   RISK_RED_THRESHOLD, RISK_YELLOW_THRESHOLD, riskBand
 } from './optics';
 
@@ -28,7 +28,7 @@ export const manualFourCorners = (l: Layout): Camera[] => [
 const TARGET = { red: 'Vùng trọng yếu', yellow: 'Vùng ưu tiên', green: 'Lối đi chung' } as const;
 const F = (p: number) => DORI_FACTOR[doriOf(p)];
 
-export interface Candidate { cam: Camera; ppm: Float32Array }
+export interface Candidate { cam: Camera; ppm: Float32Array; handPpm?: Float32Array }
 type Profile = Pick<Camera, 'fov' | 'res' | 'range' | 'height' | 'model' | 'tilt' | 'vfov' | 'ceilingDrop'>;
 export interface CandOpts {
   anchorStep?: number;
@@ -37,6 +37,7 @@ export interface CandOpts {
   cameraProfiles?: Profile[];
   mounts?: 'wall' | 'mixed' | 'ceiling';
   algorithm?: OptimizationAlgorithm;
+  dualHeight?: boolean;
   maxCandidateCells?: number;
   maxCandidates?: number;
   redTarget?: number;
@@ -91,9 +92,22 @@ export function buildCandidates(l: Layout, free: Zone[], opts: CandOpts = {}): C
   // In dense rooms even the corner orientations may exceed the budget. Sample evenly.
   if (poses.length > cap) poses = Array.from({ length: cap }, (_, i) => poses[Math.floor(i * poses.length / cap)]);
   const out: Candidate[] = [];
+  const faceH = l.targetHeight ?? FACE_Z, handH = Math.min(faceH, HAND_Z);
+  const useDual = Boolean((opts.dualHeight ?? l.optimization?.dualHeight) && faceH > HAND_Z + 1e-6);
   for (const cam of poses) {
-    const ppm = Float32Array.from(free, z => ppmAt(cam, z.cx, z.cy, obstacles, l.targetHeight, l.floorPolygon));
-    if (ppm.some(p => p > 0)) out.push({ cam, ppm });
+    if (!useDual) {
+      const ppm = Float32Array.from(free, z => dualPpmAt(cam, z.cx, z.cy, obstacles, faceH, faceH, l.floorPolygon)[0]);
+      if (ppm.some(p => p > 0)) out.push({ cam, ppm });
+    } else {
+      const ppm = new Float32Array(free.length), handPpm = new Float32Array(free.length);
+      let any = false;
+      for (let j = 0; j < free.length; j++) {
+        const [fp, hp] = dualPpmAt(cam, free[j].cx, free[j].cy, obstacles, faceH, handH, l.floorPolygon);
+        ppm[j] = fp; handPpm[j] = hp;
+        if (fp > 0) any = true;
+      }
+      if (any) out.push({ cam, ppm, handPpm });
+    }
   }
   return out;
 }
@@ -134,28 +148,46 @@ function solvePrepared(
   weighted: boolean,
   candidateCount: number,
   redTarget = 95,
-  yellowTarget = 80
+  yellowTarget = 80,
+  dualHeight = false
 ): { cameras: Camera[]; diagnostics: OptimizationDiagnostics } {
   const started = performance.now();
   const isKpi = algorithm === 'kpi_hybrid' && weighted;
+  const useDual = Boolean(dualHeight && weighted && groups.some(g => g.some(c => c.handPpm)));
   const lambdaRed = 1.5, lambdaYel = 0.75;
   const redMask = free.map(z => weighted && z.w >= RISK_RED_THRESHOLD);
   const yelMask = free.map(z => weighted && z.w >= RISK_YELLOW_THRESHOLD && z.w < RISK_RED_THRESHOLD);
   const redN = redMask.filter(Boolean).length, yelN = yelMask.filter(Boolean).length;
   const totalW = weights.reduce((s, w) => s + w, 0);
 
+  const effPpm = (j: number, faceP: number, handP: number) => {
+    if (!useDual) return faceP;
+    if (redMask[j]) return handP >= DORI_MIN.recognition ? faceP : Math.min(faceP, DORI_MIN.recognition - 1);
+    if (yelMask[j]) return Math.min(faceP, handP);
+    return faceP;
+  };
+
   const selected: Array<{ candidate: Candidate; slot: number }> = [];
   const objective = (ppm: Float32Array) => { let score = 0; for (let j = 0; j < ppm.length; j++) score += weights[j] * F(ppm[j]); return score; };
   const merge = (except = -1) => {
-    const result = new Float32Array(free.length);
-    selected.forEach(({ candidate }, i) => { if (i !== except) for (let j = 0; j < result.length; j++) result[j] = Math.max(result[j], candidate.ppm[j]); });
-    return result;
+    const face = new Float32Array(free.length);
+    const hand = useDual ? new Float32Array(free.length) : undefined;
+    selected.forEach(({ candidate }, i) => {
+      if (i !== except) for (let j = 0; j < face.length; j++) {
+        face[j] = Math.max(face[j], candidate.ppm[j]);
+        if (hand && candidate.handPpm) hand[j] = Math.max(hand[j], candidate.handPpm[j]);
+      }
+    });
+    if (!hand) return { base: face, baseEff: face, baseHand: undefined };
+    const baseEff = new Float32Array(free.length);
+    for (let j = 0; j < face.length; j++) baseEff[j] = effPpm(j, face[j], hand[j]);
+    return { base: face, baseEff, baseHand: hand };
   };
-  const baseKpiStats = (base: Float32Array) => {
+  const baseKpiStats = (baseEff: Float32Array) => {
     let redOk = 0, yelOk = 0;
-    for (let j = 0; j < base.length; j++) {
-      if (redMask[j] && base[j] >= DORI_MIN.identification) redOk++;
-      if (yelMask[j] && base[j] >= DORI_MIN.recognition) yelOk++;
+    for (let j = 0; j < baseEff.length; j++) {
+      if (redMask[j] && baseEff[j] >= DORI_MIN.identification) redOk++;
+      if (yelMask[j] && baseEff[j] >= DORI_MIN.recognition) yelOk++;
     }
     const redPct = redN ? (100 * redOk) / redN : 100;
     const yelPct = yelN ? (100 * yelOk) / yelN : 100;
@@ -163,16 +195,18 @@ function solvePrepared(
     return { redOk, yelOk, redPct, hinge };
   };
   // Lexicographic scoring: DORI (plus Stage-1 Red / hinge for kpi_hybrid) first, nominal PPM only breaks ties.
-  const addition = (base: Float32Array, candidate: Candidate, stage1Red = false, stats?: ReturnType<typeof baseKpiStats>): [number, number] => {
+  const addition = (state: ReturnType<typeof merge>, candidate: Candidate, stage1Red = false, stats?: ReturnType<typeof baseKpiStats>): [number, number] => {
+    const { base, baseEff, baseHand } = state;
     let deltaW = 0, tie = 0, addRed = 0, addYel = 0;
     for (let j = 0; j < base.length; j++) {
-      const p = candidate.ppm[j];
-      if (p > base[j]) {
-        deltaW += weights[j] * (F(p) - F(base[j]));
-        tie += weights[j] * (Math.min(p, 250) - Math.min(base[j], 250));
+      const fNew = Math.max(base[j], candidate.ppm[j]);
+      const p = useDual ? effPpm(j, fNew, Math.max(baseHand![j], candidate.handPpm ? candidate.handPpm[j] : 0)) : fNew;
+      if (p > baseEff[j]) {
+        deltaW += weights[j] * (F(p) - F(baseEff[j]));
+        tie += weights[j] * (Math.min(p, 250) - Math.min(baseEff[j], 250));
         if (isKpi) {
-          if (redMask[j] && base[j] < DORI_MIN.identification && p >= DORI_MIN.identification) addRed++;
-          if (yelMask[j] && base[j] < DORI_MIN.recognition && p >= DORI_MIN.recognition) addYel++;
+          if (redMask[j] && baseEff[j] < DORI_MIN.identification && p >= DORI_MIN.identification) addRed++;
+          if (yelMask[j] && baseEff[j] < DORI_MIN.recognition && p >= DORI_MIN.recognition) addYel++;
         }
       }
     }
@@ -186,29 +220,29 @@ function solvePrepared(
 
   const maxRedSlots = Math.max(1, Math.ceil(0.67 * K));
   for (let slot = 0; slot < K; slot++) {
-    const base = merge(), used = new Set(selected.map(s => poseKey(s.candidate.cam)));
-    const stats = isKpi ? baseKpiStats(base) : undefined;
+    const state = merge(), used = new Set(selected.map(s => poseKey(s.candidate.cam)));
+    const stats = isKpi ? baseKpiStats(state.baseEff) : undefined;
     const stage1Red = Boolean(isKpi && redN > 0 && slot < maxRedSlots && stats!.redPct < redTarget);
     let best: Candidate | undefined, bestScore = -1, bestTie = -1;
     for (const candidate of groups[slot]) {
       if (used.has(poseKey(candidate.cam))) continue;
-      const [score, tie] = addition(base, candidate, stage1Red, stats);
+      const [score, tie] = addition(state, candidate, stage1Red, stats);
       if (score > bestScore + 1e-9 || (Math.abs(score - bestScore) <= 1e-9 && tie > bestTie + 1e-9)) { best = candidate; bestScore = score; bestTie = tie; }
     }
     if (best) selected.push({ candidate: best, slot });
   }
-  const greedyScore = objective(merge());
+  const greedyScore = objective(merge().baseEff);
   let iterations = 0;
   if (algorithm === 'hybrid' || algorithm === 'kpi_hybrid') for (let pass = 0; pass < 3; pass++) {
     let improved = false;
     for (let index = 0; index < selected.length; index++) {
-      const base = merge(index), used = new Set(selected.filter((_, i) => i !== index).map(s => poseKey(s.candidate.cam)));
-      const stats = isKpi ? baseKpiStats(base) : undefined;
-      const old = selected[index], [oldGain, oldTie] = addition(base, old.candidate, false, stats);
+      const state = merge(index), used = new Set(selected.filter((_, i) => i !== index).map(s => poseKey(s.candidate.cam)));
+      const stats = isKpi ? baseKpiStats(state.baseEff) : undefined;
+      const old = selected[index], [oldGain, oldTie] = addition(state, old.candidate, false, stats);
       let best = old.candidate, bestGain = oldGain, bestTie = oldTie;
       for (const candidate of groups[old.slot]) {
         if (used.has(poseKey(candidate.cam))) continue;
-        const [gain, tie] = addition(base, candidate, false, stats);
+        const [gain, tie] = addition(state, candidate, false, stats);
         if (gain > bestGain + 1e-9 || (Math.abs(gain - bestGain) <= 1e-9 && tie > bestTie + 1e-9)) { best = candidate; bestGain = gain; bestTie = tie; }
       }
       if (bestGain > oldGain + 1e-9) { selected[index] = { ...old, candidate: best }; improved = true; iterations++; }
@@ -217,18 +251,19 @@ function solvePrepared(
   }
   const cameras = selected.map(({ candidate }, i) => {
     let top = 1, gain = -1;
-    free.forEach((z, j) => { const s = weights[j] * F(candidate.ppm[j]); if (s > gain) { gain = s; top = z.w; } });
+    free.forEach((z, j) => { const s = weights[j] * F(effPpm(j, candidate.ppm[j], candidate.handPpm ? candidate.handPpm[j] : 0)); if (s > gain) { gain = s; top = z.w; } });
     return { ...candidate.cam, id: `CAM-${String(i + 1).padStart(2, '0')}`, target: TARGET[riskBand(top)] };
   });
-  return { cameras, diagnostics: { algorithm, greedyScore, finalScore: objective(merge()), iterations, candidateCount, ms: performance.now() - started } };
+  return { cameras, diagnostics: { algorithm, greedyScore, finalScore: objective(merge().baseEff), iterations, candidateCount, ms: performance.now() - started } };
 }
 
 export function optimizeCameras(l: Layout, zones: Zone[], K = 3, weighted = true, opts: CandOpts = {}): { cameras: Camera[]; diagnostics: OptimizationDiagnostics } {
   if (!Number.isInteger(K) || K < 0 || K > 20) throw new Error('Ngân sách camera phải là số nguyên từ 0 đến 20.');
   const started = performance.now(), algorithm = opts.algorithm ?? l.optimization?.algorithm ?? 'kpi_hybrid';
+  const dualHeight = opts.dualHeight ?? l.optimization?.dualHeight ?? false;
   const free = zones.filter(z => !z.solid), weights = free.map(z => weighted ? z.w : 1);
-  const { groups, candidateCount } = prepareCandidateGroups(l, free, K, opts);
-  const result = solvePrepared(free, weights, groups, K, algorithm, weighted, candidateCount, opts.redTarget ?? 95, opts.yellowTarget ?? 80);
+  const { groups, candidateCount } = prepareCandidateGroups(l, free, K, { ...opts, dualHeight });
+  const result = solvePrepared(free, weights, groups, K, algorithm, weighted, candidateCount, opts.redTarget ?? 95, opts.yellowTarget ?? 80, dualHeight);
   return { ...result, diagnostics: { ...result.diagnostics, ms: performance.now() - started } };
 }
 
@@ -246,13 +281,14 @@ export function minimumCamerasForTargets(l: Layout, zones: Zone[], cameraProfile
   const free = zones.filter(z => !z.solid), weights = free.map(z => z.w);
   const maxK = cameraProfiles.length;
   const minAlg: OptimizationAlgorithm = opts.algorithm ?? (l.optimization?.algorithm === 'greedy' ? 'greedy' : 'kpi_hybrid');
-  const { groups, candidateCount } = prepareCandidateGroups(l, free, maxK, { ...opts, cameraProfiles });
+  const dualHeight = opts.dualHeight ?? l.optimization?.dualHeight ?? false;
+  const { groups, candidateCount } = prepareCandidateGroups(l, free, maxK, { ...opts, cameraProfiles, dualHeight });
 
-  let fallbackResult = solvePrepared(free, weights, groups, 0, minAlg, true, candidateCount, redTarget, yellowTarget);
+  let fallbackResult = solvePrepared(free, weights, groups, 0, minAlg, true, candidateCount, redTarget, yellowTarget, dualHeight);
   let fallbackScore = evaluate({ ...l, cameras: fallbackResult.cameras }, zones).score;
 
   for (let count = 1; count <= maxK; count++) {
-    const stepResult = solvePrepared(free, weights, groups.slice(0, count), count, minAlg, true, candidateCount, redTarget, yellowTarget);
+    const stepResult = solvePrepared(free, weights, groups.slice(0, count), count, minAlg, true, candidateCount, redTarget, yellowTarget, dualHeight);
     const score = evaluate({ ...l, cameras: stepResult.cameras }, zones).score;
     fallbackResult = stepResult;
     fallbackScore = score;

@@ -110,6 +110,11 @@ describe('Studio workflow', () => {
   it('loads a populated template and supports moving people in 3D with undo', async () => {
     const index = PRESETS.findIndex(preset => preset.people?.length);
     act(() => renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' }).props.onChange({ target: { value: String(index) } }));
+    expect(renderer.root.findByProps({ role: 'dialog' })).toBeDefined();
+    await click('Hủy');
+    expect(canvas().people).toEqual([]);
+    act(() => renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' }).props.onChange({ target: { value: String(index) } }));
+    await click('Đổi mặt bằng');
     expect(canvas().people).toEqual(PRESETS[index].people);
     await click('3D');
     const scene = renderer.root.findByType(Store3D).props;
@@ -235,10 +240,11 @@ describe('Studio workflow', () => {
     expect(renderer.root.findAllByProps({ 'aria-label': 'So sánh trước và sau tối ưu' })).toHaveLength(0);
   });
 
-  it('loads every new retail template with its installation cameras and budget', () => {
+  it('loads every new retail template with its installation cameras and budget', async () => {
     for (let index=3; index<PRESETS.length; index++) {
       const picker=renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' });
       act(() => picker.props.onChange({ target: { value: String(index) } }));
+      await click('Đổi mặt bằng');
       expect(canvas().layout.cameras).toEqual(PRESETS[index].cameras);
       expect(canvas().layout.floorPolygon).toEqual(PRESETS[index].floorPolygon);
         expect(renderer.root.findByProps({ 'aria-label': 'Số camera tùy chỉnh' }).props.value).toBe(String(PRESETS[index].cameras.length));

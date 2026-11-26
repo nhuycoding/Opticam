@@ -66,36 +66,34 @@ npm.cmd run experiments
 
 ## Tài liệu
 
-- [Hướng dẫn người dùng](docs/USER_GUIDE.md) — công cụ trên Canvas, chỉnh camera, xuất dữ liệu.
+- [Tổng quan toàn dự án (Project Overview)](PROJECT_OVERVIEW.md) — kiến trúc, thuật toán `kpi_hybrid` + 2 cao độ `1.6 m / 1.0 m`, 18 mặt bằng và bằng chứng thực nghiệm.
+- [Tài liệu trích dẫn (References)](REFERENCES.md) — chuẩn IEC 62676-4 và danh mục bài báo khoa học đối chứng.
+- [Hướng dẫn người dùng](docs/USER_GUIDE.md) — quy trình 2 bước (`Mặt bằng` → `Kết quả`), 18 mẫu cửa hàng, cảnh báo khuất 1.0 m và xuất dữ liệu.
 - [Kiến trúc dự án](docs/ARCHITECTURE.md) — cấu trúc file và luồng frontend/backend.
-- [Mô hình và công thức](docs/FORMULAS.md) — PPM, DORI, vùng rủi ro, mục tiêu Greedy và BOM.
-- [Hợp đồng API](docs/API_CONTRACT.md) — endpoint, schema, giới hạn và trạng thái tích hợp.
-- [Nghiên cứu và kết quả](docs/RESEARCH.md) — thiết kế thí nghiệm, số liệu và giới hạn nghiên cứu.
+- [Mô hình và công thức](docs/FORMULAS.md) — PPM, DORI, kiểm tra 2 cao độ (`1.6 m + 1.0 m`), vùng rủi ro, `kpi_hybrid` và BOM.
+- [Hợp đồng API](docs/API_CONTRACT.md) — endpoint, schema (`algorithm`, `dualHeight`), giới hạn và trạng thái tích hợp.
+- [Nghiên cứu & Đánh giá khoa học (2026-11-26)](paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md) — thí nghiệm Phase 1–4, MILP bounds và đối chứng `N = 50` cửa hàng.
+- [Tóm tắt trình bày (Khách hàng / Giảng viên)](paper_evaluation_2026-11-26/PRESENTATION_ABSTRACT.md) — bản giải thích [cho khách hàng](paper_evaluation_2026-11-26/ABSTRACT_CUSTOMER.md) và [cho giảng viên hướng dẫn](paper_evaluation_2026-11-26/ABSTRACT_PROFESSOR.md).
 
 ## Cấu trúc cấp cao
 
 ```text
-backend/       FastAPI, optimizer, API tests, cấu hình dependencies
-data_samples/  Tám layout JSON mẫu, gồm cửa hàng Việt Nam và mẫu có người
-docs/          Tài liệu người dùng, kiến trúc, công thức, API, nghiên cứu
-frontend/      React/Konva, Three.js, thuật toán client, unit tests, experiments
-legacy_pygame/ Prototype Pygame cũ, chỉ để tham khảo
-results/       CSV và báo cáo do experiments sinh ra
-scripts/       Công cụ tạo lại layout mẫu
+backend/                    FastAPI, Two-Stage kpi_hybrid optimizer, 62 API/retail tests
+data_samples/               18 layout JSON mẫu (3 quốc tế + VN 01..VN 15 có người tĩnh)
+docs/                       Tài liệu người dùng, kiến trúc, công thức, API, nghiên cứu
+frontend/                   React/Konva 2.5D, Three.js 3D/POV, 255 unit/UI tests, experiments
+legacy_pygame/              Prototype Pygame cũ, chỉ để tham khảo
+paper_evaluation_2026-11-26/ Bộ thí nghiệm đánh giá khoa học Phase 1–4, MILP và báo cáo
+results/                    CSV và báo cáo do experiments sinh ra
+scripts/                    Công cụ tạo lại layout mẫu
 ```
 
 ## Trạng thái và giới hạn
 
-- Frontend có Canvas 2.5D, mô hình 3D/POV, camera gắn tường hoặc trần, heatmap DORI/rủi ro,
-  Greedy và Greedy + Local Search chạy trên Web Worker, BOM CSV và dự án JSON.
-- Backend có API tối ưu Greedy/Hybrid, lưu/nạp layout, xuất BOM JSON/CSV/XLSX và project bundle.
-  Các endpoint lưu/nạp và xuất báo cáo backend hiện chưa có nút gọi trực tiếp trên UI.
-- Phân tích lấy mẫu trên mặt phẳng tại độ cao mục tiêu, dùng góc nhìn và đường ngắm 3D
-  có xét pan, tilt, FOV ngang/dọc, tầm xa và chiều cao vật cản. Chưa tính méo ống kính,
-  ánh sáng, nén video, hướng mặt hoặc chuyển động. Người tĩnh che khuất trong hình 3D;
-  chưa tham gia phép tính heatmap/KPI và hàm mục tiêu tối ưu.
-- Kết quả nghiên cứu và các giả định định lượng được ghi trong [docs/RESEARCH.md](docs/RESEARCH.md);
-  không xem tỷ lệ phủ mô phỏng là bảo đảm nhận diện thực tế.
+- **Quy trình 2 bước (`Mặt bằng` → `Kết quả`):** hỗ trợ 18 mặt bằng cửa hàng Việt Nam & quốc tế có người tĩnh, Canvas 2.5D, 3D/POV, camera tường/trần, hộp thoại xác nhận trong ứng dụng khi đổi layout, lớp phủ DORI/rủi ro, và **cảnh báo khuất tầm thấp (`1.0 m`)** dạng gạch chéo vàng cam trên ô chỉ thấy mặt `1.6 m`.
+- **Thuật toán mặc định `kpi_hybrid` (Two-Stage KPI + Local Search) & Tìm số camera tối thiểu theo từng `K`:** chạy đồng nhất trên cả Web Worker TypeScript (`Float32Array`) và FastAPI Python (`dualHeight` tùy chọn chia sẻ cùng phép cắt XY 2D), xuất BOM CSV và bundle JSON.
+- **Giới hạn quang học:** chưa mô phỏng méo ống kính, ánh sáng yếu/ngược sáng, nén video, hướng mặt hay người di chuyển; người tĩnh che khuất trong atlas 3D nhưng chưa làm vật cản trong hàm mục tiêu 2D.
+- Kết quả nghiên cứu và giới hạn được ghi trong [docs/RESEARCH.md](docs/RESEARCH.md) và [paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md](paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md).
 
 ## Chế độ 2.5D và 3D
 

@@ -136,6 +136,7 @@ class RiskStroke(FiniteModel):
 class OptimizationSettings(FiniteModel):
     algorithm: Literal["greedy", "hybrid", "kpi_hybrid"] = "kpi_hybrid"
     mounts: Literal["wall", "mixed", "ceiling"] = "mixed"
+    dualHeight: bool = False
 
 
 class LayoutData(FiniteModel):
@@ -329,6 +330,7 @@ def optimize_layout(request: OptimizeRequest) -> dict[str, Any]:
     selected, coverage = optimizer.run_greedy(
         candidate_groups[0] if candidate_groups else [], cells, request.cameraBudgetK,
         camera_candidate_groups=candidate_groups, algorithm=layout.optimization.algorithm,
+        dual_height=layout.optimization.dualHeight,
     )
     diagnostics = {**coverage["diagnostics"], "ms": (time.perf_counter() - started) * 1000}
     cameras = [

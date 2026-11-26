@@ -132,7 +132,8 @@ export function normalizeLayout(raw: any): Layout {
     ceilingHeight,
     optimization: {
       algorithm: L.optimization?.algorithm === 'greedy' ? 'greedy' : L.optimization?.algorithm === 'hybrid' ? 'hybrid' : 'kpi_hybrid',
-      mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed'
+      mounts: ['wall', 'ceiling'].includes(L.optimization?.mounts) ? L.optimization.mounts : 'mixed',
+      ...(L.optimization?.dualHeight ? { dualHeight: true } : {})
     },
     ...(people.length ? { people } : {}),
     description: typeof L.description === 'string' ? L.description : undefined,

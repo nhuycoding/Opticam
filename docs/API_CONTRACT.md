@@ -24,7 +24,7 @@ locally in the browser.
   "gridM": 0.5,
   "targetHeight": 1.6,
   "ceilingHeight": 3.2,
-  "optimization": { "algorithm": "hybrid", "mounts": "mixed" },
+  "optimization": { "algorithm": "kpi_hybrid", "mounts": "mixed", "dualHeight": false },
   "obstacles": [
     { "id": "shelf-1", "type": "shelf", "x": 3, "y": 2, "w": 2, "h": 0.6, "elev": 1.8, "angle": 0, "riskCategory": "standard", "riskWmax": 3, "riskR0": 1, "riskR": 2 }
   ],
@@ -46,8 +46,9 @@ wall. `ceilingHeight` defaults to 3.2 m and accepts 2.4–6 m. `ceilingDrop` def
 0.15 m and accepts 0.15–1 m. Ceiling camera height is normalized to ceiling height minus
 drop, retaining at least 1.8 m above the floor. Wall height is capped at ceiling height
 minus 0.3 m. Ceiling cameras require clearance inside the footprint and from tall fixtures.
-`optimization.algorithm` is `greedy|hybrid` (default hybrid); `optimization.mounts` is
-`wall|mixed|ceiling` (default mixed). Layout/project save, load and export retain these fields.
+`optimization.algorithm` is `greedy|hybrid|kpi_hybrid` (default `kpi_hybrid`); `optimization.mounts` is
+`wall|mixed|ceiling` (default `mixed`); optional `optimization.dualHeight` (`boolean`, default `false`)
+enforces 1.0 m hand-level visibility (`>= 125 PPM`) on Red/Yellow zones in addition to 1.6 m face ID. Layout/project save, load and export retain these fields.
 `targetHeight` is the person point used by coverage calculations in meters: face `1.6`,
 chest `1.2`, or waist `0.9`; omitted values default to face height.
 Obstacle risk profiles accept `riskWmax` (1–5), `riskR0` (meters), and `riskR` (meters,
@@ -84,7 +85,7 @@ the matrices using `buildZones()`; blocked cells are excluded from coverage calc
   "layout": {
     "version": "1.0", "name": "Demo", "widthM": 10, "heightM": 6, "gridM": 0.5,
     "ceilingHeight": 3.2,
-    "optimization": { "algorithm": "hybrid", "mounts": "mixed" },
+    "optimization": { "algorithm": "kpi_hybrid", "mounts": "mixed", "dualHeight": false },
     "obstacles": [],
     "risk": {},
     "riskStrokes": [],

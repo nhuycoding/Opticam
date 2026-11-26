@@ -285,7 +285,7 @@ class OptiCamGreedy:
     def run_greedy(
         self, camera_candidates, grid_points, camera_budget, target_coverage=0.95,
         camera_candidate_groups=None, algorithm="greedy",
-        red_target=95.0, yellow_target=80.0, lambda_red=1.5, lambda_yel=0.75,
+        red_target=95.0, yellow_target=80.0, lambda_red=1.5, lambda_yel=0.75, dual_height=False,
     ):
         """Greedy, hybrid local search, and Two-Stage KPI-aware hybrid search on the shared candidate pool."""
         started = time.perf_counter()
@@ -299,15 +299,172 @@ class OptiCamGreedy:
         yel_n = sum(1 for m in yel_mask if m)
         total_w = sum(weights)
 
+        def _compile_obstacles():
+            compiled = []
+            for obs in self.obstacles:
+                if _value(obs, "type", "shelf") == "entrance":
+                    continue
+                elev = float(_value(obs, "elev", _value(obs, "height", 1.8)))
+                if elev <= 0:
+                    continue
+                rect = _obstacle_rect(obs)
+                if rect is None:
+                    continue
+                ox, oy, ow, oh, angle_deg = rect
+                ang = math.radians(-angle_deg)
+                compiled.append((ox + ow / 2, oy + oh / 2, ow / 2, oh / 2, math.cos(ang), math.sin(ang), elev))
+            return compiled
+
+        compiled_obs = _compile_obstacles()
+        pts_xy = [(x, y) for x, y, _ in grid_points]
+        fp = self.floor_polygon
+        fp_is_convex = False
+        if fp and len(fp) >= 3:
+            sign = 0
+            convex = True
+            n_fp = len(fp)
+            for idx_fp in range(n_fp):
+                ax, ay = fp[idx_fp]
+                bx, by = fp[(idx_fp + 1) % n_fp]
+                cx, cy = fp[(idx_fp + 2) % n_fp]
+                cross = (bx - ax) * (cy - by) - (by - ay) * (cx - bx)
+                if abs(cross) > 1e-9:
+                    s = 1 if cross > 0 else -1
+                    if sign == 0:
+                        sign = s
+                    elif sign != s:
+                        convex = False
+                        break
+            fp_is_convex = convex and all(point_in_floor(pt, fp) for pt in pts_xy)
+        th = self.target_height
+        hand_h = min(th, 1.0)
+        use_dual = bool(dual_height and th > 1.0 + 1e-6)
+
+        def _eff_ppm(j, face_p, hand_p):
+            if not use_dual:
+                return face_p
+            if red_mask[j]:
+                return face_p if hand_p >= REC_PPM else min(face_p, REC_PPM - 1.0)
+            if yel_mask[j]:
+                return min(face_p, hand_p)
+            return face_p
+
+        def _raycast_candidate(camera):
+            cx_cam, cy_cam, ch = camera["x"], camera["y"], camera["height"]
+            origin = (cx_cam, cy_cam)
+            if fp_is_convex and not point_in_floor(origin, fp):
+                return None
+            rng = camera["range"]
+            rng_sq = rng * rng
+            dz = th - ch
+            dz_sq = dz * dz
+            dz_h = hand_h - ch
+            dz_h_sq = dz_h * dz_h
+            pan = math.radians(camera["pan"])
+            tilt = math.radians(camera.get("tilt", 45 if camera.get("mount") == "ceiling" else 20))
+            cp, sp = math.cos(pan), math.sin(pan)
+            ct, st = math.cos(tilt), math.sin(tilt)
+            tan_h = math.tan(math.radians(camera["fov"] / 2))
+            vfov = camera.get("vfov") or math.degrees(2 * math.atan(tan_h / (16 / 9)))
+            tan_v = math.tan(math.radians(vfov / 2))
+            scale = camera["res"] / (2.0 * tan_h)
+            ppm_list = [0.0] * count
+            hand_list = [0.0] * count if use_dual else None
+            for j, (px, py) in enumerate(pts_xy):
+                dx = px - cx_cam
+                dy = py - cy_cam
+                d_xy2 = dx * dx + dy * dy
+                dist_sq = d_xy2 + dz_sq
+                dist_h_sq = d_xy2 + dz_h_sq
+                ok_f = 0.0009 <= dist_sq <= rng_sq
+                ok_h = use_dual and 0.0009 <= dist_h_sq <= rng_sq
+                if not ok_f and not ok_h:
+                    continue
+                along = dx * cp + dy * sp
+                right = -dx * sp + dy * cp
+                if ok_f:
+                    forward = along * ct - dz * st
+                    up = along * st + dz * ct
+                    ok_f = forward > 0.0 and abs(right) <= forward * tan_h + 1e-9 and abs(up) <= forward * tan_v + 1e-9
+                if ok_h:
+                    forward_h = along * ct - dz_h * st
+                    up_h = along * st + dz_h * ct
+                    ok_h = forward_h > 0.0 and abs(right) <= forward_h * tan_h + 1e-9 and abs(up_h) <= forward_h * tan_v + 1e-9
+                if not ok_f and not ok_h:
+                    continue
+                if fp and not fp_is_convex and not segment_in_floor(origin, (px, py), fp):
+                    continue
+                for ocx, ocy, ohw, ohh, oca, osa, oelev in compiled_obs:
+                    odx0, ody0 = cx_cam - ocx, cy_cam - ocy
+                    odx1, ody1 = px - ocx, py - ocy
+                    x0 = odx0 * oca - ody0 * osa
+                    y0 = odx0 * osa + ody0 * oca
+                    x1 = odx1 * oca - ody1 * osa
+                    y1 = odx1 * osa + ody1 * oca
+                    t_min, t_max = 0.0, 1.0
+                    ddx, ddy = x1 - x0, y1 - y0
+                    if abs(ddx) < 1e-12:
+                        if x0 < -ohw or x0 > ohw:
+                            continue
+                    else:
+                        n = (-ohw - x0) / ddx
+                        f = (ohw - x0) / ddx
+                        if n > f:
+                            n, f = f, n
+                        if n > t_min:
+                            t_min = n
+                        if f < t_max:
+                            t_max = f
+                        if t_min > t_max:
+                            continue
+                    if abs(ddy) < 1e-12:
+                        if y0 < -ohh or y0 > ohh:
+                            continue
+                    else:
+                        n = (-ohh - y0) / ddy
+                        f = (ohh - y0) / ddy
+                        if n > f:
+                            n, f = f, n
+                        if n > t_min:
+                            t_min = n
+                        if f < t_max:
+                            t_max = f
+                        if t_min > t_max:
+                            continue
+                    if ok_f:
+                        hf0, hf1 = ch + dz * t_min, ch + dz * t_max
+                        if (hf0 if hf0 < hf1 else hf1) <= oelev + 1e-9:
+                            ok_f = False
+                    if ok_h:
+                        hh0, hh1 = ch + dz_h * t_min, ch + dz_h * t_max
+                        if (hh0 if hh0 < hh1 else hh1) <= oelev + 1e-9:
+                            ok_h = False
+                    if not ok_f and not ok_h:
+                        break
+                if ok_f:
+                    ppm_list[j] = scale / math.sqrt(dist_sq)
+                if ok_h:
+                    hand_list[j] = scale / math.sqrt(dist_h_sq)
+            ppm = array('f', ppm_list)
+            if not any(ppm):
+                return None
+            if not use_dual:
+                nz = tuple((j, p, dori_factor(p), p if p < ID_PPM else ID_PPM) for j, p in enumerate(ppm) if p > 0.0)
+                return (camera, ppm, nz, None)
+            hand_arr = array('f', hand_list)
+            nz = tuple((j, p, dori_factor(p), p if p < ID_PPM else ID_PPM) for j, p in enumerate(ppm) if p > 0.0)
+            nz_h = tuple((j, hp) for j, hp in enumerate(hand_arr) if hp > 0.0)
+            return (camera, ppm, nz, nz_h)
+
         cache = {}
         candidate_groups = []
         for group in groups:
             if id(group) not in cache:
                 candidates = []
                 for camera in group:
-                    ppm = array('f', (camera_ppm(camera, (x, y), self.obstacles, self.target_height, self.floor_polygon) for x, y, _ in grid_points))
-                    if any(ppm):
-                        candidates.append((camera, ppm))
+                    item = _raycast_candidate(camera)
+                    if item is not None:
+                        candidates.append(item)
                 cache[id(group)] = candidates
             candidate_groups.append(cache[id(group)])
 
@@ -316,33 +473,71 @@ class OptiCamGreedy:
 
         selected = []
 
-        def merge(except_index=-1):
-            result = [0.0] * count
+        def merge_state(except_index=-1):
+            face = [0.0] * count
+            hand = [0.0] * count if use_dual else None
             for i, (candidate, _) in enumerate(selected):
                 if i != except_index:
-                    result = [max(a, b) for a, b in zip(result, candidate[1])]
-            return result
+                    for j, p, _, _ in candidate[2]:
+                        if p > face[j]:
+                            face[j] = p
+                    if use_dual and candidate[3]:
+                        for j, hp in candidate[3]:
+                            if hp > hand[j]:
+                                hand[j] = hp
+            if not use_dual:
+                return face, face, None
+            eff = [_eff_ppm(j, face[j], hand[j]) for j in range(count)]
+            return eff, face, hand
 
-        def base_kpi_stats(base):
-            red_ok = sum(1 for rm, p in zip(red_mask, base) if rm and p >= ID_PPM)
-            yel_ok = sum(1 for ym, p in zip(yel_mask, base) if ym and p >= REC_PPM)
+        def base_kpi_stats(base_eff):
+            red_ok = sum(1 for rm, p in zip(red_mask, base_eff) if rm and p >= ID_PPM)
+            yel_ok = sum(1 for ym, p in zip(yel_mask, base_eff) if ym and p >= REC_PPM)
             red_pct = (100.0 * red_ok / red_n) if red_n else 100.0
             yel_pct = (100.0 * yel_ok / yel_n) if yel_n else 100.0
             hinge = total_w * 0.01 * (lambda_red * max(0.0, red_target - red_pct) + lambda_yel * max(0.0, yellow_target - yel_pct))
             return red_ok, yel_ok, red_pct, hinge
 
-        def addition(base, candidate, stage1_red=False, stats=None):
+        def addition(base_eff, base_face, base_hand, base_f, base_t, candidate, stage1_red=False, stats=None):
             delta_w = tie = 0.0
             add_red = add_yel = 0
-            for old, new, w, rm, ym in zip(base, candidate[1], weights, red_mask, yel_mask):
-                if new > old:
-                    delta_w += w * (dori_factor(new) - dori_factor(old))
-                    tie += w * (min(new, ID_PPM) - min(old, ID_PPM))
-                    if is_kpi:
-                        if rm and old < ID_PPM <= new:
-                            add_red += 1
-                        if ym and old < REC_PPM <= new:
-                            add_yel += 1
+            if not use_dual:
+                for j, new, new_f, new_t in candidate[2]:
+                    old = base_eff[j]
+                    if new > old:
+                        w = weights[j]
+                        delta_w += w * (new_f - base_f[j])
+                        tie += w * (new_t - base_t[j])
+                        if is_kpi:
+                            if red_mask[j] and old < ID_PPM <= new:
+                                add_red += 1
+                            if yel_mask[j] and old < REC_PPM <= new:
+                                add_yel += 1
+            else:
+                touched = {j: (p, base_hand[j]) for j, p, _, _ in candidate[2]}
+                if candidate[3]:
+                    for j, hp in candidate[3]:
+                        prev = touched.get(j)
+                        if prev is not None:
+                            if hp > prev[1]:
+                                touched[j] = (prev[0], hp)
+                        else:
+                            touched[j] = (base_face[j], hp)
+                for j, (fp_cand, hp_cand) in touched.items():
+                    fp = fp_cand if fp_cand > base_face[j] else base_face[j]
+                    hp = hp_cand if hp_cand > base_hand[j] else base_hand[j]
+                    new = _eff_ppm(j, fp, hp)
+                    old = base_eff[j]
+                    if new > old:
+                        w = weights[j]
+                        delta_w += w * (dori_factor(new) - base_f[j])
+                        new_t = new if new < ID_PPM else ID_PPM
+                        tie += w * (new_t - base_t[j])
+                        if is_kpi:
+                            if red_mask[j] and old < ID_PPM <= new:
+                                add_red += 1
+                            if yel_mask[j] and old < REC_PPM <= new:
+                                add_yel += 1
             if not is_kpi or stats is None:
                 return delta_w, tie
             if stage1_red:
@@ -359,15 +554,17 @@ class OptiCamGreedy:
         max_red_slots = max(1, math.ceil(0.67 * camera_budget))
         for slot in range(camera_budget):
             group = candidate_groups[min(slot, len(candidate_groups) - 1)]
-            base = merge()
+            base_eff, base_face, base_hand = merge_state()
+            base_f = [dori_factor(p) for p in base_eff]
+            base_t = [p if p < ID_PPM else ID_PPM for p in base_eff]
             used = {pose(candidate[0]) for candidate, _ in selected}
-            stats = base_kpi_stats(base) if is_kpi else None
+            stats = base_kpi_stats(base_eff) if is_kpi else None
             stage1_red = bool(is_kpi and red_n > 0 and slot < max_red_slots and stats[2] < red_target)
             best, best_score, best_tie = None, -1.0, -1.0
             for candidate in group:
                 if pose(candidate[0]) in used:
                     continue
-                score, tie = addition(base, candidate, stage1_red, stats)
+                score, tie = addition(base_eff, base_face, base_hand, base_f, base_t, candidate, stage1_red, stats)
                 if better(score, tie, best_score, best_tie):
                     best, best_score, best_tie = candidate, score, tie
             if best is not None:
@@ -376,21 +573,23 @@ class OptiCamGreedy:
         def objective(ppm):
             return sum(w * dori_factor(p) for w, p in zip(weights, ppm))
 
-        greedy_score = objective(merge())
+        greedy_score = objective(merge_state()[0])
         iterations = 0
         if algorithm in ("hybrid", "kpi_hybrid"):
             for _ in range(3):
                 improved = False
                 for index, (old, slot) in enumerate(selected):
-                    base = merge(index)
+                    base_eff, base_face, base_hand = merge_state(index)
+                    base_f = [dori_factor(p) for p in base_eff]
+                    base_t = [p if p < ID_PPM else ID_PPM for p in base_eff]
                     used = {pose(c[0]) for i, (c, _) in enumerate(selected) if i != index}
-                    stats = base_kpi_stats(base) if is_kpi else None
-                    old_gain, old_tie = addition(base, old, False, stats)
+                    stats = base_kpi_stats(base_eff) if is_kpi else None
+                    old_gain, old_tie = addition(base_eff, base_face, base_hand, base_f, base_t, old, False, stats)
                     best, best_gain, best_tie = old, old_gain, old_tie
                     for candidate in candidate_groups[min(slot, len(candidate_groups) - 1)]:
                         if pose(candidate[0]) in used:
                             continue
-                        gain, tie = addition(base, candidate, False, stats)
+                        gain, tie = addition(base_eff, base_face, base_hand, base_f, base_t, candidate, False, stats)
                         if better(gain, tie, best_gain, best_tie):
                             best, best_gain, best_tie = candidate, gain, tie
                     if best_gain > old_gain + 1e-9:
@@ -398,7 +597,7 @@ class OptiCamGreedy:
                         improved, iterations = True, iterations + 1
                 if not improved:
                     break
-        ppm = merge()
+        ppm = merge_state()[0]
         final_score = objective(ppm)
         coverage = sum(p >= 25 for p in ppm) / count * 100 if count else 100
         return [candidate[0] for candidate, _ in selected], {

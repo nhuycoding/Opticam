@@ -8,7 +8,7 @@ trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian ch�
 
 ## Khu vực giao diện
 
-- **Thanh đầu trang:** chọn mặt bằng mẫu, hoàn tác/làm lại, tối ưu vị trí, mở BOM và xuất JSON.
+- **Thanh đầu trang:** chọn 1 trong 18 mặt bằng mẫu (hiển thị hộp thoại xác nhận trong ứng dụng trước khi thay đổi), chuyển bước **Mặt bằng** / **Kết quả**, hoàn tác/làm lại và xuất JSON/BOM.
 - **Thanh công cụ bên trái:** chọn/kéo, thêm camera/kệ/POS/cửa, đặt người đánh giá, đo và tô mức ưu tiên W.
 - **Canvas:** mặt bằng theo mét, lưới, vật cản, camera, vùng FOV và heatmap. Chọn lớp DORI/rủi ro/tắt
   và bật lưới/điểm neo ngay phía trên canvas.
@@ -19,7 +19,7 @@ trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian ch�
 
 ## Các thao tác chính
 
-1. Chọn một trong tám layout mẫu ở thanh đầu trang; nhập layout JSON trong mục **Xuất và dự án**.
+1. Chọn một trong 18 layout mẫu ở thanh đầu trang (3 mẫu quốc tế và 15 mẫu cửa hàng Việt Nam `VN 01`–`VN 15` có người tĩnh); nhập layout JSON trong menu **Xuất dự án**.
 2. Thêm kệ, POS, cửa hoặc camera bằng thanh công cụ bên trái.
    Chọn **Người đánh giá**, rồi bấm vào mặt bằng để đặt hình người; chọn/kéo hình người để
    mở thông tin và xem DORI/PPM tại mặt, ngực, bụng và chân. Dùng `Delete` để xóa người.
@@ -35,18 +35,9 @@ trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian ch�
    lưu theo vị trí/bán kính thực nên giữ nguyên khi đổi kích thước lưới. Heatmap rủi ro dùng
    thang đơn sắc theo độ ưu tiên; lưới nhỏ hơn 0.5 m ẩn số, ở 0.5 m hiện mọi W, lưới lớn hơn chỉ hiện W ≥ 2.
    Chú giải bên dưới sơ đồ lọc Thấp/Vừa/Cao.
-6. Trong **Trần nhà & vị trí lắp**, chọn **Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**,
-   rồi chọn **Greedy + Local Search** hoặc **Greedy (đối chứng)**. Nhập số camera 1–20
-   vào **Số camera muốn bố trí** và bấm **Tối ưu số camera đã nhập**. Các lệnh tối ưu
-   số camera hiện có và giảm số camera theo KPI vẫn có trong menu tối ưu.
-   Bộ tối ưu giữ các thông số quang học của từng profile, đồng thời tìm lại vị trí, kiểu
-   lắp, pan và tilt theo phạm vi cho phép. Camera tường giữ chiều cao trong giới hạn trần;
-   camera trần dùng chiều cao trần trừ khoảng hạ. Bảng kết quả cho biết điểm Greedy,
-   điểm sau Local Search, số ứng viên và số lần thay camera giúp tăng điểm.
-   Lệnh giảm camera chọn tiền tố ngắn nhất đạt Đỏ 95% và Vàng 80% trong phương án tìm được;
-   không chứng minh số camera tối thiểu toàn cục. Nếu chưa đạt KPI, ứng dụng giữ phương án
-   đủ ngân sách tìm được và báo tỷ lệ thực tế. **Hủy** dừng tác vụ; chỉnh mặt bằng trong lúc
-   tối ưu làm kết quả cũ không còn được áp dụng.
+6. Trong **Camera và tối ưu → Thiết lập tối ưu**, chọn phạm vi lắp (**Tường + trần**, **Chỉ tường** hoặc **Chỉ trần**), bật/tắt **Chống khuất tầm tay (1.0 m)** nếu cần bắt buộc camera thấy cả mức tay/hàng hóa `1.0 m` (ngoài mặt `1.6 m`), và nhập **Số camera muốn bố trí (1–20)** rồi bấm **Tối ưu phương án**.
+   Hệ thống mặc định dùng thuật toán **Two-Stage KPI + Local Search (`kpi_hybrid`)**: ưu tiên phủ ≥95% vùng Đỏ trước rồi cân bằng vùng Vàng và thực hiện tối đa 3 vòng hoán đổi 1-camera. Trên heatmap DORI, ô chỉ thấy mặt `1.6 m` nhưng bị kệ/quầy che ở tầm tay `1.0 m` sẽ hiện gạch chéo vàng cam kèm cảnh báo trong Scorecard.
+   Lệnh **Giảm số camera theo KPI** giải độc lập từng ngân sách `K = 1..M` trên cùng pool ứng viên để tìm số camera ít nhất đạt đồng thời Đỏ ≥95% và Vàng ≥80%. Nếu chưa đạt KPI, ứng dụng giữ phương án đủ ngân sách tìm được và báo tỷ lệ thực tế. **Hủy** dừng tác vụ; chỉnh mặt bằng trong lúc tối ưu làm kết quả cũ không còn được áp dụng.
 7. Rê chuột lên ô để xem tọa độ, W, nhóm ưu tiên và trạng thái camera phủ. Nút **Vừa khung**,
    **100%**, `+`/`−`, cuộn chuột và kéo nền trống dùng để điều hướng canvas; giữ `Alt` khi cuộn
    để xoay camera/vật thể đang chọn.

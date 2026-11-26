@@ -1,7 +1,16 @@
 import { floorArea } from './core/footprint';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type Konva from 'konva';
-import { ArrowLeft, ChevronDown, ChevronRight, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Camera as CameraIcon, MousePointer2, Columns3, Monitor, DoorOpen, UserRound, Ruler, Undo2, Redo2, RotateCw, Trash2, Download, ScanLine, Grid2X2, Crosshair, Layers, ShieldCheck, Eraser, Map, HelpCircle } from 'lucide-react';
+import { TutorialModal } from './components/TutorialModal';
+
+const TUTORIAL_STORAGE_KEY = 'opticam.tutorial.dismissed';
+
+function shouldAutoOpenTutorial(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.localStorage?.getItem === 'function'
+    && window.localStorage.getItem(TUTORIAL_STORAGE_KEY) !== '1';
+}
 import '@fontsource/be-vietnam-pro/vietnamese-400.css';
 import '@fontsource/be-vietnam-pro/vietnamese-500.css';
 import '@fontsource/be-vietnam-pro/vietnamese-600.css';
@@ -75,6 +84,18 @@ export default function App() {
   const [sel, setSel] = useState<Selection>(null);
   const [people, setPeople] = useState<Person[]>(() => structuredClone(PRESETS[0].people ?? []));
   const [grid, setGrid] = useState(true), [anchors, setAnchors] = useState(false), [bom, setBom] = useState(false);
+  const [showTutorial, setShowTutorial] = useState<boolean>(shouldAutoOpenTutorial);
+  const closeTutorial = useCallback((dontShowAgain: boolean) => {
+    if (dontShowAgain) {
+      try {
+        window.localStorage?.setItem(TUTORIAL_STORAGE_KEY, '1');
+      } catch {
+        // Ignore storage errors in private or sandboxed environments.
+      }
+    }
+    setShowTutorial(false);
+  }, []);
+  const [pendingLayout, setPendingLayout] = useState<{ layout: Layout; goPlan: boolean } | null>(null);
   const [solveMs, setSolveMs] = useState(0), [renderMs, setRenderMs] = useState(0), [unweighted, setUnweighted] = useState<Score | null>(null);
   const [msg, setMsg] = useState('');
   const [cameraBudget, setCameraBudget] = useState(3);
@@ -164,14 +185,17 @@ export default function App() {
     h.last = { layout: nextLayout, people: nextPeople }; h.ignoreNext = true;
     setUndoReady(false); setRedoReady(false);
   };
-  const loadLayout = (l: Layout) => {
-    if (!window.confirm('Thay layout hiện tại? Các thay đổi chưa xuất sẽ bị mất.')) return false;
+  const applyLayout = (l: Layout, goPlan = false) => {
     optimizationController.current?.abort();
     setBrush(null); setTool('select'); setMeasure(null); setRiskFilter(null); setFocusCell(null);
     setCameraViewId(null);
     const nextPeople = structuredClone(l.people ?? []);
     resetHistory(l, nextPeople); setLayout(l); setPeople(nextPeople); setSel(null); setUnweighted(null); setSolveMs(0); setCameraBudget(l.cameras.length || 3);
-    return true;
+    if (goPlan) goStep('plan');
+  };
+  const loadLayout = (l: Layout, goPlan = false) => {
+    setPendingLayout({ layout: l, goPlan });
+    return false;
   };
   const undo = () => {
     const h = history.current;
@@ -514,10 +538,10 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (dimension === '3d' && cameraViewId && ['c', 'r', 'delete', 'backspace'].includes(k)) return;
-      if (k === 'escape') { setBrush(null); setTool('select'); setSel(null); setMeasure(null); setCameraViewId(null); } else if (k === 'b') setBom((v) => !v); else if (k === 'o' && isPlanning) (document.getElementById(CAMERA_OPTIMIZATION_FORM) as HTMLFormElement | null)?.requestSubmit();
+      if (k === 'escape') { if (pendingLayout) { setPendingLayout(null); return; } setBrush(null); setTool('select'); setSel(null); setMeasure(null); setCameraViewId(null); } else if (k === 'b') setBom((v) => !v); else if (k === 'o' && isPlanning) (document.getElementById(CAMERA_OPTIMIZATION_FORM) as HTMLFormElement | null)?.requestSubmit();
       else if (k === 'g') setGrid((v) => !v); else if (k === 'a') setAnchors((v) => !v); else if (k === 'c' && isPlanning) addCamera();
       else if (k === 'r') rotate(1); else if (k === 'delete' || k === 'backspace') deleteSelected();
-      else if (/^[1-9]$/.test(k) && Number(k) <= PRESETS.length && loadLayout(withManualCams(PRESETS[+k - 1]))) goStep('plan');
+      else if (/^[1-9]$/.test(k) && Number(k) <= PRESETS.length) loadLayout(withManualCams(PRESETS[+k - 1]), true);
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
@@ -571,7 +595,7 @@ export default function App() {
         <label className="project-picker"><span className="eyebrow">DỰ ÁN HIỆN TẠI</span>
           <select aria-label="Chọn mặt bằng cửa hàng" value={selectedPreset < 0 ? '' : selectedPreset} onChange={(event) => {
             const preset = PRESETS[Number(event.target.value)];
-            if (preset && loadLayout(withManualCams(preset))) goStep('plan');
+            if (preset) loadLayout(withManualCams(preset), true);
           }}>
             {selectedPreset < 0 && <option value="">Mặt bằng tùy chỉnh</option>}
             {PRESETS.map((preset, index) => <option key={preset.name} value={index}>{preset.name}</option>)}
@@ -587,6 +611,7 @@ export default function App() {
           <button onClick={redo} disabled={!redoReady} title="Làm lại (Ctrl+Y)" aria-label="Làm lại"><Redo2 size={17} /></button>
         </div>
         <div className="header-actions">
+          <button type="button" onClick={() => setShowTutorial(true)} title="Hướng dẫn nhanh" aria-label="Hướng dẫn nhanh"><HelpCircle size={17} /></button>
           <details className="export-menu"><summary aria-label="Xuất dự án"><Download size={15} /><span>Xuất dự án</span><ChevronDown size={13} /></summary>
             <div className="menu-popover">
               <button onClick={() => download('opticam_layout.json', exportBundle({ ...layout, people }, score))}>Lưu dự án JSON</button>
@@ -685,9 +710,10 @@ export default function App() {
                 {group === 'priority' && <Inspector mode="risk" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />}
               </PlanSection>
               <PlanSection id="camera" title="Camera và tối ưu" icon={CameraIcon} expanded={group === 'camera'} onToggle={() => toggleGroup('camera')}>
-                <CameraCountOptimizer key={layout.name} count={cameraBudget} mounts={layout.optimization?.mounts ?? 'mixed'}
+                <CameraCountOptimizer key={layout.name} count={cameraBudget} mounts={layout.optimization?.mounts ?? 'mixed'} dualHeight={Boolean(layout.optimization?.dualHeight)}
                   onCountChange={setCameraBudget} onOptimize={autoOptimize} onInvalid={() => { setGroup('camera'); setBrush(null); }} disabled={optimizing}
-                  onMounts={mounts => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'hybrid', mounts } })} />
+                  onMounts={mounts => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'kpi_hybrid', mounts, ...(layout.optimization?.dualHeight ? { dualHeight: true } : {}) } })}
+                  onDualHeight={dualHeight => patch({ optimization: { algorithm: layout.optimization?.algorithm ?? 'kpi_hybrid', mounts: layout.optimization?.mounts ?? 'mixed', ...(dualHeight ? { dualHeight: true } : {}) } })} />
                 {group === 'camera' && (dimension === 'plan'
                   ? <Inspector mode="camera" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />
                   : <SceneInspector mode="camera" layout={layout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor}
@@ -736,6 +762,19 @@ export default function App() {
         <span className="status-shortcuts">{isPlanning && <><kbd>O</kbd> tối ưu </>}<kbd>G</kbd> lưới <kbd>Esc</kbd> bỏ chọn</span>
       </footer>
       {bom && <BomModal layout={layout} onClose={closeBom} />}
+      {showTutorial && <TutorialModal onClose={closeTutorial} />}
+      {pendingLayout && (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="layout-confirm-title" onClick={(event) => { if (event.target === event.currentTarget) setPendingLayout(null); }}>
+          <div className="modal-box confirm-modal">
+            <h2 id="layout-confirm-title">Thay đổi mặt bằng cửa hàng?</h2>
+            <p className="confirm-body">Các thay đổi chưa xuất trên mặt bằng <strong>{layout.name}</strong> sẽ bị mất khi chuyển sang <strong>{pendingLayout.layout.name}</strong>.</p>
+            <div className="confirm-actions">
+              <button type="button" onClick={() => setPendingLayout(null)}>Hủy</button>
+              <button type="button" className="primary" onClick={() => { const next = pendingLayout; setPendingLayout(null); applyLayout(next.layout, next.goPlan); }}>Đổi mặt bằng</button>
+            </div>
+          </div>
+        </div>
+      )}
       {msg && <div className={`toast${optimizing ? ' toast-busy' : messageTone === 'error' ? ' toast-error' : ''}`} role="status" aria-live="polite">{optimizing && <span className="spinner" />} {msg}</div>}
     </div>
   );

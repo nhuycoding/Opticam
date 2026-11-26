@@ -57,12 +57,14 @@ export interface RiskStroke {
   weight: Weight;
 }
 
+export type OptimizationAlgorithm = 'greedy' | 'hybrid' | 'kpi_hybrid';
+
 export interface Layout {
   version: string; name: string;
   widthM: number; heightM: number; gridM: number; pixelsPerMeter: number;
   targetHeight: TargetHeight;
   ceilingHeight?: number;
-  optimization?: { algorithm: 'greedy' | 'hybrid'; mounts: 'wall' | 'mixed' | 'ceiling' };
+  optimization?: { algorithm: OptimizationAlgorithm; mounts: 'wall' | 'mixed' | 'ceiling'; dualHeight?: boolean };
   floorPolygon?: [number, number][];
   description?: string;
   designNotes?: string[];
@@ -76,12 +78,13 @@ export interface Layout {
 }
 
 export interface Zone { r: number; c: number; cx: number; cy: number; w: Weight; solid: boolean }
-export interface Cell extends Zone { ppm: number; dori: Dori }
+export interface Cell extends Zone { ppm: number; dori: Dori; handPpm?: number; headOnly?: boolean }
 
 export interface Score {
   red: number; yellow: number;   // % ô đạt chuẩn DORI của vùng
   redCells?: number; yellowCells?: number;
   redMinPpm: number;
   weighted: number;              // Σ W × Score_DORI
+  headOnlyCells?: number; headOnlyPct?: number;
   cams: number; ms: number;
 }

@@ -49,6 +49,7 @@ def test_downward_camera_retains_both_rectangular_sensor_orientations():
 
 def test_real_store_hybrid_improvement_and_frontend_golden_parity():
     l=json.loads((Path(__file__).parents[2]/'data_samples/ministop_50m2.json').read_text())
+    l['optimization']={'algorithm':'hybrid','mounts':'mixed'}
     grid=l['gridM'];rows=round(l['heightM']/grid);cols=round(l['widthM']/grid)
     optimizer=OptiCamGreedy(l['widthM'],l['heightM'],l['obstacles'],l.get('targetHeight',1.6),l.get('riskStrokes',()),l.get('risk',{}),l.get('floorPolygon'))
     zones=optimizer.generate_grid(grid)
@@ -62,6 +63,26 @@ def test_real_store_hybrid_improvement_and_frontend_golden_parity():
     assert r['diagnostics']['finalScore']>r['diagnostics']['greedyScore']
     assert [(c['mount'],c['x'],c['y'],c['pan'],c['tilt']) for c in r['cameras']]==[
         ('wall',7.5,0,120,35),('ceiling',1.4166666666666667,5.5,330,35),('wall',4.5,0,150,20)]
+
+
+def test_kpi_hybrid_mode_and_frontend_golden_parity():
+    l=json.loads((Path(__file__).parents[2]/'data_samples/circle_k_75m2.json').read_text())
+    l['optimization']={'algorithm':'kpi_hybrid','mounts':'mixed'}
+    grid=l['gridM'];rows=round(l['heightM']/grid);cols=round(l['widthM']/grid)
+    optimizer=OptiCamGreedy(l['widthM'],l['heightM'],l['obstacles'],l.get('targetHeight',1.6),l.get('riskStrokes',()),l.get('risk',{}),l.get('floorPolygon'))
+    zones=optimizer.generate_grid(grid)
+    lookup={(round(x,6),round(y,6)):w for x,y,w in zones}
+    risk=[[lookup.get((round((c+.5)*grid,6),round((r+.5)*grid,6)),1) for c in range(cols)] for r in range(rows)]
+    blocked=[[int((round((c+.5)*grid,6),round((r+.5)*grid,6)) not in lookup) for c in range(cols)] for r in range(rows)]
+    p={'cameraBudgetK':3,'layout':l,'grid':{'rows':rows,'cols':cols,'cellSizeM':grid},'riskMatrix':risk,'blockedMatrix':blocked}
+    r=optimize_layout(OptimizeRequest.parse_obj(p))
+    assert r['diagnostics']['algorithm']=='kpi_hybrid'
+    assert r['diagnostics']['finalScore']==pytest.approx(655.8522728639972)
+    assert [(c['mount'],round(c['x'],4),c['y'],c['pan'],c['tilt']) for c in r['cameras']]==[
+        ('ceiling',5.2885,5.5,210,35),('ceiling',12.0192,5.5,240,35),('ceiling',4.3269,5.5,330,35)]
+    resp = client.post('/api/v1/optimize', json=p)
+    assert resp.status_code == 200
+    assert resp.json()['diagnostics']['finalScore'] == pytest.approx(655.8522728639972)
 
 
 def test_ceiling_installation_metadata_and_pitch_survive_bom_and_heatmap_export():

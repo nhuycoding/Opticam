@@ -86,7 +86,7 @@ describe('Studio workflow', () => {
     expect(renderer.root.findAllByProps({ 'aria-label': 'Thuật toán tối ưu' })).toHaveLength(0);
     act(() => renderer.root.findByProps({ 'aria-label': 'Vị trí cho phép tối ưu' }).props.onChange({ target: { value: 'ceiling' } }));
     await optimize();
-    expect(vi.mocked(requestOptimize).mock.calls.at(-1)![0]).toMatchObject({ ceilingHeight: 3.8, optimization: { algorithm: 'hybrid', mounts: 'ceiling' } });
+    expect(vi.mocked(requestOptimize).mock.calls.at(-1)![0]).toMatchObject({ ceilingHeight: 3.8, optimization: { algorithm: 'kpi_hybrid', mounts: 'ceiling' } });
   });
 
   it('optimizes a typed camera count without deleting the existing cameras first', async () => {
@@ -110,6 +110,11 @@ describe('Studio workflow', () => {
   it('loads a populated template and supports moving people in 3D with undo', async () => {
     const index = PRESETS.findIndex(preset => preset.people?.length);
     act(() => renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' }).props.onChange({ target: { value: String(index) } }));
+    expect(renderer.root.findByProps({ role: 'dialog' })).toBeDefined();
+    await click('Hủy');
+    expect(canvas().people).toEqual([]);
+    act(() => renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' }).props.onChange({ target: { value: String(index) } }));
+    await click('Đổi mặt bằng');
     expect(canvas().people).toEqual(PRESETS[index].people);
     await click('3D');
     const scene = renderer.root.findByType(Store3D).props;
@@ -235,10 +240,11 @@ describe('Studio workflow', () => {
     expect(renderer.root.findAllByProps({ 'aria-label': 'So sánh trước và sau tối ưu' })).toHaveLength(0);
   });
 
-  it('loads every new retail template with its installation cameras and budget', () => {
+  it('loads every new retail template with its installation cameras and budget', async () => {
     for (let index=3; index<PRESETS.length; index++) {
       const picker=renderer.root.findByProps({ 'aria-label': 'Chọn mặt bằng cửa hàng' });
       act(() => picker.props.onChange({ target: { value: String(index) } }));
+      await click('Đổi mặt bằng');
       expect(canvas().layout.cameras).toEqual(PRESETS[index].cameras);
       expect(canvas().layout.floorPolygon).toEqual(PRESETS[index].floorPolygon);
         expect(renderer.root.findByProps({ 'aria-label': 'Số camera tùy chỉnh' }).props.value).toBe(String(PRESETS[index].cameras.length));
@@ -283,5 +289,24 @@ describe('Studio workflow', () => {
     act(() => settings.findByProps({ 'aria-label': 'Kích thước ô (m)' }).props.onBlur());
     expect(canvas().layout.gridM).toBe(.25);
     expect(canvas().layout.cameras).toBe(previous.cameras);
+  });
+
+  it('opens, navigates, and closes the quick-start tutorial modal from header button', async () => {
+    const text = (n: ReactTestInstance | string): string => typeof n === 'string' ? n : n.children.map(text).join('');
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0);
+    const helpBtn = renderer.root.findByProps({ 'aria-label': 'Hướng dẫn nhanh' });
+    await act(async () => { helpBtn.props.onClick(); });
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(1);
+    const panelTitle = () => text(renderer.root.findByProps({ role: 'tabpanel' }).findByType('h3'));
+    expect(panelTitle()).toContain('Dựng cửa hàng & Đánh dấu vùng ưu tiên');
+    await click('Tiếp theo');
+    expect(panelTitle()).toContain('Chạy tối ưu & Chống khuất tầm tay (1.0 m)');
+    await click('Tiếp theo');
+    expect(panelTitle()).toContain('Đọc bản đồ DORI, Gạch chéo & Kiểm tra 3D');
+    await click('Quay lại');
+    expect(panelTitle()).toContain('Chạy tối ưu & Chống khuất tầm tay (1.0 m)');
+    await click('Tiếp theo');
+    await click('Bắt đầu thiết kế');
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0);
   });
 });

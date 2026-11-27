@@ -35,7 +35,7 @@ flowchart LR
    - Fixing `minimumCamerasForTargets`'s prefix-slice bug via **Dedicated Per-`K` Search (`T3`)** saves `1+` camera on **`28.6%` (`Dev`) and `54.0%` (`Held-Out`)** of stores under baseline (`4.52 -> 3.72` cams), and **combining `T2 + T3` cuts mean required Capex to `2.48–2.57` cameras/store**.
 
 4. **Formal Proof Benchmarks (`Phase 3`):**
-   - **Exact MILP Gap (`51/51` instances):** `OptiCam-Hybrid` reaches **`99.19%` (Dev, min `96.68%`)** and **`98.82%` (Held-Out, min `95.51%`)** of exact global MILP / LP-dual upper bounds—far above the theoretical `63.21%` `(1 - 1/e)` guarantee—while running **`399–672x` faster** (`15–148 ms` vs. `4.5–40.3 s`).
+   - **Exact MILP Gap (`51/51` instances):** To quantify how close our fast heuristic (`15–148 ms`) gets to the theoretical global optimum, we benchmarked against **HiGHS** (*High Performance Software for Linear Optimization*, Univ. of Edinburgh)—an open-source C++ MILP/LP/QP solver rivaling Gurobi/CPLEX (`4.5–40.3 s` runtime). `OptiCam-Hybrid` reaches **`99.19%` (Dev, min `96.68%`)** and **`98.82%` (Held-Out, min `95.51%`)** of exact global MILP / LP-dual upper bounds—far above the theoretical `63.21%` `(1 - 1/e)` guarantee—while running **`399–672x` faster**.
    - **Out-of-Sample Statistical Dominance (`N = 50`):** At `K=4`, `OptiCam-Hybrid` and `OptiCam-Tuned` achieve a **50–0–0 win-tie-loss sweep** (`rank_biserial r = 1.000`, `p_holm < 1e-6`, `McNemar p < 1e-6`) over **every** paper baseline (`Erdem-06`, `Aziz-24`, `Kim-19`, `Wang-13`).
 
 ---

@@ -6,7 +6,7 @@
 > 2. **Chiếu tia 3D & kiểm tra che khuất:** Camera nhìn *qua đầu* quầy `1.1 m` tới mặt khách (`1.6 m`), nhưng bị chắn nếu tia cắt ngang kệ `1.8 m`.
 > 3. **Quy đổi độ nét (`PPM` → `DORI`):** Tính số pixel trên mỗi mét tại mục tiêu, quy ra điểm `0.00–1.00` theo chuẩn quốc tế IEC 62676-4.
 > 4. **Tối ưu 2 giai đoạn (`kpi_hybrid`) + Dual-Height (`1.6 m / 1.0 m`) + BOM:** Khóa đủ nhận diện mặt ở quầy/cửa trước, rồi tối ưu phủ kệ & tầm tay, cuối cùng tính chiều dài dây cáp.  
-> *(Gặp thuật ngữ lạ? Xem bảng giải thích nhanh bằng tiếng Việt/Anh tại [**GLOSSARY.md**](../GLOSSARY.md).)*
+> *(Gặp thuật ngữ lạ? Xem bảng giải thích nhanh bằng tiếng Việt/Anh tại [**GLOSSARY.md**](../GLOSSARY.md); xem nguồn trích dẫn chuẩn & chứng minh thực nghiệm cho từng công thức tại [**REFERENCES.md**](../REFERENCES.md) và [**ABSTRACT_PROFESSOR.md**](../paper_evaluation_2026-11-26/ABSTRACT_PROFESSOR.md).)*
 
 *Lưu ý: Mô hình lấy mẫu trên mặt phẳng độ cao để hỗ trợ bố trí sơ bộ; không thay thế khảo sát ánh sáng/ống kính thực tế.*
 

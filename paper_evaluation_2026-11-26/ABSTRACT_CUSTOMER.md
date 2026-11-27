@@ -3,6 +3,14 @@
 > **Quick Summary**  
 > **OptiCam** turns your shop floor plan into a tested camera plan in **under 0.2 seconds** in the browser (and a few seconds on the Python server). Tested across **7 real store layouts** and **50 unseen test stores**, OptiCam passes strict cashier face-ID and shelf security checks on **`98%` of stores with just 3 cameras** (`49/50`) and **`100%` with 4 cameras** (`50/50`), needing only **`2.48–2.57` cameras on average** for a `50–80 m²` shop. *(Unfamiliar with any term like `PPM` or `CRAVED`? See the plain-English [**Glossary**](../GLOSSARY.md).)*
 
+> **Quick Key — Plain-English Meanings of Terms Used Below**
+> - **Red Zone & Red Face-ID:** High-risk areas (**cashier counter & entrance doors**, colored red on the map) where video must be sharp enough to **clearly identify a person's face and cash notes** (`>= 250 PPM`).
+> - **Yellow Zone (Shelf Recognition):** Merchandise shelves and aisles (colored yellow) where video must clearly show **hands reaching and items being picked up** (`>= 125 PPM`).
+> - **PPM (Pixels Per Meter):** How many camera pixels cover `1 meter` of a person—more pixels = sharper video.
+> - **CRAVED:** A retail theft-risk checklist (**C**oncealable, **R**emovable, **A**vailable, **V**aluable, **E**njoyable, **D**isposable) that scores small, pricey items (cosmetics, alcohol) higher than bulky items (water cases).
+> - **Hybrid (`kpi_hybrid`):** OptiCam's smart two-step placement method—it first locks cameras onto the **Red Zone** (cashier/doors), then covers **Yellow** shelves, and finally **swaps camera angles** up to 3 times to eliminate blind spots. *(The "old Hybrid" skipped the first cashier-locking step.)*
+> - **1.0 m Hand Check (`Dual-Height`):** Checks both **face height (`1.6 m`)** and **hand height (`1.0 m`)** so tall shelves don't hide shoplifting hands even when faces are visible.
+
 ---
 
 ## 1. Why Ordinary Camera Plans Fail in Real Stores
@@ -74,10 +82,20 @@ Red Goal     Uncovered Red Area     Avg Cameras (Old)    What Happens in Real St
 - **`95%` Red** leaves at most a tiny `0.175 m²` edge sliver on average (smaller than one `0.5 m × 0.5 m` floor tile) instead of forcing you to buy extra hardware.
 - **`80%` Yellow shelves** costs **`0` extra cameras** compared to `70%` (`3.72 -> 3.72`), while ensuring 4 out of 5 shelf zones capture hand-level action clearly.
 
+### D. How `1.0 m` Hand-Height Clarity Is Graded (And Why It Isn't All-or-Nothing)
+A strict pass/fail rule at `1.0 m` fails `10/18` real stores because a `1.1 m` cashier counter naturally shields the lower `1.0 m` zone right at the desk. Instead, OptiCam grades `1.0 m` hand visibility in **4 smooth steps** on priority zones (`W >= 3.0`), while keeping **`65%`** (cashier/doors) and **`80%`** (shelves) credit for clear `1.6 m` faces:
+
+| Hand Clarity at `1.0 m` | Grade Multiplier | What It Means in Practice |
+|---|---:|---|
+| **`>= 125.0 PPM`** | **`100%` (`1.00`)** | Full credit — hands & stolen items are crystal clear |
+| **`62.5 – 124.9 PPM`** | **`85%` (`0.85`)** | Good — reaches `1.0 m` Hand KPI target (`80%` of priority floor) |
+| **`25.0 – 62.4 PPM`** | **`50%` (`0.50`)** | Partial — hand/body motion is still visible at low level |
+| **`< 25.0 PPM`** | **`0%` (`0.00`)** | Blocked at `1.0 m` — flagged with amber stripes (`headOnly`) |
+
 ---
 
 ## 4. Real Store Results (`50` Unseen Stores, Identical 4 MP Cameras)
 
-- **3 Cameras (Tight Budget):** OptiCam passes **`98%` (`49/50`)** with **`98.0%` Red Face-ID** (`83 ms` solver), vs. `38%` (old Hybrid), `22%` (wall-only), and `0%–6%` across 4 academic baselines.
-- **4 Cameras (Standard Setup):** OptiCam passes **`100%` (`50/50`)** with **`99.6%` Red Face-ID**, vs. `80%` (old Hybrid), `36%` (manual 4-corners), and `0%–24%` across academic baselines.
-- **Hardware Needed to Pass Every Store:** **`2.48` cameras** on average (`2.57` on 7 real templates), vs. `4.52` (old prefix slicer), `8.3–10.0` (2D Set Cover), and `22–43` (dense redundant sensor tools).
+- **3 Cameras (Tight Budget):** OptiCam passes **`98%` (`49/50`)** with **`98.0%` Red Face-ID** (`83 ms` solver), vs. `38%` (old Hybrid without cashier-first locking), `22%` (wall-only cameras), and `0%–6%` across 4 academic methods.
+- **4 Cameras (Standard Setup):** OptiCam passes **`100%` (`50/50`)** with **`99.6%` Red Face-ID**, vs. `80%` (old Hybrid), `36%` (manual 4-corners), and `0%–24%` across academic methods.
+- **Hardware Needed to Pass Every Store:** **`2.48` cameras** on average (`2.57` on 7 real templates), vs. `4.52` (old method that simply chopped cameras off a 6-camera plan), `8.3–10.0` (flat 2D academic Set-Cover tools that treat low desks like walls), and `22–43` (academic overlapping-sensor tools built for large warehouses).

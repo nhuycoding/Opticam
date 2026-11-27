@@ -31,6 +31,7 @@ flowchart LR
   A cell belongs to the walkable evaluation set $J_{\text{free}}$ if its center is inside the room polygon and outside all solid fixtures (doors/entrances do **not** block floor cells or sightlines).
 - **Clockwise 90° Rotation (`rotateLayout90`):** When swapping room width and length ($W_{\text{room}} \leftrightarrow H_{\text{room}}$), every coordinate $(x, y)$, obstacle size $(w, h)$, and camera angle $\text{pan}$ rotates together so nothing clips outside walls:
   $$(x',\, y') = (H_{\text{old}} - y,\;\; x), \qquad (w',\, h') = (h,\;\; w), \qquad \text{pan}' = (\text{pan} + 90^\circ) \bmod 360^\circ$$
+- **Citation / Proof:** Standard 2D Euclidean affine rotation ($-90^\circ$ in top-left screen coordinates, verified by unit tests in [`editor.test.ts`](../frontend/src/core/editor.test.ts)). Grid convergence (`0.50 m` vs `0.25 m` vs `0.10 m`) is proven via **Roache (1994/1997)** refinement testing in [`phase3_proof_results.json`](./data/phase3_proof_results.json) (`<= 0.53 pp` difference).
 
 ---
 
@@ -56,6 +57,10 @@ flowchart LR
    OptiCam models `13` interior fixture subtypes (`wall-shelf`, `gondola`, `endcap`, `promo-island`, `checkout-rack`, `locked-cabinet`, `fridge`, `freezer`, `food-counter`, `seating`, `locker`, `partition`, `column`) plus `pos` and `entrance`. Each shelf can hold multiple vertical tiers ($z_{\min}$–$z_{\max}$) assigned from `16` product categories scored on the 6-axis **CRAVED** framework (*Concealable, Removable, Available, Valuable, Enjoyable, Disposable*), with $w_{\max}$ ranging from `4.8` (alcohol/tobacco) and `4.7` (cosmetics) down to `1.8` (bulky paper/water):
    $$W_{\max,\text{shelf}} = \max_{\text{tier} \in \text{shelf}} w_{\max}(\text{tier})$$
    Any tier placed at $z_{\min} \le 1.0\text{ m}$ automatically triggers a **low-shelf hand-occlusion warning**.
+- **Citation / Proof:**
+  - **CRAVED Categories:** Grounded in criminology's **Clarke (1999)** *Hot Products* framework ([REFERENCES.md](../REFERENCES.md#L57)).
+  - **Weights `(5, 3, 1)` & `[4.5, 3.0, 1.8]`:** Grounded in **Saaty (1980/2008)** AHP (`CR = 0.0066 < 0.10`), **proven** via non-circular `0.65 m` physical-mask Pareto (`W1`, doubling $K=4$ pass `40% → 80%`) and **Lakens (2017)** `TOST` equivalence against Nelder–Mead decimals (`p = 0.0007`, [`phase1_w1_pareto.csv`](./data/phase1_w1_pareto.csv), [`phase1b_fine_tuning.json`](./data/phase1b_fine_tuning.json)).
+  - **Linear Decay Kernel ($r_0 = 1.0\text{ m}$, $R = 2.5/2.0\text{ m}$):** Smooth queue-taper design; **Saltelli et al. (2010)** Sobol analysis proves output variance is insensitive to `±20%` radius shifts (`ST = 0.037–0.046`, [`phase1_weights_thresholds.json`](./data/phase1_weights_thresholds.json)). Real store crime-dollar ratios remain external assumptions ([`docs/FORMULAS.md`](../docs/FORMULAS.md)).
 
 ---
 
@@ -77,6 +82,7 @@ For camera $c$ at $(x_c, y_c, H_c)$ aimed at azimuth $\phi$ (`pan`), downward ti
    First verify the 2D floor segment $(x_c, y_c) \to (x, y)$ stays inside `floorPolygon`. Then, for every solid obstacle $o$ (`type !== 'entrance'`) with top height $o.\text{elev}$ (`1.1 m` for POS counters, `1.45–1.8 m` for shelves), compute the 2D entry/exit fractions $[t_{\text{enter}}, t_{\text{exit}}] \subseteq [0, 1]$ where the ray crosses $o$'s rectangle. The ray clears the obstacle **over the top** iff its height at both entry and exit is strictly above $o.\text{elev}$:
    $$\min\!\big(H_c + t_{\text{enter}}(Z - H_c),\;\; H_c + t_{\text{exit}}(Z - H_c)\big) > o.\text{elev}$$
    *Why this matters:* A 2D planner thinks a `1.1 m` cashier desk blocks everything behind it. Because OptiCam checks 3D ray height, a wall camera at $H_c = 2.4\text{ m}$ sees **over** the `1.1 m` desk to capture a customer's face at $Z = 1.6\text{ m}$!
+- **Citation / Proof:** Standard 3D pinhole perspective projection and Kay–Kajiya / Woo Ray-AABB slab intersection; cross-stack numerical parity between TypeScript and Python is verified to **`0.00e+00`** across all store geometries ([`fast_cache.py`](./scripts/fast_cache.py), `62` pytest + `270` Vitest tests).
 
 ---
 
@@ -97,6 +103,8 @@ $$p_{c,j}(Z) = \frac{\text{Res}_H}{2 \cdot r \cdot \tan(\alpha_H / 2)}\; [\text{
 | **Detection** | $25.0 - 62.4\text{ PPM}$ | **`0.20`** | Presence of a person on the floor |
 | **Blind** | $< 25.0\text{ PPM}$ | **`0.00`** | Too blurry or occluded to use |
 
+- **Citation / Proof:** The `250 / 125 / 62.5 / 25 PPM` thresholds and `1.6 m` target plane come directly from **IEC 62676-4:2014** (*Video surveillance systems — Part 4: Application guidelines*, [REFERENCES.md](../REFERENCES.md#L9)). The diminishing-returns utility weights `[1.00, 0.75, 0.40, 0.20, 0.00]` form a concave step function over clarity tiers, preserving **monotone submodularity** (**Nemhauser, Wolsey & Fisher, 1978**).
+
 ---
 
 ### 2.5 Graded Dual-Height Occlusion Model (`1.6 m` Face + `1.0 m` Hand)
@@ -114,6 +122,7 @@ $$p_{c,j}(Z) = \frac{\text{Res}_H}{2 \cdot r \cdot \tan(\alpha_H / 2)}\; [\text{
    - **Hand multiplier $M_{\text{hand}}(p_H)$:** `1.00` ($\ge 125\text{ PPM}$), `0.85` ($\ge 62.5\text{ PPM}$), `0.50` ($\ge 25\text{ PPM}$), `0.00` ($< 25\text{ PPM}$).
 
    *Worked Example:* At a cashier cell ($W_j = 5.0$, $\alpha = 0.65$) with sharp Face-ID ($F(p_F) = 1.00$), if the `1.1 m` desk blocks `1.0 m` hands ($M_{\text{hand}} = 0$), the cell still retains $0.65$ credit; if a second camera sees the hands at `80 PPM` ($M_{\text{hand}} = 0.85$), credit jumps to $0.65 + 0.35 \times 0.85 = \mathbf{0.9475}$.
+- **Citation / Proof:** The `1.0 m` secondary plane and `>= 62.5 PPM` Observation threshold follow **IEC 62676-4:2014**. The graded parameters (`minW=3.0, 0.65/0.80, M_hand, λ_Hand=0.50`) were **empirically proven** via an 18-store sweep ([`COMPREHENSIVE_EVALUATION_OVERVIEW.md`](./COMPREHENSIVE_EVALUATION_OVERVIEW.md)), lifting KPI pass rate from `8/18` (`44.4%`, binary cutoff) to **`17/18` (`94.4%`)**, achieving **`98.7%`** Red hand coverage, and cutting head-only blind spots by **`44%`** (`11.8% → 6.6%`).
 
 ---
 
@@ -140,6 +149,10 @@ $$p_{c,j}(Z) = \frac{\text{Res}_H}{2 \cdot r \cdot \tan(\alpha_H / 2)}\; [\text{
 
 4. **Dedicated Per-$K$ Sizing (`minimumCamerasForTargets`):**  
    Pre-computes the raycast cache once (`prepareCandidateGroups`) and solves $K = 1, 2, \dots, K_{\max}$ **independently from scratch**, returning the smallest $K$ that satisfies $\text{Red}\% \ge 95\% \land \text{Yel}\% \ge 80\%$ (instead of slicing a prefix off a larger plan).
+- **Citation / Proof:**
+  - **Theoretical Floor & Local Search:** Greedy maximization of $\Phi(S)$ inherits the $(1 - 1/e) \approx 63.21\%$ approximation guarantee (**Nemhauser, Wolsey & Fisher, 1978**); 1-swap refinement follows **Filmus & Ward (2014)**.
+  - **Empirical Optimality & Dominance:** Proven via `51` **HiGHS MILP** benchmarks (**`98.8%–99.2%`** of exact global optimum, `399–672x` faster), `Phase 2` hinge calibration ([`phase2_tuning_summary.csv`](./data/phase2_tuning_summary.csv)), `Ablation 2` ([`phase3_ablation2.csv`](./data/phase3_ablation2.csv)), and `N = 50` Wilcoxon/Holm/McNemar tests (`50–0–0` over **Erdem-06**, **Kim-19**, **Aziz-24**, **Wang-13**, $p_{\text{Holm}} < 10^{-6}$).
+  - **KPI Thresholds (`95% / 80%`):** Proven via **Satopaa et al. (2011)** Kneedle (`94%`), Capex+Blind minimum (`96%`), and **Lakens (2017)** `TOST` (`p = 1e-5`, [`phase1b_tkpi_1pct.csv`](./data/phase1b_tkpi_1pct.csv)).
 
 ---
 
@@ -148,6 +161,7 @@ $$p_{c,j}(Z) = \frac{\text{Res}_H}{2 \cdot r \cdot \tan(\alpha_H / 2)}\; [\text{
 $$\text{Cable}_i = \left\lceil 1.1 \times \big(|x_i - x_N| + |y_i - y_N| + H_i + 3.0\big) \right\rceil\text{ m}, \qquad \text{Total Cost} = 1{,}250{,}000\,N_{\text{cam}} + 1{,}500{,}000\text{ VND}$$
 - **$|x_i - x_N| + |y_i - y_N| + H_i$:** Manhattan routing along walls/ceiling plus vertical drop from ceiling height $H_i$.
 - **$+3.0\text{ m}$ and $\times 1.1$:** Service loop slack at both ends plus `10%` routing margin, rounded up to whole meters.
+- **Citation / Scope Note:** Standard **$L_1$ (Manhattan) orthogonal cabling heuristic** used in architectural MEP estimation; `3.0 m` slack, `10%` margin, and VND unit prices (`1,250,000` / `1,500,000`) are configurable engineering reference defaults (not supplier quotes).
 
 ---
 
@@ -170,7 +184,7 @@ $$\text{Cable}_i = \left\lceil 1.1 \times \big(|x_i - x_N| + |y_i - y_N| + H_i +
 1. **Non-Circular Evidence for `(5, 3, 1)`:** Real-world theft dollar ratios cannot be proven inside a simulator (stated explicitly in [`docs/FORMULAS.md`](../docs/FORMULAS.md)), so `(5, 3, 1)` rests on AHP (`CR = 0.0066`), **physical-mask Pareto testing** (`0.65 m` boxes around till/doors/shelves), and out-of-sample **`TOST` equivalence** (`p = 0.0007`).
 2. **Ablation Study (`N = 50` unseen stores, `K=4` KPI pass rate):**  
    `Random (0%)` → `Manual 4 Corners (36%)` → `Uniform Grid (40%)` → `Mixed Greedy (52%)` → `Wall Hybrid (66%)` → `Mixed Hybrid (80%)` → **`Live Two-Stage kpi_hybrid (100%)`**.
-3. **Near Exact Global Optimality (`51` HiGHS MILP Cases):** Against an exact 0–1 MILP solver (verified `0.00e+00` against brute-force), OptiCam reaches **`99.19%` (`Dev 7`, min `96.68%`)** and **`98.82%` (`Held-Out 15`, min `95.51%`)** of the global upper bound, running **`399–672x` faster** (`15–148 ms` vs `4.5–40.3 s`).
+3. **Near Exact Global Optimality (`51` HiGHS MILP Cases):** **HiGHS** (*High Performance Software for Linear Optimization*, Univ. of Edinburgh) is a state-of-the-art open-source C++ MILP/LP/QP solver rivaling commercial Gurobi and CPLEX. **Why we compare against it:** Because `kpi_hybrid` is a fast heuristic (`15–148 ms`) for real-time interactive design, benchmarking against HiGHS MILP (verified `0.00e+00` against brute-force) measures the exact gap from the mathematically guaranteed global optimum (`4.5–40.3 s`). OptiCam reaches **`99.19%` (`Dev 7`, min `96.68%`)** and **`98.82%` (`Held-Out 15`, min `95.51%`)** of the global upper bound, running **`399–672x` faster**.
 4. **Statistical Sweep Over Literature Baselines (`N = 50` unseen stores, `K=4`):**
    - **`OptiCam kpi_hybrid`:** `98.13% W%`, `99.60% Red`, **`50/50 (100%)` KPI** (`98%` at `K=3`, `2.48` mean Min-$K$).
    - vs **`OptiCam-Hybrid` (Previous Prod):** `80%` KPI (`38%` at `K=3`); `kpi_hybrid` wins **`10–0` McNemar** at `K=4` ($p=0.00195$) and **`30–0`** at `K=3` ($p < 10^{-6}$) with zero loss in `W%` ($p = 0.609$).

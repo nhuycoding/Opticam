@@ -122,7 +122,7 @@ Watch how performance climbs on **50 unseen stores (4 cameras)** as each OptiCam
 ```
 
 ### Does Greedy Get Close to the Theoretical "Perfect" Answer?
-Yes — we compared OptiCam against an exact **HiGHS MILP mathematical solver** (guaranteed global best on the grid) across **51 test cases**:
+**Why we check this:** Fast heuristics (`~0.1 s`) cannot guarantee the absolute global best layout on their own. To measure *exactly* how good OptiCam's placement is, we compared it across **51 test cases** against **HiGHS** (*High Performance Software for Linear Optimization*, Univ. of Edinburgh)—a top open-source C++ **MILP** (Mixed-Integer Linear Programming) solver rivaling commercial Gurobi/CPLEX that finds the mathematically guaranteed best answer on the grid:
 - **How close to perfection?** **`99.19%`** on real templates (`min 96.68%`) and **`98.82%`** on unseen stores (`min 95.51%`), hitting exact **`100.00%`** matches on multiple layouts.
 - **How fast?** **`15–148 ms`** vs. **`4.5–40.3 seconds`** for exact MILP — **`400x to 670x` faster** (keeps even `200 m²` stores under `0.2s`!).
 - **Does the `0.50 m` grid cheat?** Testing finished layouts on a `25x` finer **`0.10 m` grid (`~4,900` points)** confirms `0.50 m` optimization matches or beats finer-grid re-optimization (`0.0` to `+4.2 pp`).
@@ -141,7 +141,7 @@ flowchart LR
     U3 --> R["Live Result: 98% Pass at 3 Cams + 100% Pass at 4 Cams + 98.7% Red Hand Protection!"]
 ```
 
-- **Why Graded `1.0 m` Hand Scoring Beats a Binary Cutoff (`18` Store Presets):** Requiring strict `125 PPM` down to `1.0 m` behind `1.1 m` counters broke Red KPI on `10/18` stores (`8/18` pass, `3.94` avg cameras). Replacing that cliff with tuned graded partial credit (`minW=3.0`, `>= 62.5 PPM`, `65%`/`80%` face blend, `lambdaHand=0.50`) restores **`17/18` (`94.4%`) KPI pass**, lifts **Red `1.0 m` hand coverage from `93.8%` to `98.7%`**, and cuts **head-only blind spots by `44%`** (`11.8% -> 6.6%`) at `3.33` avg cameras.
+- **Why Graded `1.0 m` Hand Scoring Beats a Binary Cutoff (`18` Store Presets):** Requiring strict `125 PPM` down to `1.0 m` behind `1.1 m` counters broke Red KPI on `10/18` stores (`8/18` pass, `3.94` avg cameras). Replacing that cliff with **4-tier graded partial credit at `1.0 m`** (`>=125 PPM -> 1.00`, `62.5–124.9 -> 0.85`, `25–62.4 -> 0.50`, `<25 -> 0.00`, applied on `W >= 3.0` with `65%` Red / `80%` Yellow face retention and `lambdaHand = 0.50` toward `80%` hand coverage) restores **`17/18` (`94.4%`) KPI pass**, lifts **Red `1.0 m` hand coverage from `93.8%` to `98.7%`**, and cuts **head-only blind spots by `44%`** (`11.8% -> 6.6%`) at `3.33` avg cameras.
 
 ---
 

@@ -1,6 +1,7 @@
 # OptiCam-Retail vs. Literature Baselines: Cross-Evaluation Report
 
 **Date:** 2026-11-26  
+**Technical Glossary:** [Plain-English Glossary of All Terms (`PPM`, `DORI`, `BIP`, `SOCP`, `SemGA`, `MILP`)](../GLOSSARY.md)  
 **Benchmark Scope:** All 8 current store layouts in [`../data_samples/`](../data_samples) (7 distinct geometries; [`vn_co_nguoi_78m2.json`](../data_samples/vn_co_nguoi_78m2.json) shares identical geometry, fixtures, and risk weights with [`vn_goc_pho_78m2.json`](../data_samples/vn_goc_pho_78m2.json))  
 **Controlled Camera Hardware:** `2560 px` horizontal resolution (4 MP), `85°` horizontal FOV (`16:9` vertical FOV `~54.4°`), `10.0 m` effective range  
 **Cross-Evaluation Engine:** OptiCam 3D pinhole projection (`Z_target = 1.6 m`), 3D ray-box obstacle occlusion, IEC 62676-4 DORI utility vector `[1.00, 0.75, 0.40, 0.20, 0.00]`, and continuous spatial risk weights $W_j \in [1.0, 5.0]$ (verified to `0.0000` diff against [`../results/ceiling-optimization.csv`](../results/ceiling-optimization.csv)).

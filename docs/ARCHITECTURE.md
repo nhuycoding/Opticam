@@ -1,5 +1,8 @@
 # Kiến trúc và cấu trúc dự án
 
+> **Tóm tắt nhanh:** OptiCam chia làm **2 phần song song**: **Frontend** (React + Konva 2.5D + Three.js 3D + Web Worker chạy offline) và **Backend** (FastAPI Python). Cả hai dùng chung một mô hình toán học (`0.00e+00` sai số) — nếu Backend tắt hoặc quá 15 giây, trình duyệt tự động chạy tiếp trên Web Worker mà không gián đoạn người dùng.  
+> *(Giải thích thuật ngữ kiến trúc & thuật toán xem tại [GLOSSARY.md](../GLOSSARY.md).)*
+
 ## Cây thư mục
 
 ```text

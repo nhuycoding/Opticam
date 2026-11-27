@@ -3,7 +3,7 @@
 > **Choose Your Audience Version:**
 > - **For Store Owners / Customers:** [`ABSTRACT_CUSTOMER.md`](./ABSTRACT_CUSTOMER.md) — Plain-English explanation of how OptiCam works in the 2-step app today, why `5:3:1`, `250/125/62.5/25 PPM`, and `95%/80%` were chosen without extra-camera traps, and how it saves hardware.
 > - **For Guiding Professor / Academic Defense:** [`ABSTRACT_PROFESSOR.md`](./ABSTRACT_PROFESSOR.md) — Exact mathematical formulation of the live `kpi_hybrid` + dedicated per-`K` engine, full parameter defense (`AHP`, `W1` Pareto, `W2` Sobol, `W3` Nelder–Mead + `TOST`, `Kneedle`), `51`-case HiGHS MILP bounds, Ablation, Grid Convergence, and `N=50` Wilcoxon/Holm/McNemar proofs.
-> - **Full Audit & Literature Report:** [`COMPREHENSIVE_EVALUATION_OVERVIEW.md`](./COMPREHENSIVE_EVALUATION_OVERVIEW.md) | [`PAPER_COMPARISON_REPORT.md`](./PAPER_COMPARISON_REPORT.md)
+> - **Full Audit & Literature Report:** [`COMPREHENSIVE_EVALUATION_OVERVIEW.md`](./COMPREHENSIVE_EVALUATION_OVERVIEW.md) | [`PAPER_COMPARISON_REPORT.md`](./PAPER_COMPARISON_REPORT.md) | [**Plain-English Glossary**](../GLOSSARY.md)
 
 > **The 10-Second Takeaway**  
 > **OptiCam** places store CCTV cameras in **~0.1 seconds** using 3D line-of-sight, face-clarity grading (DORI), and store-risk zones. Across **7 real store floor plans** and **50 unseen synthetic stores**, OptiCam beats every published academic baseline **50 out of 50 times** (`100%` win rate), reaches **`98.8%–99.2%`** of mathematically optimal exact placement, and our **live production Two-Stage `kpi_hybrid` + Dedicated Min-`K` solver** passes security checks on **`98%` of stores with just 3 cameras** (`49/50`) and **`100%` with 4 cameras** (`50/50`), cutting average required hardware to **`2.48–2.57` cameras**.

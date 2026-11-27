@@ -1,102 +1,177 @@
-# OptiCam-Retail: Complete Technical Abstract, Mathematical Formulation & Parameter Justification
+# OptiCam-Retail: Technical Reference, Formulas & Parameter Defense
 
-> **Executive Technical Summary**  
-> **OptiCam-Retail** is a deterministic 3D risk-aware CCTV placement and evaluation engine for retail spaces (`50–200 m²`) combining **3D pinhole frustum & Ray-AABB occlusion**, **IEC 62676-4 DORI utility**, **CRAVED multi-tier shelf risk modeling**, a **Two-Stage KPI-Aware Greedy + 1-Swap Local Search (`kpi_hybrid`)**, **Dedicated Per-$K$ Sizing**, and a **Graded Dual-Height (`1.6 m` Face + `1.0 m` Hand) Occlusion Guard**—running with `0.00e+00` numerical parity across TypeScript Web Workers (`~0.1–0.4 s`) and pure Python FastAPI (`~1–4 s`). Across `7` real retail geometries (`dev_7`) and `50` unseen synthetic stores (`heldout_50`), it reaches **`98.8%–99.2%` of exact global HiGHS MILP optimality**, sweeps four published academic baselines **`50 wins – 0 losses`** ($p_{\text{Holm}} < 10^{-6}$), and passes security KPIs (`Red >= 95%`, `Yellow >= 80%`) on **`98%` (`49/50`) at $K=3$** and **`100%` (`50/50`) at $K=4$** (`2.48` mean required cameras).
+> **One-Sentence Summary**  
+> **OptiCam-Retail** automatically places CCTV cameras in convenience stores (`50–200 m²`) by combining **3D line-of-sight geometry**, **IEC 62676-4 image-clarity scoring (DORI)**, **theft-risk weighting (CRAVED)**, and a **Two-Stage KPI-Aware Greedy + 1-Swap (`kpi_hybrid`)** solver with a **Graded Dual-Height (`1.6 m` Face + `1.0 m` Hand)** occlusion check. Across `7` real store geometries and `50` unseen test stores, it reaches **`98.8%–99.2%` of exact mathematical optimality (HiGHS MILP)**, beats four published academic baselines **`50 wins to 0 losses`**, and passes security KPIs (`>= 95%` Red Face-ID, `>= 80%` Yellow Shelf Recognition) on **`98%` of stores with 3 cameras** and **`100%` with 4 cameras** (`2.48` cameras on average).  
+> *(Every technical term is explained inline below and in the standalone [**Glossary**](../GLOSSARY.md).)*
 
 ---
 
-## 1. End-to-End Pipeline & Architecture
+## 1. How the System Works (Big Picture)
+
+OptiCam runs the exact same deterministic math (`0.00e+00` numerical difference) in both the **browser** (TypeScript Web Worker, `~0.1–0.4 s`) and the **Python backend** (FastAPI, `~1–4 s`):
 
 ```mermaid
-flowchart TD
-    In["Store Layout: Floor Polygon, Fixtures (1.1m POS, 1.45-1.8m Shelves, Walls), 0.5m Free Grid J, Budget K"] --> Risk["1. Continuous Risk Field + CRAVED Shelf-Tier Aggregation W_j in [1, 5]"]
-    Risk --> Pool["2. Bounded Wall/Ceiling Candidate Pool (<= 12,000 poses, <= 1.5M pose-cell pairs)"]
-    Pool --> Dual{"dualHeight (1.0m Hand Guard) ON?"}
-    Dual -- "Yes" --> SharedXY["Shared-XY 2D Ray-AABB for 1.6m Face & Graded 1.0m Hand (<5% extra cost; W >= 3.0)"]
-    Dual -- "No" --> SingleZ["Standard 1.6m plane (still audits handCoverage & headOnly cells on Scorecard/Heatmap)"]
-    SharedXY --> Branch{"Slot t < max(1, ceil(0.67*K)) AND Red% < 95%?"}
-    SingleZ --> Branch
-    Branch -- "Yes (Stage 1)" --> S1["Maximize Red Face-ID gain first (prevent aisle dilution)"]
-    Branch -- "No (Stage 2)" --> S2["Maximize Graded DORI + Hinge shortfall (lambdaRed=1.5, lambdaYel=0.75, lambdaHand=0.50)"]
-    S1 --> Loop["Repeat t = 0..K-1, then <= 3 passes of 1-camera swaps"]
-    S2 --> Loop
-    Loop --> MinK["Min-K Sizing: reuse candidate pool to solve K = 1..maxK independently until Red >= 95% & Yel >= 80%"]
+flowchart LR
+    A["1. Store Grid & Risk Map<br/>0.5 m cells, CRAVED weights W in [1, 5]"] --> B["2. Candidate Pool<br/>Wall + Ceiling poses, 30 deg pan, <= 12k poses"]
+    B --> C["3. 3D Visibility + Clarity<br/>1.6 m Face & 1.0 m Hand (shared XY raycast)"]
+    C --> D["4. Two-Stage kpi_hybrid Solver<br/>Stage 1: Lock Red POS -> Stage 2: Shelves + 3 Swaps"]
+    D --> E["5. Min-K Sizing & BOM<br/>Smallest K passing KPI + Cable/Cost estimate"]
 ```
 
 ---
 
-## 2. Exact Mathematical Formulation
+## 2. Every Formula Explained (Intuition → Formula → Symbols → Example)
 
-### 2.1 Spatial Discretization & Coordinate System
-- **2D Floor Frame:** Top-left origin $(0,0)$, $+x$ right, $+y$ down (meters), azimuth $\text{pan}=0^\circ$ along $+x$ increasing clockwise. Room bounds $W_{\text{room}}, H_{\text{room}} \in [3, 40]\text{ m}$, ceiling height $H_{\text{ceil}} \in [2.4, 6.0]\text{ m}$ (default `3.2 m`).
-- **Grid & Free Cells ($J_{\text{free}}$):** Cell size $g = \text{gridM} \in [0.1, 2.0]\text{ m}$ (default `0.5 m`, capped at `12,000` cells). Cell $(r,c)$ has center $(x_c, y_r) = ((c + 0.5)g,\,(r + 0.5)g)$. A cell is in $J_{\text{free}}$ iff its center lies inside `floorPolygon` (if present) and outside all solid obstacles (`type !== 'entrance'`).
-- **Clockwise 90° Layout Rotation (`rotateLayout90`):** Swapping $W_{\text{room}} \leftrightarrow H_{\text{room}}$ transforms every point $(x, y) \mapsto (H_{\text{old}} - y,\, x)$, obstacle dimensions $(w, h) \mapsto (h, w)$, and camera azimuth $\text{pan} \mapsto (\text{pan} + 90^\circ) \bmod 360^\circ$, preserving all furniture/camera/shopper alignments without wall-clipping errors.
+### 2.1 Store Grid, Coordinates & 90° Auto-Rotation
+**What it does:** Converts the continuous floor plan (in meters) into discrete test points so coverage and occlusion can be measured consistently.
 
-### 2.2 Continuous Risk Field & CRAVED Shelf-Tier Aggregation
-- **Distance-Decay Risk Weight:** Each fixture $o$ carries profile $(W_{\max}, r_0, R)$ with default core radius $r_0 = 1.0\text{ m}$ and outer fade $R = 2.5\text{ m}$ (`pos`, `entrance`) or $R = 2.0\text{ m}$ (`shelf`). For Euclidean distance $d_o(j)$ from cell $j$ to obstacle $o$'s rotated bounding box:
-  $$W_o(j) = 1 + (W_{\max} - 1)\left(1 - \operatorname{clamp}\!\left(\frac{d_o(j) - r_0}{R - r_0},\, 0,\, 1\right)\right), \qquad W_{\text{auto}}(j) = \max\!\left(1,\, \max_o W_o(j)\right)$$
-- **Manual Brush Override:** Circular metric strokes $(x, y, \text{radius}, W \in \{5, 3, 1\})$ overwrite $W_{\text{auto}}(j)$ in chronological order (latest stroke wins).
-- **Display Bands & KPI Masks:** Red (`W >= 4.0`), Yellow (`2.0 <= W < 4.0`), Green (`W < 2.0`). Continuous $W_j \in [1, 5]$ is used in all optimization objectives.
-- **CRAVED Multi-Tier Shelf Model (`craved.ts`, `fixtures.ts`):** `13` interior fixture subtypes (`wall-shelf`, `gondola`, `endcap`, `promo-island`, `checkout-rack`, `locked-cabinet`, `fridge`, `freezer`, `food-counter`, `seating`, `locker`, `partition`, `column`) + `pos` and `entrance`. Merchandising shelves support vertical tiers `tiers[]` ($z_{\min}$–$z_{\max}$) assigned from `16` CRAVED-scored product categories (`wmax` up to `4.8` for alcohol/tobacco, `4.7` cosmetics, `4.6` phone accessories/batteries, down to `1.8` bulky goods). Shelf priority aggregates automatically as $W_{\max,\text{shelf}} = \max_{\text{tier}} w_{\max}(\text{tier})$, flagging low tiers with $z_{\min} \le 1.0\text{ m}$ as hand-occlusion risks.
-
-### 2.3 3D Pinhole Projection, Ray-AABB Occlusion & DORI Utility
-For camera $c$ at $(x_c, y_c, H_c)$ with pan $\phi$, downward tilt $\theta$ (defaults: `20°` wall, `45°` ceiling), horizontal resolution $\text{Res}_H$ (`2560 px` default 4 MP), horizontal FOV $\alpha_H$ (`85°` default), 16:9 vertical FOV $\alpha_V = 2\arctan(\tan(\alpha_H/2)/(16/9)) \approx 54.4^\circ$, and max range $R_{\max}$ (`10.0 m`):
-1. **Range & Frustum Check:** For target $(x, y, Z)$ with $\Delta x = x - x_c$, $\Delta y = y - y_c$, $\Delta z = Z - H_c$, and 3D distance $r = \sqrt{\Delta x^2 + \Delta y^2 + \Delta z^2}$:
-   - Requires $0.03\text{ m} \le r \le R_{\max}$, and in the camera's rotated frame:
-     $$\text{along} = \Delta x\cos\phi + \Delta y\sin\phi, \quad \text{right} = -\Delta x\sin\phi + \Delta y\cos\phi$$
-     $$\text{depth} = \text{along}\cos\theta - \Delta z\sin\theta > 0, \quad \text{up} = \text{along}\sin\theta + \Delta z\cos\theta$$
-     $$|\text{right}| \le \text{depth}\tan(\alpha_H / 2), \qquad |\text{up}| \le \text{depth}\tan(\alpha_V / 2)$$
-2. **Floor Polygon & 3D Ray-AABB Occlusion:** Checks that segment $(x_c, y_c) \to (x, y)$ stays inside `floorPolygon`. For every solid obstacle $o$ (`type !== 'entrance'`, top elevation $o.\text{elev}$), if the 2D XY segment intersects $o$'s rotated rectangle on parameter interval $[t_{\text{enter}}, t_{\text{exit}}] \subseteq [0, 1]$, the ray is unoccluded iff it clears $o$'s top edge:
-   $$\min\!\big(H_c + t_{\text{enter}}(Z - H_c),\; H_c + t_{\text{exit}}(Z - H_c)\big) > o.\text{elev}$$
-3. **Pixel Density & IEC 62676-4 DORI Utility:**
-   $$p_{c,j}(Z) = \frac{\text{Res}_H}{2\,r\,\tan(\alpha_H / 2)}\; [\text{PPM}], \qquad F(p) = \begin{cases} 1.00 & p \ge 250 \text{ (Identification)}\\ 0.75 & 125 \le p < 250 \text{ (Recognition)}\\ 0.40 & 62.5 \le p < 125 \text{ (Observation)}\\ 0.20 & 25 \le p < 62.5 \text{ (Detection)}\\ 0.00 & p < 25 \text{ (Blind)} \end{cases}$$
-
-### 2.4 Graded Dual-Height Occlusion Model (`1.6 m` Face + `1.0 m` Hand)
-- **Shared-XY Raycast (`dualPpmAt`):** Evaluates both $Z_{\text{face}} = 1.6\text{ m}$ and $Z_{\text{hand}} = 1.0\text{ m}$ inside the **same** 2D `segmentInFloor` and `segmentRectInterval` loop, adding `< 5%` compute overhead.
-- **Diagnostic Metrics (Always Active):** Cells with $p_{\text{face}} \ge 25$ and $p_{\text{hand}} < 25$ are flagged `headOnly` (amber diagonal hatches). `handCoverage` measures the percentage of priority cells ($W_j \ge 3.0$) reaching $p_{\text{hand}} \ge 62.5\text{ PPM}$ at `1.0 m` (`80%` target).
-- **Graded Partial-Credit Guard (`dualHeight = true`, `DUAL_HEIGHT_SCORING`):** Only applied on priority cells ($W_j \ge 3.0$). Let hand visibility multiplier $M_{\text{hand}}(p_H)$ and face-retention share $\alpha(W_j)$ be:
-  $$M_{\text{hand}}(p_H) = \begin{cases} 1.00 & p_H \ge 125\\ 0.85 & 62.5 \le p_H < 125\\ 0.50 & 25 \le p_H < 62.5\\ 0.00 & p_H < 25 \end{cases}, \qquad \alpha(W_j) = \begin{cases} 0.65 & W_j \ge 4.0 \text{ (Red)}\\ 0.80 & 3.0 \le W_j < 4.0 \text{ (Yellow)}\\ 1.00 & W_j < 3.0 \end{cases}$$
-  $$F_{\text{eff}}(W_j, p_F, p_H) = F(p_F)\cdot\Big(\alpha(W_j) + \big(1 - \alpha(W_j)\big)\,M_{\text{hand}}(p_H)\Big)$$
-
-### 2.5 Bounded Candidate Pool & Two-Stage `kpi_hybrid` + Min-`K` Solver
-1. **Candidate Sampling (`buildCandidates`):**
-   - **Wall poses:** Anchors along perimeter every `step` m (`max(gridM, 0.5 m)`), $H_c = \min(H_{\text{prof}}, H_{\text{ceil}} - 0.3)$, tilts $\{\theta, \max(0, \theta - 15^\circ), \min(90^\circ, \theta + 15^\circ)\}$ (default `{20°, 5°, 35°}`), excluding anchors within `0.12 m` of tall obstacles ($o.\text{elev} \ge H_c - 0.08$).
-   - **Ceiling poses:** Interior grid `(nx × ny)` inside floor polygon, $H_c = \max(1.8,\, H_{\text{ceil}} - \text{drop})$ (default `drop = 0.15 m`), tilts `{35°, 55°, 75°, 90°}`.
-   - **Azimuth & Memory Cap:** $30^\circ$ pan increments (`12` directions). Across $U$ unique camera profiles, `step` doubles until $|C| \le \min(\lfloor 12{,}000 / U \rfloor,\, \lfloor 1{,}500{,}000 / (U \cdot |J_{\text{free}}|) \rfloor)$.
-2. **Two-Stage KPI Construction & 1-Swap Local Polish (`solvePrepared`):**
-   - **Hinge Shortfall Penalty:** Let $\text{Red}\%, \text{Yel}\%, \text{Hand}\%$ be the percentage of Red ($W \ge 4$), Yellow ($2 \le W < 4$), and Hand ($W \ge 3$) cells meeting `250 / 125 / 62.5 PPM`:
-     $$H(S) = \left(\sum_{j} W_j\right) \cdot 0.01 \cdot \Big(1.50\max(0, 95 - \text{Red}\%) + 0.75\max(0, 80 - \text{Yel}\%) + \mathbb{I}_{\text{dual}}\,0.50\max(0, 80 - \text{Hand}\%)\Big)$$
-   - **Stage 1 (`slot < max(1, ceil(0.67 * K))` and `Red% < 95%`):** Picks candidate $c$ maximizing $\Delta_{\text{Red}} \cdot \frac{\sum W_j}{\max(1, |\text{Red}|)} + 0.1\,\Delta\Phi$, locking in cashier/entrance Face-ID before wide aisles dilute early picks.
-   - **Stage 2 & 3-Pass 1-Swap Polish:** Picks additions and up to `3` rounds of single-camera replacements maximizing $\Delta\Phi + (H_{\text{old}} - H_{\text{new}})$, breaking ties lexicographically via capped nominal PPM $\sum_j W_j(\min(p_{\text{new},j}, 250) - \min(p_{\text{old},j}, 250))$.
-3. **Dedicated Per-$K$ Sizing (`minimumCamerasForTargets`):** Calls `prepareCandidateGroups` once and runs `solvePrepared` independently for $K = 1, 2, \dots, K_{\max}$ until $\text{Red}\% \ge 95\% \land \text{Yel}\% \ge 80\%$.
-
-### 2.6 Bill of Materials (BOM) Estimation (`bom.ts`)
-- Anchors the NVR at the POS center $(x_N, y_N)$ (or `(0, 0)` fallback):
-  $$\text{Cable}_i = \left\lceil 1.1 \times \big(|x_i - x_N| + |y_i - y_N| + H_i + 3.0\big) \right\rceil\text{ m}, \qquad \text{Cost} = 1{,}250{,}000\,N_{\text{cam}} + 1{,}500{,}000\text{ VND}$$
+- **Coordinate System:** Origin `(0, 0)` is at the **top-left** corner; `+x` points right, `+y` points down, and camera azimuth `pan = 0°` points along `+x` (increasing clockwise). Room dimensions are `3–40 m`, ceiling height $H_{\text{ceil}}$ is `2.4–6.0 m` (default `3.2 m`).
+- **Grid Cell Centers:** Given grid size $g \in [0.1, 2.0]\text{ m}$ (default `0.5 m`, capped at `12,000` total cells), cell $(r, c)$ has center:
+  $$(x_c,\, y_r) = \big((c + 0.5)\,g,\;\; (r + 0.5)\,g\big)$$
+  A cell belongs to the walkable evaluation set $J_{\text{free}}$ if its center is inside the room polygon and outside all solid fixtures (doors/entrances do **not** block floor cells or sightlines).
+- **Clockwise 90° Rotation (`rotateLayout90`):** When swapping room width and length ($W_{\text{room}} \leftrightarrow H_{\text{room}}$), every coordinate $(x, y)$, obstacle size $(w, h)$, and camera angle $\text{pan}$ rotates together so nothing clips outside walls:
+  $$(x',\, y') = (H_{\text{old}} - y,\;\; x), \qquad (w',\, h') = (h,\;\; w), \qquad \text{pan}' = (\text{pan} + 90^\circ) \bmod 360^\circ$$
 
 ---
 
-## 3. Why Every Number Was Chosen (Empirical & Theoretical Defense)
+### 2.2 Continuous Theft-Risk Weighting ($W_j$) & CRAVED Shelf Tiers
+**What it does:** Gives higher priority to cashiers, doors, and high-theft shelves than to empty walkways, fading smoothly with distance across queues.
 
-| Choice | Exact Value | Why It Was Chosen & Quantitative Proof | Source Data |
+1. **Distance-Decay Weight around Each Fixture:**
+   $$W_o(j) = 1 + (W_{\max} - 1)\left(1 - \operatorname{clamp}\!\left(\frac{d_o(j) - r_0}{R - r_0},\; 0,\; 1\right)\right)$$
+   - **$d_o(j)$:** Euclidean distance (meters) from grid cell $j$ to the nearest edge of fixture $o$'s rotated box.
+   - **$W_{\max}$:** Peak priority inside the core (`5.0` for POS/Entrance, `4.5` for high-risk CRAVED shelves, `3.0` for standard shelves, `1.8` for bulky shelves).
+   - **$r_0 = 1.0\text{ m}$:** Full-strength core radius (arm's-reach zone around the till or shelf).
+   - **$R$:** Outer fade radius (`2.5 m` for POS/Entrance queues; `2.0 m` for shelf aisles). Beyond $R$, weight drops to baseline `1.0`.
+   - **$\operatorname{clamp}(u, 0, 1)$:** Restricts the fraction to $[0, 1]$, so weight stays flat at $W_{\max}$ inside $r_0$ and tapers linearly to `1.0` at $R$.
+
+   *Worked Example:* At $d = 1.75\text{ m}$ from a POS counter ($W_{\max}=5, r_0=1.0, R=2.5$), the fade fraction is $(1.75-1.0)/(2.5-1.0) = 0.5$, giving $W = 1 + (5-1)(1 - 0.5) = 3.0$.
+
+2. **Combining Fixtures & Manual Brush:**
+   $$W_{\text{auto}}(j) = \max\!\big(1,\;\max_o W_o(j)\big)$$
+   Overlapping zones take the **highest** priority rather than summing (prevents double-counting corners). Any manual brush stroke ($W \in \{5, 3, 1\}$) overrides $W_{\text{auto}}(j)$ (latest stroke wins).
+   - **Display & KPI Bands:** **Red** ($W \ge 4.0$), **Yellow** ($2.0 \le W < 4.0$), **Green** ($W < 2.0$). The optimizer uses the exact continuous $W_j \in [1, 5]$.
+
+3. **CRAVED Multi-Tier Shelf Aggregation (`craved.ts`, `fixtures.ts`):**  
+   OptiCam models `13` interior fixture subtypes (`wall-shelf`, `gondola`, `endcap`, `promo-island`, `checkout-rack`, `locked-cabinet`, `fridge`, `freezer`, `food-counter`, `seating`, `locker`, `partition`, `column`) plus `pos` and `entrance`. Each shelf can hold multiple vertical tiers ($z_{\min}$–$z_{\max}$) assigned from `16` product categories scored on the 6-axis **CRAVED** framework (*Concealable, Removable, Available, Valuable, Enjoyable, Disposable*), with $w_{\max}$ ranging from `4.8` (alcohol/tobacco) and `4.7` (cosmetics) down to `1.8` (bulky paper/water):
+   $$W_{\max,\text{shelf}} = \max_{\text{tier} \in \text{shelf}} w_{\max}(\text{tier})$$
+   Any tier placed at $z_{\min} \le 1.0\text{ m}$ automatically triggers a **low-shelf hand-occlusion warning**.
+
+---
+
+### 2.3 3D Pinhole Camera Projection & Line-of-Sight Occlusion
+**What it does:** Checks whether a target point $(x, y, Z)$ is (1) within camera range, (2) inside the 3D rectangular lens cone, and (3) not blocked by any wall or tall shelf.
+
+For camera $c$ at $(x_c, y_c, H_c)$ aimed at azimuth $\phi$ (`pan`), downward tilt $\theta$ (`20°` wall default, `45°` ceiling default), horizontal FOV $\alpha_H$ (`85°`), and max range $R_{\max}$ (`10.0 m`):
+
+1. **Vertical FOV (16:9 Sensor Aspect Ratio):**
+   $$\alpha_V = 2\arctan\!\left(\frac{\tan(\alpha_H / 2)}{16/9}\right) \approx 54.4^\circ \text{ (when }\alpha_H = 85^\circ\text{)}$$
+
+2. **3D Camera-Local Coordinates:** Let $\Delta x = x - x_c$, $\Delta y = y - y_c$, $\Delta z = Z - H_c$, and 3D distance $r = \sqrt{\Delta x^2 + \Delta y^2 + \Delta z^2}$. First rotate horizontally onto the camera's forward/side axes, then pitch down by $\theta$:
+   $$\text{along} = \Delta x\cos\phi + \Delta y\sin\phi, \qquad \text{right} = -\Delta x\sin\phi + \Delta y\cos\phi$$
+   $$\text{depth} = \text{along}\cos\theta - \Delta z\sin\theta, \qquad \text{up} = \text{along}\sin\theta + \Delta z\cos\theta$$
+   The point lies inside the 3D frustum and range iff:
+   $$0.03\text{ m} \le r \le R_{\max}, \qquad \text{depth} > 0, \qquad |\text{right}| \le \text{depth}\tan(\alpha_H/2), \qquad |\text{up}| \le \text{depth}\tan(\alpha_V/2)$$
+
+3. **3D Ray-AABB Occlusion Check:**  
+   First verify the 2D floor segment $(x_c, y_c) \to (x, y)$ stays inside `floorPolygon`. Then, for every solid obstacle $o$ (`type !== 'entrance'`) with top height $o.\text{elev}$ (`1.1 m` for POS counters, `1.45–1.8 m` for shelves), compute the 2D entry/exit fractions $[t_{\text{enter}}, t_{\text{exit}}] \subseteq [0, 1]$ where the ray crosses $o$'s rectangle. The ray clears the obstacle **over the top** iff its height at both entry and exit is strictly above $o.\text{elev}$:
+   $$\min\!\big(H_c + t_{\text{enter}}(Z - H_c),\;\; H_c + t_{\text{exit}}(Z - H_c)\big) > o.\text{elev}$$
+   *Why this matters:* A 2D planner thinks a `1.1 m` cashier desk blocks everything behind it. Because OptiCam checks 3D ray height, a wall camera at $H_c = 2.4\text{ m}$ sees **over** the `1.1 m` desk to capture a customer's face at $Z = 1.6\text{ m}$!
+
+---
+
+### 2.4 Image Clarity: PPM & IEC 62676-4 DORI Utility ($F$)
+**What it does:** Converts physical 3D distance into **Pixels Per Meter (PPM)**—how sharp a person or item actually looks in recorded video—and maps it to diminishing-returns utility $F(p)$.
+
+$$p_{c,j}(Z) = \frac{\text{Res}_H}{2 \cdot r \cdot \tan(\alpha_H / 2)}\; [\text{PPM}]$$
+- **$\text{Res}_H$:** Horizontal sensor resolution (`2560 px` for standard 4 MP Dome).
+- **$2\,r\tan(\alpha_H/2)$:** Physical width (meters) of the camera's view at distance $r$.
+
+*Worked Example:* At $r = 5.0\text{ m}$ with a 4 MP (`2560 px`), `85°` camera: $\text{PPM} = 2560 / (2 \times 5.0 \times \tan 42.5^\circ) = 2560 / 9.163 \approx \mathbf{279.4\text{ PPM}}$ (clear Face-ID). At $r = 9.0\text{ m}$, it drops to $\mathbf{155.2\text{ PPM}}$ (Recognition only, too blurry for Face-ID).
+
+| Clarity Tier (IEC 62676-4) | Threshold ($p$) | Utility $F(p)$ | What You Can See in Video |
+|---|---:|---:|---|
+| **Identification** (`Red` KPI) | $\ge 250.0\text{ PPM}$ | **`1.00`** | Clear facial features, cash notes at till |
+| **Recognition** (`Yellow` KPI) | $125.0 - 249.9\text{ PPM}$ | **`0.75`** | Hands reaching, items picked off shelves |
+| **Observation** (`Hand` KPI) | $62.5 - 124.9\text{ PPM}$ | **`0.40`** | Walking direction, clothing, hand motion |
+| **Detection** | $25.0 - 62.4\text{ PPM}$ | **`0.20`** | Presence of a person on the floor |
+| **Blind** | $< 25.0\text{ PPM}$ | **`0.00`** | Too blurry or occluded to use |
+
+---
+
+### 2.5 Graded Dual-Height Occlusion Model (`1.6 m` Face + `1.0 m` Hand)
+**What it does:** Prevents cameras from looking only over high shelves at faces (`1.6 m`) while leaving low shelves and hands (`1.0 m`) blind—without breaking Face-ID behind `1.1 m` POS desks.
+
+1. **Shared-XY Raycast (`dualPpmAt`):** Computes both $p_F$ (at $Z_{\text{face}} = 1.6\text{ m}$) and $p_H$ (at $Z_{\text{hand}} = 1.0\text{ m}$) inside the **exact same 2D polygon and XY box-intersection pass**, adding `< 5%` compute cost.
+2. **Always-On Diagnostics:**
+   - **Head-Only Blind Spot (`headOnly`):** Any cell visible at face height ($p_F \ge 25\text{ PPM}$) but completely blind at hand height ($p_H < 25\text{ PPM}$) is marked with amber diagonal stripes.
+   - **Hand Coverage (`handCoverage`):** Percentage of priority cells ($W_j \ge 3.0$) reaching at least Observation clarity ($p_H \ge 62.5\text{ PPM}$) at `1.0 m` (target: `80%`).
+3. **Graded Partial-Credit Score (`dualHeight = true`, `DUAL_HEIGHT_SCORING`):**  
+   For low-priority walkways ($W_j < 3.0$), score equals standard face utility $F(p_F)$. For priority cells ($W_j \ge 3.0$), a fraction $(1 - \alpha)$ of the cell's credit depends on `1.0 m` hand clarity $M_{\text{hand}}(p_H)$:
+   $$F_{\text{eff}}(W_j, p_F, p_H) = F(p_F) \cdot \Big(\alpha(W_j) + \big(1 - \alpha(W_j)\big)\,M_{\text{hand}}(p_H)\Big)$$
+   where:
+   - **Face-retention share $\alpha(W_j)$:** `0.65` for **Red** ($W_j \ge 4.0$, i.e. 65% face + 35% hand) and `0.80` for **Yellow** ($3.0 \le W_j < 4.0$, i.e. 80% face + 20% hand).
+   - **Hand multiplier $M_{\text{hand}}(p_H)$:** `1.00` ($\ge 125\text{ PPM}$), `0.85` ($\ge 62.5\text{ PPM}$), `0.50` ($\ge 25\text{ PPM}$), `0.00` ($< 25\text{ PPM}$).
+
+   *Worked Example:* At a cashier cell ($W_j = 5.0$, $\alpha = 0.65$) with sharp Face-ID ($F(p_F) = 1.00$), if the `1.1 m` desk blocks `1.0 m` hands ($M_{\text{hand}} = 0$), the cell still retains $0.65$ credit; if a second camera sees the hands at `80 PPM` ($M_{\text{hand}} = 0.85$), credit jumps to $0.65 + 0.35 \times 0.85 = \mathbf{0.9475}$.
+
+---
+
+### 2.6 Candidate Pool & Two-Stage `kpi_hybrid` + Min-$K$ Solver
+**What it does:** Searches a bounded set of realistic wall/ceiling poses in two stages—first locking in Red Face-ID at the register/doors, then sweeping shelves and polishing every camera with local swaps.
+
+1. **Candidate Pool Generation (`buildCandidates`):**
+   - **Wall poses:** Along the perimeter every `step` m (`max(gridM, 0.5 m)`), height $H_c = \min(H_{\text{prof}}, H_{\text{ceil}} - 0.3)$ (default `2.4 m`), tilts `{20°, 5°, 35°}`, skipping anchors within `0.12 m` of tall obstacles ($o.\text{elev} \ge H_c - 0.08$).
+   - **Ceiling poses:** Interior grid inside floor polygon, height $H_c = \max(1.8,\, H_{\text{ceil}} - 0.15)$, tilts `{35°, 55°, 75°, 90°}`.
+   - **Azimuth & Memory Cap:** `30°` pan steps (`12` directions). Across $U$ unique camera models, `step` doubles if needed so total poses stay within $|C| \le \min(\lfloor 12{,}000 / U \rfloor,\; \lfloor 1{,}500{,}000 / (U \cdot |J_{\text{free}}|) \rfloor)$.
+
+2. **Total Weighted Score ($\Phi$) & Hinge Shortfall ($H$):**
+   $$\Phi(S) = \sum_{j \in J_{\text{free}}} W_j \cdot F_{\text{eff}}\!\left(W_j,\;\max_{c \in S} p_{c,j}^{\text{face}},\;\max_{c \in S} p_{c,j}^{\text{hand}}\right)$$
+   $$H(S) = \left(\sum_{j} W_j\right) \cdot 0.01 \cdot \Big(1.50\max(0,\, 95 - \text{Red}\%) + 0.75\max(0,\, 80 - \text{Yel}\%) + \mathbb{I}_{\text{dual}}\,0.50\max(0,\, 80 - \text{Hand}\%)\Big)$$
+   *How to read $H(S)$:* Every `1%` missing below the `95% Red`, `80% Yellow`, or `80% Hand` targets adds a scaled penalty (`1.50`, `0.75`, `0.50` times `1%` of total store weight). Once a target is met, its $\max(0, \dots)$ term becomes `0` and stops distorting placement.
+
+3. **Two-Stage Greedy + 3-Pass 1-Swap Polish (`solvePrepared`):**
+   - **Stage 1 (Protect Cash & Doors First):** While camera slot $t < \max(1, \lceil 0.67 K \rceil)$ and $\text{Red}\% < 95\%$, pick the pose maximizing:
+     $$\text{Gain}_1(c) = \Delta_{\text{Red}}(c) \cdot \frac{\sum_j W_j}{\max(1, |\text{Red}|)} + 0.1\,\Delta\Phi(c)$$
+     where $\Delta_{\text{Red}}(c)$ is the number of newly covered Red cells reaching $\ge 250\text{ PPM}$. This stops wide merchandise aisles from stealing the first cameras away from the register.
+   - **Stage 2 & Local Swaps (Cover Shelves & Polish):** For remaining slots and up to `3` passes of single-camera replacements, pick the pose maximizing:
+     $$\text{Gain}_2(c) = \Delta\Phi(c) + \big(H(S_{\text{base}}) - H(S_{\text{base}} \cup \{c\})\big)$$
+     *Tie-breaker:* If two poses tie in $\text{Gain}$, prefer higher capped clarity $\sum_j W_j\big(\min(p_{\text{new},j}, 250) - \min(p_{\text{old},j}, 250)\big)$.
+
+4. **Dedicated Per-$K$ Sizing (`minimumCamerasForTargets`):**  
+   Pre-computes the raycast cache once (`prepareCandidateGroups`) and solves $K = 1, 2, \dots, K_{\max}$ **independently from scratch**, returning the smallest $K$ that satisfies $\text{Red}\% \ge 95\% \land \text{Yel}\% \ge 80\%$ (instead of slicing a prefix off a larger plan).
+
+---
+
+### 2.7 Bill of Materials (BOM) Cable & Cost Formula (`bom.ts`)
+**What it does:** Estimates cabling and hardware budget assuming the NVR/PoE switch sits at the POS counter $(x_N, y_N)$ (or `(0, 0)` if no POS exists):
+$$\text{Cable}_i = \left\lceil 1.1 \times \big(|x_i - x_N| + |y_i - y_N| + H_i + 3.0\big) \right\rceil\text{ m}, \qquad \text{Total Cost} = 1{,}250{,}000\,N_{\text{cam}} + 1{,}500{,}000\text{ VND}$$
+- **$|x_i - x_N| + |y_i - y_N| + H_i$:** Manhattan routing along walls/ceiling plus vertical drop from ceiling height $H_i$.
+- **$+3.0\text{ m}$ and $\times 1.1$:** Service loop slack at both ends plus `10%` routing margin, rounded up to whole meters.
+
+---
+
+## 3. Why Every Parameter Was Chosen (Proof Summary)
+
+| Parameter | Exact Value | Why This Exact Value Was Chosen (Plain-English Proof) | Source Data |
 |---|---|---|---|
-| **Priority Weights** | `(5, 3, 1)` & Shelves `[4.5, 3.0, 1.8]` | Maps onto Saaty's `1–3–5` AHP scale with consistent pairwise ratios (`CR = 0.0066 < 0.10`, eigenvector `[5.11, 5.11, 4.65, 2.79, 1.81, 1.0]`). Equal `(1,1,1)` halves $K=4$ pass rate (`80% → 40%`, `4%` at $K=3$). Continuous Nelder–Mead decimal fitting (`6.784, 3.456`) on `dev_7` does **not** beat `(5, 3, 1)` out-of-sample on `heldout_50` (`94.203` vs `94.246`; `TOST p = 0.0007` within `±1 pp`). High-risk shelf `4.5` ranked `#1` across top-5 grid candidates. | [`phase1_w1_pareto.csv`](./data/phase1_w1_pareto.csv), [`phase1b_fine_tuning.json`](./data/phase1b_fine_tuning.json) |
-| **Zone Radii & Cutoffs** | `r0 = 1.0 m`, `R = 2.5 m / 2.0 m`; Red `>= 4.0` | Varying radii by `±20%` moves metrics by `< 0.5%` (Sobol total-order `ST = 0.037–0.046`), sitting on a flat plateau. Cutoff `4.0` captures `100.0%` of actual POS/door choke points. | [`phase1_weights_thresholds.json`](./data/phase1_weights_thresholds.json) |
-| **KPI Thresholds** | `Red >= 95%`, `Yellow >= 80%` | `1%` sweep across `90%–100%` (`N=50`) places the **Kneedle elbow at `94%`** and minimum combined Capex+Blind cost at **`96%`**—`95%` sits dead center (`TOST p = 1e-5` equivalent to `96%` cost). Tightening to `98–100%` triggers the **"Last-Cell Curse"**: `24%–57%` of stores need `+1/+2` extra cameras for a `0.15 m²` grazing corner sliver (`14.3%` of `dev_7` infeasible at `K=7`). Raising Yellow `70% → 80%` costs `0.00` extra cameras (`3.72 → 3.72`). | [`phase1b_tkpi_1pct.csv`](./data/phase1b_tkpi_1pct.csv) |
-| **DORI Utility** | `[1.0, 0.75, 0.40, 0.20]` | **IEC 62676-4** tiers. Saltelli Sobol (`W2`) showed `F_recog = 0.75` drove `78.8%` of $K=3$ variance. Fixing search order (`kpi_hybrid`) instead of distorting IEC constants kept `[1.0, 0.75, 0.40, 0.20]` intact and lifted $K=3$ KPI pass from `38% → 98%`. | [`phase2_tuning_summary.csv`](./data/phase2_tuning_summary.csv) |
-| **Stage-1 & Hinge** | `ceil(0.67*K)`, `λ_Red=1.5`, `λ_Yel=0.75`, `3` swaps | `λ_Red = 0.5` underperforms at $K=3$ (`88%` pass); `λ_Red = 3.0` degrades shelves (`91.9%` vs `93.2%`); `1.5` wins both. Local 1-swaps saturate by Pass 3 (`92% → 42% → 16%` active). | [`phase2_tuning_summary.csv`](./data/phase2_tuning_summary.csv), [`phase3_ablation2.csv`](./data/phase3_ablation2.csv) |
-| **Dual-Height Guard** | `minW=3.0`, `M_hand∈[0,0.5,0.85,1]`, `0.65/0.80`, `λ_Hand=0.50` (`62.5 PPM`, `80%`) | A naive binary `>= 125 PPM` cutoff at `1.0 m` behind `1.1 m` POS counters broke Red KPI on `10/18` preset stores (`8/18` pass, `3.94` min-$K$). Tuned graded partial credit restores **`17/18` (`94.4%`) KPI pass**, maximizes Red `1.0 m` hand coverage (**`98.7%`** vs `93.8%` face-only), and cuts head-only blind gaps by **`44%`** (`11.8% → 6.6%`) at `3.33` min-$K$. | [`optics.ts`](../frontend/src/core/optics.ts), [`COMPREHENSIVE_EVALUATION_OVERVIEW.md`](./COMPREHENSIVE_EVALUATION_OVERVIEW.md) |
+| **Priority Weights** | `(5, 3, 1)` & Shelves `[4.5, 3.0, 1.8]` | Matches Saaty's `1–3–5` AHP scale with near-perfect consistency (`CR = 0.0066 < 0.10`, eigenvector `[5.11, 5.11, 4.65, 2.79, 1.81, 1.0]`). Equal `(1,1,1)` halves $K=4$ pass rate (`80% → 40%`, `4%` at $K=3$). Continuous Nelder–Mead decimal fitting (`6.784, 3.456`) on `dev_7` does **not** beat `(5, 3, 1)` on `50` unseen stores (`94.203` vs `94.246`; `TOST p = 0.0007`). High-risk shelf `4.5` ranked `#1` across top-5 grid candidates. | [`phase1_w1_pareto.csv`](./data/phase1_w1_pareto.csv), [`phase1b_fine_tuning.json`](./data/phase1b_fine_tuning.json) |
+| **Zone Radii & Cutoffs** | `r0 = 1.0 m`, `R = 2.5 / 2.0 m`, Red `>= 4.0` | Varying radii by `±20%` changes outputs by `< 0.5%` (Sobol sensitivity `ST = 0.037–0.046`), meaning they sit on a flat safe plateau. Cutoff `4.0` captures `100.0%` of actual POS/door choke points. | [`phase1_weights_thresholds.json`](./data/phase1_weights_thresholds.json) |
+| **KPI Targets** | `Red >= 95%`, `Yellow >= 80%` | A `1%` sweep from `90%` to `100%` (`N=50`) places the **Kneedle curvature elbow at `94%`** and lowest combined Capex+Blind cost at **`96%`**—`95%` sits dead center (`TOST p = 1e-5`). Demanding `98%–100%` triggers the **"Last-Cell Curse"**: `24%–57%` of stores must buy `+1/+2` extra cameras just for a `0.15 m²` corner sliver (`14.3%` of `dev_7` infeasible at `K=7`). Raising Yellow `70% → 80%` costs `0` extra cameras (`3.72 → 3.72`). | [`phase1b_tkpi_1pct.csv`](./data/phase1b_tkpi_1pct.csv) |
+| **DORI Utilities** | `[1.0, 0.75, 0.40, 0.20]` | Standard **IEC 62676-4** tiers. Global Sobol testing (`W2`) revealed `F_recog = 0.75` caused `78.8%` of $K=3$ swings. Instead of distorting IEC numbers, fixing search order (`kpi_hybrid`) kept `[1.0, 0.75, 0.40, 0.20]` intact and lifted $K=3$ pass rate from `38% → 98%`. | [`phase2_tuning_summary.csv`](./data/phase2_tuning_summary.csv) |
+| **Stage-1 & Hinge** | `ceil(0.67*K)`, `λ_Red = 1.5`, `λ_Yel = 0.75`, `3` swaps | `λ_Red = 0.5` is too weak at $K=3$ (`88%` pass); `λ_Red = 3.0` hurts shelves (`91.9%` vs `93.2%`); `1.5` wins both. Local 1-swaps saturate by Pass 3 (`92% → 42% → 16%` active). | [`phase2_tuning_summary.csv`](./data/phase2_tuning_summary.csv), [`phase3_ablation2.csv`](./data/phase3_ablation2.csv) |
+| **Dual-Height Guard** | `minW=3.0`, `M_hand∈[0,0.5,0.85,1]`, `0.65/0.80`, `λ_Hand=0.50` (`62.5 PPM`, `80%`) | A strict binary `>= 125 PPM` cutoff at `1.0 m` behind `1.1 m` counters broke Red KPI on `10/18` preset stores (`8/18` pass, `3.94` min-$K$). Tuned graded partial credit restores **`17/18` (`94.4%`) KPI pass**, maximizes Red hand coverage (**`98.7%`** vs `93.8%` face-only), and halves head-only blind gaps (`11.8% → 6.6%`) at `3.33` min-$K$. | [`optics.ts`](../frontend/src/core/optics.ts), [`COMPREHENSIVE_EVALUATION_OVERVIEW.md`](./COMPREHENSIVE_EVALUATION_OVERVIEW.md) |
 | **Grid & Pool Caps** | `0.50 m` grid, `12k` / `1.5M` cap | Re-evaluating `0.50 m` solutions on a `25x` finer `0.10 m` grid (`4,913` pts) agrees with `0.25 m` within `0.53 pp` and matches/beats `0.25 m` pools (`0.0` to `+4.2 pp`), while keeping `30–200 m²` solves under `360 ms`. | [`phase3_proof_results.json`](./data/phase3_proof_results.json) |
 
 ---
 
-## 4. Core Proofs (`Phase 1–3` Verification Summary)
+## 4. Core Verification & Academic Benchmark Summary (`Phase 1–3`)
 
-1. **Non-Circular Evidence for `(5, 3, 1)`:** Real crime dollar ratios are external to geometric optics (stated in [`docs/FORMULAS.md`](../docs/FORMULAS.md)), so `(5, 3, 1)` rests on AHP (`CR = 0.0066`), **physical-mask Pareto testing** (`0.65 m` boxes around till/doors/shelves), and out-of-sample **`TOST` equivalence** (`p = 0.0007`).
-2. **Every Module Earns Its Keep (`Ablation 2`, `N = 50` unseen stores, `K=4`):**  
+1. **Non-Circular Evidence for `(5, 3, 1)`:** Real-world theft dollar ratios cannot be proven inside a simulator (stated explicitly in [`docs/FORMULAS.md`](../docs/FORMULAS.md)), so `(5, 3, 1)` rests on AHP (`CR = 0.0066`), **physical-mask Pareto testing** (`0.65 m` boxes around till/doors/shelves), and out-of-sample **`TOST` equivalence** (`p = 0.0007`).
+2. **Ablation Study (`N = 50` unseen stores, `K=4` KPI pass rate):**  
    `Random (0%)` → `Manual 4 Corners (36%)` → `Uniform Grid (40%)` → `Mixed Greedy (52%)` → `Wall Hybrid (66%)` → `Mixed Hybrid (80%)` → **`Live Two-Stage kpi_hybrid (100%)`**.
-3. **Near Exact Global Optimality (`51` HiGHS MILP Cases):** Against an exact 0–1 MILP solver (verified `0.00e+00` against brute-force), OptiCam achieves **`99.19%` (`Dev 7`, min `96.68%`)** and **`98.82%` (`Held-Out 15`, min `95.51%`)** of the global upper bound, running **`399–672x` faster** (`15–148 ms` vs `4.5–40.3 s`).
-4. **Statistical Sweep Over Academic Baselines (`N = 50` unseen stores, `K=4`):**
+3. **Near Exact Global Optimality (`51` HiGHS MILP Cases):** Against an exact 0–1 MILP solver (verified `0.00e+00` against brute-force), OptiCam reaches **`99.19%` (`Dev 7`, min `96.68%`)** and **`98.82%` (`Held-Out 15`, min `95.51%`)** of the global upper bound, running **`399–672x` faster** (`15–148 ms` vs `4.5–40.3 s`).
+4. **Statistical Sweep Over Literature Baselines (`N = 50` unseen stores, `K=4`):**
    - **`OptiCam kpi_hybrid`:** `98.13% W%`, `99.60% Red`, **`50/50 (100%)` KPI** (`98%` at `K=3`, `2.48` mean Min-$K$).
    - vs **`OptiCam-Hybrid` (Previous Prod):** `80%` KPI (`38%` at `K=3`); `kpi_hybrid` wins **`10–0` McNemar** at `K=4` ($p=0.00195$) and **`30–0`** at `K=3` ($p < 10^{-6}$) with zero loss in `W%` ($p = 0.609$).
    - vs **`Erdem-06` (0–1 BIP):** `93.37% W%`, `6%` KPI (`8.3–10.0` cams Set Cover) → **`50/0/0`** ($p_{\text{Holm}} < 10^{-6}, r = 1.000$).

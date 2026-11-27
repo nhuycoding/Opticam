@@ -1,5 +1,10 @@
 # Backend API reference
 
+> **Quick Summary (One-Pass Read)**  
+> - **What this API does:** Receives a store layout JSON (`widthM`, `heightM`, `obstacles`, `cameras`, `riskStrokes`) at `POST /api/v1/optimize` and returns optimal camera poses using the exact same `kpi_hybrid` + `Dual-Height` math as the browser Web Worker (`15s` timeout fallback).  
+> - **Interactive Docs:** Start backend and open `http://localhost:8000/docs` (Swagger UI).  
+> - **Need term definitions (`DORI`, `CRAVED`, `kpi_hybrid`, `dualHeight`)?** See [GLOSSARY.md](../GLOSSARY.md).
+
 Base URL local: `http://localhost:8000`. OpenAPI/Swagger UI: `/docs`.
 Pydantic request models are implemented in `backend/main.py`; optimizer logic is in
 `backend/greedy_optimizer.py`. All dimensions/distances are meters and angles are degrees.

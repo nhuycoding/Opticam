@@ -1,5 +1,10 @@
 # Hướng dẫn sử dụng
 
+> **Tóm tắt nhanh (2 bước thiết kế)**  
+> 1. **Mặt bằng:** Chọn 1 trong 18 mẫu có sẵn (hoặc tự tạo bằng **Tạo layout** / **Dựng vách `W`**), chỉnh **Kích thước**, đặt **Nội thất** (gắn tầng **CRAVED**), tô **Vùng ưu tiên** và đặt/tối ưu **Camera**.  
+> 2. **Kết quả:** Xem bản đồ độ nét **DORI**, kiểm tra vùng khuất tầm tay `1.0 m` (gạch chéo vàng cam), so sánh trước/sau tối ưu trên **2.5D / 3D** và xuất **BOM / JSON**.  
+> *(Gặp thuật ngữ kỹ thuật như `PPM`, `DORI`, `CRAVED`? Xem giải thích đơn giản tại [GLOSSARY.md](../GLOSSARY.md).)*
+
 ## Mở ứng dụng
 
 Khởi động backend và frontend theo hướng dẫn tại [README.md](../README.md), sau đó mở
@@ -11,7 +16,7 @@ trên Web Worker của trình duyệt khi API lỗi hoặc quá thời gian ch�
 - **Thanh đầu trang:** chọn 1 trong 18 mặt bằng mẫu qua popover `StudioSelect`, nút **Tạo layout** để mở trình dựng cửa hàng mới, chuyển bước **Mặt bằng** / **Kết quả**, hoàn tác/làm lại, nút **Hướng dẫn (`?`)** để mở lại tour tương tác 6 bước bất kỳ lúc nào, và xuất JSON/BOM.
 - **Thanh công cụ bên trái:** chọn/kéo, thêm **13 loại nội thất chuyên dụng** (15 mục trong thư viện thu gọn), POS, cửa, **Dựng vách (`W`)** chấm 2 điểm dựng tường ngăn, camera tường/trần, đặt người đánh giá, đo và tô mức ưu tiên W.
 - **Canvas 2.5D & Cột Camera thu gọn:** mặt bằng theo mét, lưới, bóng xem trước vị trí đặt (**ghost placement**), tay kéo góc đổi kích thước trực tiếp trên vật thể đang chọn, nhãn kệ tự lật thẳng đứng (`180°`), DORI/rủi ro kèm gạch chéo cảnh báo khuất 1.0 m, và cột **Camera** cạnh canvas có thể thu gọn thành thanh mini (`190 px` ↔ `46 px`).
-- **Inspector / Bảng thiết lập bên phải (`396 px`):** KPI trực tiếp (gồm tỷ lệ phủ tầm tay `1.0 m`), bảng so sánh, preset kích thước **S / M / L**, thanh trượt + stepper `−/+` cập nhật ngay lập tức, **folder xếp tầng kệ CRAVED**, và chỉnh thông số camera/tường bao.
+- **Inspector / Bảng thiết lập bên phải (`396 px`):** Chia làm **4 hộp riêng biệt**: **Kích thước** (preset diện tích, Rộng/Dài, Xoay 90°, Tạo mới, Chiều cao trần, Lưới), **Nội thất** (chỉnh vật thể đang chọn, preset **S / M / L**, stepper `−/+`, **folder xếp tầng kệ CRAVED** và **Thư viện 15 nội thất**), **Vùng ưu tiên** (cọ tô W) và **Camera và tối ưu** (KPI trực tiếp gồm độ phủ tầm tay `1.0 m`, so sánh trước/sau và thiết lập thuật toán).
 - **Xuất và dự án / Công cụ nâng cao:** nhập layout JSON, lưu PNG, Greedy không trọng số, ảnh nền và các thao tác ít dùng.
 - **Hoàn tác/Làm lại:** các thay đổi sơ đồ và hình người được gom theo thao tác; dùng nút hoặc
   `Ctrl+Z` / `Ctrl+Y` (Mac: `⌘Z` / `⌘Y`). Thay layout, xóa vật thể và xóa cọ đều dùng hộp thoại xác nhận đồng bộ trong ứng dụng.

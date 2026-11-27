@@ -1,6 +1,6 @@
 # OptiCam-Retail: References, Standards & Citations
 
-This document compiles all technical standards, academic baseline papers, optimization theorems, statistical validation methods, and retail planning guidelines referenced in **OptiCam-Retail**.
+> **Plain-English Guide:** This file lists every external standard, academic paper, mathematical theorem, and retail guideline used in OptiCam, along with **one-line explanations of what role each plays**. For definitions of technical acronyms (`DORI`, `BIP`, `SOCP`, `SemGA`, `Kneedle`, `TOST`, `Sobol`, `AHP`, `CRAVED`), see [GLOSSARY.md](GLOSSARY.md).
 
 ---
 

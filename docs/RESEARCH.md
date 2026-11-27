@@ -1,5 +1,7 @@
 # OptiCam-Retail — Tài liệu nghiên cứu (NCKH)
 
+> **Lưu ý đọc nhanh:** Đây là báo cáo NCKH đợt nền tảng (`npm run experiments`, mô hình 2D/rời rạc ban đầu). Để xem số liệu kiểm chứng mới nhất cho mô hình **3D + `kpi_hybrid` + Dual-Height (`1.6 m / 1.0 m`)**, xem [COMPREHENSIVE_EVALUATION_OVERVIEW.md](../paper_evaluation_2026-11-26/COMPREHENSIVE_EVALUATION_OVERVIEW.md) và [GLOSSARY.md](../GLOSSARY.md).
+>
 > Nhóm Ngũ Vị Hương · FIT@HCMUS · GVHD: TS. Bùi Duy Đăng.
 > Mọi con số trong tài liệu này được sinh bởi `npm run experiments` (thư mục `results/`), không ghi tay. Đây là kết quả của mô hình/optimizer chạy trên frontend, không phải benchmark API backend. Mô tả công thức hiện tại xem [FORMULAS.md](FORMULAS.md); hướng dẫn chạy ứng dụng xem [README.md](../README.md).
 

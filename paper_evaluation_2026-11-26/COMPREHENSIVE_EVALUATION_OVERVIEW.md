@@ -2,6 +2,7 @@
 
 **Date:** 2026-11-26  
 **Evaluation Folder:** `./paper_evaluation_2026-11-26/`  
+**Technical Glossary:** [Plain-English Glossary of All Terms](../GLOSSARY.md)  
 **Datasets Evaluated:**
 - **Development / Architectural Templates (`dev_7`):** All 8 store files in [`../data_samples/`](../data_samples) representing 7 distinct geometries (`50–78 m²`; [`vn_co_nguoi_78m2.json`](../data_samples/vn_co_nguoi_78m2.json) shares identical architectural walls, fixtures, and static risk weights with [`vn_goc_pho_78m2.json`](../data_samples/vn_goc_pho_78m2.json)).
 - **Held-Out Generalization Cohort (`heldout_50`):** `N = 50` unseen randomized convenience-store layouts (`50–80 m²`, seeds `2026–2075`) generated deterministically with [`scripts/synthetic_layouts.py`](./scripts/synthetic_layouts.py) mirroring [`../frontend/experiments/run.ts`](../frontend/experiments/run.ts).

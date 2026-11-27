@@ -4,6 +4,8 @@
 
 It pairs an interactive **2.5D CAD floor planner + real-time 3D/POV simulator** with a deterministic **Two-Stage KPI-Aware Greedy + Local Search (`kpi_hybrid`)** optimizer that runs identically in both the browser (TypeScript `Float32Array` Web Worker) and the backend API (FastAPI + pure Python).
 
+> **New to any term (`PPM`, `DORI`, `CRAVED`, `Ray-AABB`, `kpi_hybrid`, `MILP`, `TOST`)?** See the plain-English [**Glossary of Technical Terms**](GLOSSARY.md) for instant one-line explanations and worked examples.
+
 ---
 
 ## 1. End-to-End Architecture & Tech Stack

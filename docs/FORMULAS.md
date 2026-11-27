@@ -1,8 +1,14 @@
 # Mô hình và công thức
 
-Tài liệu này mô tả đúng các phép tính đang dùng trong frontend (`frontend/src/core/optics.ts`)
-và backend (`backend/greedy_optimizer.py`). Mô hình lấy mẫu mục tiêu trên một mặt phẳng độ cao, xét góc nhìn và che khuất 3D
-để hỗ trợ bố trí sơ bộ; không phải chứng nhận hiệu năng camera thực.
+> **Tóm tắt 10 giây (Đọc 1 lần là hiểu)**  
+> Mọi phép tính đều chạy giống hệt nhau trên Frontend ([`optics.ts`](../frontend/src/core/optics.ts)) và Backend ([`greedy_optimizer.py`](../backend/greedy_optimizer.py)):
+> 1. **Chia lưới & gán rủi ro (`W ∈ [1, 5]`):** Quầy thu ngân/cửa quan trọng nhất (`5`), kệ hàng (`1.8–4.8` theo CRAVED), lối đi (`1`).
+> 2. **Chiếu tia 3D & kiểm tra che khuất:** Camera nhìn *qua đầu* quầy `1.1 m` tới mặt khách (`1.6 m`), nhưng bị chắn nếu tia cắt ngang kệ `1.8 m`.
+> 3. **Quy đổi độ nét (`PPM` → `DORI`):** Tính số pixel trên mỗi mét tại mục tiêu, quy ra điểm `0.00–1.00` theo chuẩn quốc tế IEC 62676-4.
+> 4. **Tối ưu 2 giai đoạn (`kpi_hybrid`) + Dual-Height (`1.6 m / 1.0 m`) + BOM:** Khóa đủ nhận diện mặt ở quầy/cửa trước, rồi tối ưu phủ kệ & tầm tay, cuối cùng tính chiều dài dây cáp.  
+> *(Gặp thuật ngữ lạ? Xem bảng giải thích nhanh bằng tiếng Việt/Anh tại [**GLOSSARY.md**](../GLOSSARY.md).)*
+
+*Lưu ý: Mô hình lấy mẫu trên mặt phẳng độ cao để hỗ trợ bố trí sơ bộ; không thay thế khảo sát ánh sáng/ống kính thực tế.*
 
 ## 1. Lưới, tọa độ và vùng rủi ro
 
@@ -30,9 +36,11 @@ và backend (`backend/greedy_optimizer.py`). Mô hình lấy mẫu mục tiêu t
   W_auto = max(1, W_object_1, ..., W_object_n)
   ```
 
-  Trọng số giữ ở `Wmax` trong bán kính lõi `r0`, giảm tuyến tính về 1 tại `R`, và không
-  cộng dồn giữa vật thể. Khi người dùng chỉnh trực tiếp `Wmax` trên kệ không đồng bộ tầng,
-  nhóm được đánh dấu `custom`.
+- **Giải thích ký hiệu:**
+  - `d`: khoảng cách (mét) từ tâm ô tới mép gần nhất của vật thể.
+  - `r0` (`1.0 m`): bán kính lõi — trong vùng này, trọng số giữ nguyên mức tối đa `Wmax`.
+  - `R` (`2.5 m` với POS/Cửa, `2.0 m` với Kệ): bán kính tắt dần — ngoài vùng này, trọng số giảm về `1` (lối đi thường).
+  - `W_auto`: khi nhiều vùng chồng lấn, ô lấy **mức lớn nhất** (không cộng dồn để tránh thổi phồng góc phòng). Khi người dùng chỉnh trực tiếp `Wmax` không đồng bộ tầng, nhóm được đánh dấu `custom`.
 - Điểm CRAVED 6 trục (`concealable`, `removable`, `available`, `valuable`, `enjoyable`,
   `disposable`) được dùng để phân nhóm hàng khởi tạo (`GOODS_CATALOG`), hiển thị hình khối
   hàng hóa (`ItemShape`) và gắn cảnh báo cho tầng thấp `zMin <= 1.0 m`. Các `Wmax` là

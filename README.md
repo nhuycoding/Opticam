@@ -1,8 +1,7 @@
 # OptiCam-Retail
 
-Ứng dụng web hỗ trợ dựng mặt bằng cửa hàng, đặt camera và đánh giá vùng quan sát theo
-độ phân giải ảnh (PPM/DORI). Dự án gồm frontend React/Konva, backend FastAPI và bộ
-thí nghiệm tái lập cho thuật toán bố trí camera. Chế độ 3D sử dụng Three.js và React Three Fiber.
+> **Tóm tắt nhanh:** **OptiCam-Retail** là ứng dụng web dựng mặt bằng cửa hàng 2.5D/3D và tự động bố trí camera CCTV tối ưu theo độ phân giải ảnh (**PPM / DORI**) và mức độ rủi ro trộm cắp (**CRAVED**). Hệ thống gồm **Frontend** (React / Konva 2.5D / Three.js 3D), **Backend** (FastAPI Python) và **Bộ thí nghiệm khoa học** đối chứng thuật toán.  
+> *(Xem nhanh giải thích mọi thuật ngữ kỹ thuật tại [GLOSSARY.md](GLOSSARY.md).)*
 
 ## Bắt đầu nhanh
 
@@ -67,6 +66,7 @@ npm.cmd run experiments
 ## Tài liệu
 
 - [Tổng quan toàn dự án (Project Overview)](PROJECT_OVERVIEW.md) — kiến trúc, thuật toán `kpi_hybrid` + chấm điểm phân bậc 2 cao độ `1.6 m / 1.0 m`, 13 loại nội thất CRAVED theo tầng, 18 mặt bằng và bằng chứng thực nghiệm.
+- [Từ điển thuật ngữ kỹ thuật (Glossary)](GLOSSARY.md) — giải thích dễ hiểu mọi thuật ngữ (`PPM`, `DORI`, `CRAVED`, `Ray-AABB`, `kpi_hybrid`, `Dual-Height`, `MILP`, `AHP`, `Sobol`, `TOST`, `Kneedle`, v.v.) ngay trong một lần đọc.
 - [Tài liệu trích dẫn (References)](REFERENCES.md) — chuẩn IEC 62676-4 và danh mục bài báo khoa học đối chứng.
 - [Hướng dẫn người dùng](docs/USER_GUIDE.md) — hướng dẫn tương tác 6 bước (`?`), tự tạo layout (`CustomLayoutModal`), tự dựng tường vách (`W`), đặt nội thất ghost, tủ kệ CRAVED, 18 mẫu cửa hàng và cảnh báo khuất 1.0 m.
 - [Kiến trúc dự án](docs/ARCHITECTURE.md) — cấu trúc file (`fixtures`, `craved`, `ShelfTierFolders`, `SpotlightOverlay`, `TutorialModal`, `CustomLayoutModal`, `StudioSelect`, `CameraSchedule`) và luồng frontend/backend.

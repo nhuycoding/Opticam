@@ -21,7 +21,7 @@ export interface TutorialStep {
   title: string;
   targetSelector: string;
   preferredSide: 'left' | 'right' | 'top' | 'bottom' | 'center';
-  groupNeeded?: 'room' | 'priority' | 'camera';
+  groupNeeded?: 'room' | 'furniture' | 'priority' | 'camera';
   ensureCatalogOpen?: boolean;
   icon: typeof Map;
   description: string;
@@ -87,7 +87,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     title: 'Thư viện 15 nội thất & Tầng kệ CRAVED',
     targetSelector: '[data-tour="fixture-catalog"]',
     preferredSide: 'left',
-    groupNeeded: 'room',
+    groupNeeded: 'furniture',
     ensureCatalogOpen: true,
     icon: Box,
     description: 'Đặt nội thất theo vị trí chuột và gắn rủi ro trộm cắp CRAVED theo từng tầng kệ.',

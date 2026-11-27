@@ -78,7 +78,7 @@ describe('Studio workflow', () => {
     const changed = canvas().layout.cameras[0];
     expect(changed.mount).toBe('ceiling');
     expect(changed.x).toBeGreaterThan(0);
-    act(() => button('Kích thước và nội thất').props.onClick());
+    act(() => button('Kích thước').props.onClick());
     const height = renderer.root.findByProps({ 'aria-label': 'Chiều cao trần (m)' });
     act(() => height.props.onChange({ target: { value: '3.8' } }));
     act(() => renderer.root.findByProps({ 'aria-label': 'Chiều cao trần (m)' }).props.onBlur());
@@ -169,7 +169,7 @@ describe('Studio workflow', () => {
       expect(canvas().layout).toBe(original);
       expect(renderer.root.findAllByProps({ role: 'alert' })).toHaveLength(1);
       await click('Mở mặt bằng 2.5D');
-      expect(renderer.root.findByType(Inspector).props.layout).toBe(original);
+      expect(renderer.root.findByType(PlanningSettings).props.layout).toBe(original);
     } finally { errorLog.mockRestore(); }
   });
   it('shares edits and camera selection across 2.5D and 3D', async () => {
@@ -257,9 +257,13 @@ describe('Studio workflow', () => {
   it('groups dimensions, priority and camera settings in the plan and shows only the analysis in results', async () => {
     const workflow = renderer.root.findByProps({ 'aria-label': 'Quy trình thiết kế' });
     expect(workflow.findAllByType('strong').map(heading => heading.children)).toEqual([['Mặt bằng'], ['Kết quả']]);
-    expect(button('Kích thước và nội thất').props['aria-expanded']).toBe(true);
+    expect(button('Kích thước').props['aria-expanded']).toBe(true);
+    expect(button('Nội thất').props['aria-expanded']).toBe(false);
+    act(() => renderer.root.findByProps({ id: 'group-furniture' }).props.onClick());
+    expect(button('Kích thước').props['aria-expanded']).toBe(false);
+    expect(button('Nội thất').props['aria-expanded']).toBe(true);
     act(() => renderer.root.findByProps({ id: 'group-priority' }).props.onClick());
-    expect(button('Kích thước và nội thất').props['aria-expanded']).toBe(false);
+    expect(button('Nội thất').props['aria-expanded']).toBe(false);
     expect(renderer.root.findByProps({ id: 'group-priority' }).props['aria-expanded']).toBe(true);
     await click('Cao');
     expect(canvas()).toMatchObject({ view: 'risk', brush: 5 });

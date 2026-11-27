@@ -53,7 +53,7 @@ const STEPS = [
   { id: 'results', title: 'Kết quả', icon: ScanLine },
 ] as const;
 type Step = typeof STEPS[number]['id'];
-type PlanGroup = 'room' | 'priority' | 'camera';
+type PlanGroup = 'room' | 'furniture' | 'priority' | 'camera';
 
 function PlanSection({ id, title, icon: Icon, expanded, onToggle, children }: {
   id: PlanGroup; title: string; icon: typeof Map; expanded: boolean; onToggle: () => void; children: ReactNode;
@@ -265,29 +265,29 @@ export default function App() {
       setGroup('camera');
       setBrush(null);
     }
-    if (selection?.kind === 'obs') setGroup(current => current === 'priority' ? 'priority' : 'room');
+    if (selection?.kind === 'obs') setGroup(current => current === 'priority' ? 'priority' : 'furniture');
   }, []);
 
   const addObs = (t: ObsType, fixture?: Fixture) => {
     if (layout.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
     const r = addObstacle(layout, t, fixture);
     if (!r) return flash('Không còn chỗ trống cho khối này');
-    setLayout(r); setPlacing(null); setGroup('room'); setBrush(null); setSel({ kind: 'obs', id: r.obstacles[r.obstacles.length - 1].id }); setTool('select');
+    setLayout(r); setPlacing(null); setGroup('furniture'); setBrush(null); setSel({ kind: 'obs', id: r.obstacles[r.obstacles.length - 1].id }); setTool('select');
   };
   const startPlacing = (type: ObsType, fixture?: Fixture) => {
     if (layout.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
-    setDimension('plan'); setBrush(null); setTool('select'); setMeasure(null); setGroup('room');
+    setDimension('plan'); setBrush(null); setTool('select'); setMeasure(null); setGroup('furniture');
     setPlacing(makePlacementDraft(type, fixture, ceilingHeightFor(layout)));
   };
   const placeObstacleAt = (obstacle: Obstacle) => {
     if (layoutRef.current.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
     setLayout((l) => ({ ...l, walkways: undefined, obstacles: [...l.obstacles, obstacle] }));
-    setPlacing(null); setGroup('room'); setBrush(null); setSel({ kind: 'obs', id: obstacle.id }); setTool('select');
+    setPlacing(null); setGroup('furniture'); setBrush(null); setSel({ kind: 'obs', id: obstacle.id }); setTool('select');
   };
   const buildWallSegment = (obstacle: Obstacle) => {
     if (layoutRef.current.obstacles.length >= 500) return flash('Mặt bằng đã đạt giới hạn 500 vật cản.', 'error');
     setLayout((l) => ({ ...l, walkways: undefined, obstacles: [...l.obstacles, obstacle] }));
-    setGroup('room');
+    setGroup('furniture');
     setSel({ kind: 'obs', id: obstacle.id });
   };
   const swapRoom90 = () => {
@@ -838,11 +838,13 @@ export default function App() {
           <div className="context-heading"><h2 id="sidebar-title">{isPlanning ? 'Thiết lập mặt bằng' : 'Kết quả'}</h2></div>
           <div className="sidebar-body">
             {isPlanning ? <>
-              <PlanSection id="room" title="Kích thước và nội thất" icon={Ruler} expanded={group === 'room'} onToggle={() => toggleGroup('room')}>
+              <PlanSection id="room" title="Kích thước" icon={Ruler} expanded={group === 'room'} onToggle={() => toggleGroup('room')}>
                 <PlanningSettings layout={layout} disabled={optimizing || (dimension === '3d' && Boolean(cameraView))}
                   onRoom={setRoom} onSwapRoom={swapRoom90} onOpenCustomBuilder={() => setShowCustomBuilder(true)}
                   onGrid={setGridSize} onScale={pixelsPerMeter => patch({ pixelsPerMeter })} onCeilingHeight={setCeilingHeight} />
-                {group === 'room' && (dimension === 'plan'
+              </PlanSection>
+              <PlanSection id="furniture" title="Nội thất" icon={Box} expanded={group === 'furniture'} onToggle={() => toggleGroup('furniture')}>
+                {group === 'furniture' && (dimension === 'plan'
                   ? <Inspector mode="room" layout={layout} sel={sel} onSelect={select} onObs={editObstacle} onCam={editCamera} />
                   : <SceneInspector mode="room" layout={layout} selected={sel} people={people} onSelect={select} onEdit={openPlanEditor}
                       readOnly={Boolean(cameraView)} onRotateSelected={() => rotate(1)} onDeleteSelected={deleteSelected} />)}
